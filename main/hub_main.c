@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include "sdkconfig.h"
-#include "esp_wifi.h"
 #include "esp_system.h"
-#include "mqtt_client.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_event.h"
@@ -18,5 +16,5 @@
 
 void app_main()
 {
-    hub_wifi_connect();
+    ESP_ERROR_CHECK(hub_wifi_connect(CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD, CONFIG_MAXIMUM_RETRY));
 }

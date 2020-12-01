@@ -16,19 +16,19 @@
 #define WIFI_FAIL_BIT BIT1
 
 static const char *TAG = "HUB WIFI";
-
-static int s_retry_num;
 static EventGroupHandle_t s_wifi_event_group;
 
 static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
+    static int s_retry_num = 0;
+
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        if (s_retry_num < CONFIG_MAXIMUM_RETRY)
+        if (s_retry_num < *((int*)(event_data)))
         {
             esp_wifi_connect();
             s_retry_num++;
@@ -49,34 +49,33 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
     }
 }
 
-void hub_wifi_connect()
+esp_err_t hub_wifi_connect(const char* ssid, const char* password, int retries)
 {
+    esp_err_t result = ESP_OK;
     s_wifi_event_group = NULL;
     s_wifi_event_group = xEventGroupCreate();
 
     if (s_wifi_event_group == NULL)
     {
         ESP_LOGE(TAG, "Could not create event group.");
-        return;
+        return ESP_FAIL;
     }
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     tcpip_adapter_init();
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_config));
 
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &hub_wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler, (void*)(&retries)));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler, NULL));
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK
-        }
-    };
+    wifi_config_t wifi_config;
+    strcpy((char*)wifi_config.sta.ssid, ssid);
+    strcpy((char*)wifi_config.sta.password, password);
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
@@ -88,21 +87,24 @@ void hub_wifi_connect()
 
     if (bits & WIFI_CONNECTED_BIT)
     {
-        ESP_LOGI(TAG, "Connected to SSID: %s password: %s", CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD);
+        ESP_LOGI(TAG, "Connected to SSID: %s.", ssid);
     }
     else if (bits & WIFI_FAIL_BIT)
     {
-        ESP_LOGI(TAG, "Failed to connect to SSID: %s, password: %s", CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD);
+        ESP_LOGI(TAG, "Failed to connect to SSID: %s.", password);
+        result = ESP_FAIL;
     }
     else
     {
         ESP_LOGE(TAG, "Unexpected event.");
+        result = ESP_FAIL;
     }
 
     ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler));
     ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &hub_wifi_event_handler));
     ESP_ERROR_CHECK(esp_event_loop_delete_default());
     vEventGroupDelete(s_wifi_event_group);
+    return result;
 }
 
 void hub_wifi_disconnect()

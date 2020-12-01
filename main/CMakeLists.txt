@@ -1,1 +1,1 @@
-idf_component_register(SRCS "hub_wifi.c" "hub_main.c" INCLUDE_DIRS ".")
+idf_component_register(SRCS "hub_mqtt.c" "hub_wifi.c" "hub_main.c" INCLUDE_DIRS ".")
