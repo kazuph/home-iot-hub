@@ -7,21 +7,39 @@ menu "Home-IoT-Hub MQTT Configuration"
 
     config MQTT_URI
         string "MQTT broker URI"
-        default "BROKER"
+        default "broker"
         help
             URL of MQTT broker.
+
+    config MQTT_USERNAME
+        string "MQTT username"
+        default "username"
+        help
+            Client username.
+
+    config MQTT_PASSWORD
+        string "MQTT password"
+        default "password"
+        help
+            Client password.
+
+    config MQTT_CLIENT_ID
+        string "MQTT client ID"
+        default "id"
+        help
+            Client ID.
 endmenu
 
 menu "Home-IoT-Hub Wi-Fi Configuration"
     config WIFI_SSID
         string "WiFi SSID"
-        default "SSID"
+        default "ssid"
         help
             SSID (network name) for the project to connect to.
 
     config WIFI_PASSWORD
         string "WiFi Password"
-        default "PASSWORD"
+        default "password"
         help
             WiFi password (WPA or WPA2) for the project to use.
             Can be left blank if the network has no security set.
