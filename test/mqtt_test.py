@@ -1,63 +1,49 @@
+import unittest
+from unittest import TestCase
+from secrets import token_hex
+from uuid import uuid4
 import paho.mqtt.client as mqtt
 import json
 import time
 
-with open('test/config.json', 'r') as config_file:
-    config = json.load(config_file)
+class TestHomeIotHub(TestCase):
 
-CLIENT_ID = config["CLIENT_ID"]
-BROKER_HOST = config["BROKER_HOST"]
-BROKER_PORT = config["BROKER_PORT"]
-TEST_TOPIC = config["TEST_TOPIC"]
-WAIT_TIME_BEFORE_TEST = config["WAIT_TIME_BEFORE_TEST"]
+    PAYLOAD = None
 
-class Test(object):
-    def __init__(self, name, fun):
-        self.name = name
-        self.fun = fun
-    
-    def run(self):
-        print(f"TEST CASE: {self.name}")
-        wait_before_test()
-        self.fun()
+    def setUp(self):
+        with open('test/config.json', 'r') as config_file:
+            config = json.load(config_file)
 
-def wait_before_test():
+        self.client_id = str(uuid4())
+        self.host = config['BROKER_HOST']
+        self.port = config['BROKER_PORT']
+        self.client = mqtt.Client(client_id=self.client_id)
+        self.client.connect(host=self.host, port=self.port)
 
-    if WAIT_TIME_BEFORE_TEST == 0:
-        return
+    def test_echo(self):
+        """
+        Hub should be subscribed to /hub_test/publish topic
+        and as soon as it reads the message it publishes it 
+        to '/hub_test/subscribe' topic.
+        """
 
-    for i in range(WAIT_TIME_BEFORE_TEST, -1, -1):
-        print(f"Test starting in {i}...", end='\r')
-        time.sleep(1)
+        topic_publish = '/hub_test/publish'
+        topic_subscribe = '/hub_test/subscribe'
+        test_string = token_hex(32)
 
-def on_message(client, userdata, message):
-    print(f"Message: {message.payload.decode('utf-8')}")
-    print(f"Topic: {message.topic}")
-    print(f"QOS: {message.qos}")
-    print(f"Retain flag: {message.retain}")
+        self.client.subscribe(topic_subscribe)
+        self.client.on_message = TestHomeIotHub.on_message    
+        self.client.loop_start()
+        self.client.publish(topic_publish, test_string)
+        time.sleep(5)
+        self.client.loop_stop()
+        self.client.unsubscribe(topic_subscribe)
+        
+        self.assertEqual(PAYLOAD, test_string)
 
-def test_subscribe():
-    TEST_NAME = f"Subscribe to topic {TEST_TOPIC}."
-    client.subscribe(TEST_TOPIC)
-    client.on_message = on_message
-    client.loop_start()
-    time.sleep(5)
-    client.loop_stop()
-    client.unsubscribe(TEST_TOPIC)
+    @staticmethod
+    def on_message(client, userdata, message):
+        TestHomeIotHub.PAYLOAD = message.payload.decode('utf-8')
 
-def test_publish():
-    TEST_NAME = f"Publish to topic {TEST_TOPIC}."
-    client.publish(TEST_TOPIC, "75")
-
-def run_tests():
-    test_list.append(Test("SUBSCRIBE", test_subscribe))
-    test_list.append(Test("PUBLISH", test_publish))
-
-    for test in test_list:
-        test.run()
-
-test_list = list()
-client = mqtt.Client(client_id=CLIENT_ID)
-client.connect(host=BROKER_HOST, port=BROKER_PORT)
-run_tests()
-client.disconnect()
+if __name__ == '__main__':
+    unittest.main()
