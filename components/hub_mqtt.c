@@ -142,8 +142,6 @@ static esp_err_t _hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const cha
 hub_mqtt_client create_hub_mqtt_client()
 {
     hub_mqtt_client client = {
-        .uri = CONFIG_MQTT_URI,
-        .port = CONFIG_MQTT_PORT,
         ._mqtt_config = {
             .uri = CONFIG_MQTT_URI,
             .port = CONFIG_MQTT_PORT
