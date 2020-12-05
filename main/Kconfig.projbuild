@@ -1,9 +1,15 @@
-menu "Home-IoT-Hub Websocket Configuration"
-    config WEBSOCKET_URI
-        string "Websocket endpoint URI"
-        default "ws://echo.websocket.org"
+menu "Home-IoT-Hub MQTT Configuration"
+    config MQTT_PORT
+        int "MQTT broker PORT"
+        default 1883
         help
-            URL of websocket endpoint this project connects to and sends echo
+            Port of MQTT broker.
+
+    config MQTT_URI
+        string "MQTT broker URI"
+        default "BROKER"
+        help
+            URL of MQTT broker.
 endmenu
 
 menu "Home-IoT-Hub Wi-Fi Configuration"

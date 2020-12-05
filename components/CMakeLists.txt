@@ -1,0 +1,1 @@
+idf_component_register(SRCS "hub_mqtt.c" "hub_wifi.c" INCLUDE_DIRS "include" REQUIRES "tcpip_adapter")
