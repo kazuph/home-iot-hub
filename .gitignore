@@ -3,3 +3,4 @@ build
 venv
 sdkconfig
 sdkconfig.old
+config.json

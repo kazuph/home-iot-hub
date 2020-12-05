@@ -1,14 +1,18 @@
 import paho.mqtt.client as mqtt
+import json
 import time
 
-CLIENT_ID = "21a32b68-4d85-470c-9740-2beb823de13e"
-BROKER_HOST = "192.168.0.109"
-BROKER_PORT = 1883
-TEST_TOPIC = "/mikettle/temperature/current"
-WAIT_TIME_BEFORE_TEST = 5
+with open('config.json', 'r') as config_file:
+    config = json.load(config_file)
+
+CLIENT_ID = config["CLIENT_ID"]
+BROKER_HOST = config["BROKER_HOST"]
+BROKER_PORT = config["BROKER_PORT"]
+TEST_TOPIC = config["TEST_TOPIC"]
+WAIT_TIME_BEFORE_TEST = config["WAIT_TIME_BEFORE_TEST"]
 
 test_list = list()
-client = mqtt.Client(client_id="21a32b68-4d85-470c-9740-2beb823de13e")
+client = mqtt.Client(client_id=CLIENT_ID)
 client.connect(host=BROKER_HOST, port=BROKER_PORT)
 
 class Test(object):
