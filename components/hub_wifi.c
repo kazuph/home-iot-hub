@@ -164,6 +164,9 @@ esp_err_t hub_wifi_connect()
         goto cleanup_wifi_connect;
     }
 
+    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
+    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
+    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
     vEventGroupDelete(s_wifi_event_group);
 
     return result;
@@ -194,9 +197,5 @@ esp_err_t hub_wifi_disconnect()
 
 esp_err_t hub_wifi_cleanup()
 {
-    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
-    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
-    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
-
     return ESP_OK;
 }

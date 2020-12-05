@@ -53,6 +53,13 @@ void app_main()
         goto cleanup_wifi_connect;
     }
 
+    result = mqtt_client.subscribe(&mqtt_client, "/mikettle/#");
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MQTT client initialization failed.");
+        goto cleanup_wifi_connect;
+    }
+
     for (int i = 3600; i >= 0; i--)
     {
         if (i <= 10)
