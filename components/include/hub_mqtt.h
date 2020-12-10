@@ -8,15 +8,16 @@
 
 typedef struct hub_mqtt_client
 {
-    esp_mqtt_client_config_t _mqtt_config;
+    esp_mqtt_client_config_t config;
     esp_mqtt_client_handle_t _client_handle;
-    esp_err_t (*initialize)(struct hub_mqtt_client* client);
-    esp_err_t (*destroy)(struct hub_mqtt_client* client);
+    esp_err_t (*start)(struct hub_mqtt_client* client);
+    esp_err_t (*stop)(struct hub_mqtt_client* client);
     esp_err_t (*publish)(struct hub_mqtt_client* client, const char* topic, const char* data);
     esp_err_t (*subscribe)(struct hub_mqtt_client* client, const char* topic);
     esp_err_t (*unsubscribe)(struct hub_mqtt_client* client, const char* topic);
 } hub_mqtt_client;
 
-hub_mqtt_client create_hub_mqtt_client();
+esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client);
+esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client);
 
 #endif

@@ -44,40 +44,31 @@ void app_main()
         goto cleanup_event_loop;
     }
 
-    hub_mqtt_client mqtt_client = create_hub_mqtt_client();
+    hub_mqtt_client mqtt_client = {
+        .config = {
+            .uri = CONFIG_MQTT_URI,
+            .port = CONFIG_MQTT_PORT
+        }
+    };
 
-    result = mqtt_client.initialize(&mqtt_client);
+    result = hub_mqtt_client_initialize(&mqtt_client);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.");
         goto cleanup_wifi_connect;
     }
 
-    result = mqtt_client.subscribe(&mqtt_client, "/mikettle/#");
+    result = mqtt_client.subscribe(&mqtt_client, "/hub_test/publish");
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.");
-        goto cleanup_wifi_connect;
+        goto cleanup_mqtt_client;
     }
 
-    for (int i = 3600; i >= 0; i--)
-    {
-        if (i <= 10)
-        {
-            printf("Restarting in %d seconds...\n", i);
-        }
-        
-        result = mqtt_client.publish(&mqtt_client, "/mikettle/temperature/current", "42");
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "MQTT client publish failed.");
-        }
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
-    mqtt_client.destroy(&mqtt_client);
-
+cleanup_mqtt_client:
+    hub_mqtt_client_destroy(&mqtt_client);
 cleanup_wifi_connect:
     hub_wifi_disconnect();
     hub_wifi_cleanup();

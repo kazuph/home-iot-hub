@@ -29,7 +29,7 @@ class TestHomeIotHub(TestCase):
 
         topic_publish = '/hub_test/publish'
         topic_subscribe = '/hub_test/subscribe'
-        test_string = token_hex(32)
+        test_string = str(token_hex(16))
 
         self.client.subscribe(topic_subscribe)
         self.client.on_message = TestHomeIotHub.on_message    
@@ -38,8 +38,8 @@ class TestHomeIotHub(TestCase):
         time.sleep(5)
         self.client.loop_stop()
         self.client.unsubscribe(topic_subscribe)
-        
-        self.assertEqual(PAYLOAD, test_string)
+
+        self.assertEqual(TestHomeIotHub.PAYLOAD, test_string)
 
     @staticmethod
     def on_message(client, userdata, message):

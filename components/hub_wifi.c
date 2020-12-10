@@ -118,8 +118,6 @@ esp_err_t hub_wifi_connect()
         },
     };
 
-    //strcpy((char*)wifi_config.sta.ssid, ssid);
-    //strcpy((char*)wifi_config.sta.password, password);
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
     result = esp_wifi_set_mode(WIFI_MODE_STA);
@@ -171,7 +169,6 @@ esp_err_t hub_wifi_connect()
 
     return result;
 
-    // Handle errors
 cleanup_wifi_connect:
     esp_wifi_stop();
 cleanup_wifi_init:
