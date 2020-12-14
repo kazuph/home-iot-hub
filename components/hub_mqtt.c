@@ -44,7 +44,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             printf("DATA=%.*s\r\n", event->data_len, event->data);
 
             hub_mqtt_client* client = (hub_mqtt_client*)handler_args;
-            client->publish(client, "/hub_test/subscribe", event->data);
+            client->publish(client, "/hub_test/subscribe", (const char*)(event->data));
             
             break;
         case MQTT_EVENT_ERROR:
@@ -133,7 +133,7 @@ static esp_err_t _hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const cha
     return ESP_OK;
 }
 
-esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client)
+esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_client_config* config)
 {
     client->start = &_hub_mqtt_client_start;
     client->stop = &_hub_mqtt_client_stop;
@@ -141,7 +141,7 @@ esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client)
     client->subscribe = &_hub_mqtt_client_subscribe;
     client->unsubscribe = &_hub_mqtt_client_unsubscribe;
 
-    client->_client_handle = esp_mqtt_client_init(&(client->config));
+    client->_client_handle = esp_mqtt_client_init(config);
     if (client->_client_handle == NULL)
     {
         ESP_LOGE(TAG, "MQTT client handle initialization failed.");

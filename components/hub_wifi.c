@@ -9,7 +9,6 @@
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_event.h"
-#include "esp_wifi.h"
 #include "esp_log.h"
 
 #include "nvs.h"
@@ -67,7 +66,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
     }
 }
 
-esp_err_t hub_wifi_connect()
+esp_err_t hub_wifi_connect(wifi_config_t* config)
 {
     esp_err_t result = ESP_OK;
     s_wifi_event_group = NULL;
@@ -80,7 +79,7 @@ esp_err_t hub_wifi_connect()
         goto cleanup_event_group;
     }
 
-    tcpip_adapter_init();
+    esp_netif_init();
 
     wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
     result = esp_wifi_init(&wifi_init_config);
@@ -111,15 +110,6 @@ esp_err_t hub_wifi_connect()
         goto cleanup_event_handler_register;
     }
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD
-        },
-    };
-
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-
     result = esp_wifi_set_mode(WIFI_MODE_STA);
     if (result != ESP_OK)
     {
@@ -127,7 +117,7 @@ esp_err_t hub_wifi_connect()
         goto cleanup_wifi_init;
     }
 
-    result = esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config);
+    result = esp_wifi_set_config(ESP_IF_WIFI_STA, config);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Setting WiFi configuration failed.");
@@ -147,11 +137,11 @@ esp_err_t hub_wifi_connect()
 
     if (bits & WIFI_CONNECTED_BIT)
     {
-        ESP_LOGI(TAG, "Connected to SSID: %s.", wifi_config.sta.ssid);
+        ESP_LOGI(TAG, "Connected to SSID: %s.", config->sta.ssid);
     }
     else if (bits & WIFI_FAIL_BIT)
     {
-        ESP_LOGW(TAG, "Failed connecting to SSID: %s.", wifi_config.sta.ssid);
+        ESP_LOGW(TAG, "Failed connecting to SSID: %s.", config->sta.ssid);
         result = ESP_FAIL;
         goto cleanup_wifi_connect;
     }
@@ -162,9 +152,6 @@ esp_err_t hub_wifi_connect()
         goto cleanup_wifi_connect;
     }
 
-    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
-    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
-    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
     vEventGroupDelete(s_wifi_event_group);
 
     return result;
@@ -185,14 +172,17 @@ cleanup_event_group:
 
 esp_err_t hub_wifi_disconnect()
 {
+    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
+    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
+    esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
     esp_wifi_disconnect();
     esp_wifi_stop();
-    esp_wifi_deinit();
 
     return ESP_OK;
 }
 
 esp_err_t hub_wifi_cleanup()
 {
+    esp_wifi_deinit();
     return ESP_OK;
 }

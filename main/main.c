@@ -19,6 +19,8 @@
 
 const char* TAG = "HUB_MAIN";
 
+#ifndef CONFIG_TEST
+
 void app_main()
 {
     esp_err_t result = ESP_OK;
@@ -37,25 +39,39 @@ void app_main()
         goto cleanup_nvs;
     }
 
-    result = hub_wifi_connect();    
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = CONFIG_WIFI_SSID,
+            .password = CONFIG_WIFI_PASSWORD,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK
+        },
+    };
+
+    result = hub_wifi_connect(&wifi_config);    
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Wifi connection failed.");
         goto cleanup_event_loop;
     }
 
-    hub_mqtt_client mqtt_client = {
-        .config = {
-            .uri = CONFIG_MQTT_URI,
-            .port = CONFIG_MQTT_PORT
-        }
+    hub_mqtt_client mqtt_client;
+    hub_mqtt_client_config mqtt_client_config = {
+        .uri = CONFIG_MQTT_URI,
+        .port = CONFIG_MQTT_PORT
     };
 
-    result = hub_mqtt_client_initialize(&mqtt_client);
+    result = hub_mqtt_client_initialize(&mqtt_client, &mqtt_client_config);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.");
         goto cleanup_wifi_connect;
+    }
+
+    result = mqtt_client.start(&mqtt_client);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MQTT client initialization failed.");
+        goto cleanup_mqtt_client;
     }
 
     result = mqtt_client.subscribe(&mqtt_client, "/hub_test/publish");
@@ -65,7 +81,7 @@ void app_main()
         goto cleanup_mqtt_client;
     }
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(100000 / portTICK_PERIOD_MS);
 
 cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
@@ -79,3 +95,7 @@ cleanup_nvs:
 restart:
     esp_restart();
 }
+
+#else
+
+#endif

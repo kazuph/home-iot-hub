@@ -2,6 +2,7 @@ import unittest
 from unittest import TestCase
 from secrets import token_hex
 from uuid import uuid4
+from threading import Lock
 import paho.mqtt.client as mqtt
 import json
 import time
@@ -9,6 +10,7 @@ import time
 class TestHomeIotHub(TestCase):
 
     PAYLOAD = None
+    PAYLOAD_LOCK = Lock()
 
     def setUp(self):
         with open('test/config.json', 'r') as config_file:
@@ -26,10 +28,10 @@ class TestHomeIotHub(TestCase):
         and as soon as it reads the message it publishes it 
         to '/hub_test/subscribe' topic.
         """
-
         topic_publish = '/hub_test/publish'
         topic_subscribe = '/hub_test/subscribe'
-        test_string = str(token_hex(16))
+        test_string = token_hex(128)
+        TestHomeIotHub.reset_payload()
 
         self.client.subscribe(topic_subscribe)
         self.client.on_message = TestHomeIotHub.on_message    
@@ -39,11 +41,19 @@ class TestHomeIotHub(TestCase):
         self.client.loop_stop()
         self.client.unsubscribe(topic_subscribe)
 
-        self.assertEqual(TestHomeIotHub.PAYLOAD, test_string)
+        with TestHomeIotHub.PAYLOAD_LOCK:
+            self.assertIsNotNone(TestHomeIotHub.PAYLOAD)
+            self.assertEqual(test_string, str(TestHomeIotHub.PAYLOAD[:len(test_string)], 'utf-8'))
 
     @staticmethod
     def on_message(client, userdata, message):
-        TestHomeIotHub.PAYLOAD = message.payload.decode('utf-8')
+        with TestHomeIotHub.PAYLOAD_LOCK:
+            TestHomeIotHub.PAYLOAD = message.payload
+
+    @staticmethod
+    def reset_payload():
+        with TestHomeIotHub.PAYLOAD_LOCK:
+            TestHomeIotHub.PAYLOAD = None
 
 if __name__ == '__main__':
     unittest.main()
