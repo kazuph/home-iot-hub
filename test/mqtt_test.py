@@ -22,6 +22,9 @@ class TestHomeIotHub(TestCase):
         self.client = mqtt.Client(client_id=self.client_id)
         self.client.connect(host=self.host, port=self.port)
 
+    def tearDown(self):
+        self.client.disconnect()
+
     def test_mqtt_echo(self):
         """
         TEST MQTT ECHO
