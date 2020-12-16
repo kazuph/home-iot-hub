@@ -40,12 +40,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
         case MQTT_EVENT_DATA:
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-            printf("DATA=%.*s\r\n", event->data_len, event->data);
-
             hub_mqtt_client* client = (hub_mqtt_client*)handler_args;
-            client->publish(client, "/hub_test/subscribe", (const char*)(event->data));
-            
+            client->_subscribe_callback(client, event->topic, event->data, event->data_len);           
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
@@ -133,6 +129,12 @@ static esp_err_t _hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const cha
     return ESP_OK;
 }
 
+static esp_err_t _hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* client, hub_mqtt_client_subscribe_callback_t callback)
+{
+    client->_subscribe_callback = callback;
+    return ESP_OK;
+}
+
 esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_client_config* config)
 {
     client->start = &_hub_mqtt_client_start;
@@ -140,6 +142,8 @@ esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_cli
     client->publish = &_hub_mqtt_client_publish;
     client->subscribe = &_hub_mqtt_client_subscribe;
     client->unsubscribe = &_hub_mqtt_client_unsubscribe;
+    client->register_subscribe_callback = &_hub_mqtt_client_register_subscribe_callback;
+    client->_subscribe_callback = NULL;
 
     client->_client_handle = esp_mqtt_client_init(config);
     if (client->_client_handle == NULL)
@@ -153,5 +157,12 @@ esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_cli
 
 esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client)
 {
+    client->start = NULL;
+    client->stop = NULL;
+    client->publish = NULL;
+    client->subscribe = NULL;
+    client->unsubscribe = NULL;
+    client->register_subscribe_callback = NULL;
+    client->_subscribe_callback = NULL;
     return esp_mqtt_client_destroy(client->_client_handle);
 }

@@ -25,6 +25,13 @@ class TestHomeIotHub(TestCase):
     def tearDown(self):
         self.client.disconnect()
 
+    def test_wifi_connect_disconnect(self):
+        """
+        TEST WIFI CONNECT DISCONNECT
+        """
+        TEST_UUID = 'faf397aa-05a7-40fe-b83a-599cd15800d0'
+        pass
+
     def test_mqtt_echo(self):
         """
         TEST MQTT ECHO
