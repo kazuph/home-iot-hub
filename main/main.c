@@ -97,22 +97,22 @@ restart:
 #define TEST_SUCCESS (char)0
 #define TEST_FAILURE (char)-1
 #define TEST_SETUP_FAILURE (char)-2
-#define TEST_WIFI_CONNECT_DISCONNECT "faf397aa-05a7-40fe-b83a-599cd15800d0"
-#define TEST_MQTT_ECHO "8b9c7c5c-7f02-46dc-ad45-595709e6e2e5"
-#define TEST_MQTT_ECHO_REPEATED "3b593970-4a79-4fe5-9f0c-d52bef6aa11e"
 
 // TEST_WIFI_CONNECT_DISCONNECT
-static void test_wifi_connect_disconnect();
+#define TEST_WIFI_CONNECT_DISCONNECT 0
+static esp_err_t test_wifi_connect_disconnect();
 
 // TEST_MQTT_ECHO and TEST_MQTT_ECHO_REPEATED
+#define TEST_MQTT_ECHO 1
+#define TEST_MQTT_ECHO_REPEATED 2
 #define TEST_ECHO_WAIT_TIMEOUT 5000
 static EventGroupHandle_t s_mqtt_wait_group;
-static void test_mqtt_echo(int reruns);
+static esp_err_t test_mqtt_echo(int reruns);
 static void test_mqtt_echo_subscribe_callback(hub_mqtt_client* client, const char* topic, const void* data, int length);
 
 void app_main()
 {
-    char* test_id = NULL;
+    int test_id = -1;
 
     /* TO DO: GET FROM STDIN */
 
@@ -125,7 +125,7 @@ void app_main()
     }
 }
 
-static void test_wifi_connect_disconnect()
+static esp_err_t test_wifi_connect_disconnect()
 {
     esp_err_t result = ESP_OK;
 
@@ -160,9 +160,9 @@ static void test_wifi_connect_disconnect()
 
     ESP_LOGI(TAG, "Wifi initialization success.");
 
-cleanup_wifi_connect:
     hub_wifi_disconnect();
     hub_wifi_cleanup();
+
 cleanup_event_loop:
     esp_event_loop_delete_default();
 cleanup_nvs:
@@ -171,7 +171,7 @@ no_cleanup:
     return result;
 }
 
-void test_mqtt_echo(int reruns)
+static esp_err_t test_mqtt_echo(int reruns)
 {
     esp_err_t result = ESP_OK;
 

@@ -7,8 +7,8 @@
 #include "mqtt_client.h"
 
 struct hub_mqtt_client;
-
 typedef struct hub_mqtt_client hub_mqtt_client;
+
 typedef esp_mqtt_client_config_t hub_mqtt_client_config;
 typedef void (*hub_mqtt_client_subscribe_callback_t)(hub_mqtt_client* client, const char* topic, const void* data, int length);
 
@@ -21,7 +21,7 @@ struct hub_mqtt_client
     esp_err_t (*publish)(hub_mqtt_client* client, const char* topic, const char* data);
     esp_err_t (*subscribe)(hub_mqtt_client* client, const char* topic);
     esp_err_t (*unsubscribe)(hub_mqtt_client* client, const char* topic);
-    esp_err_t (*register_subscribe_callback)(hub_mqtt_client* client, const char* topic);
+    esp_err_t (*register_subscribe_callback)(hub_mqtt_client* client, hub_mqtt_client_subscribe_callback_t callback);
 };
 
 esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_client_config* config);
