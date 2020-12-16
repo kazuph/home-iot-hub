@@ -54,13 +54,13 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         else
         {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            ESP_LOGI(TAG, "Connect to the access point failed.");
+            ESP_LOGI(TAG, "Connect to the access point failed.\n");
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
         ip_event_got_ip_t *event = (ip_event_got_ip_t*)event_data;
-        ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -74,7 +74,7 @@ esp_err_t hub_wifi_connect(wifi_config_t* config)
     s_wifi_event_group = xEventGroupCreate();
     if (s_wifi_event_group == NULL)
     {
-        ESP_LOGE(TAG, "Could not create event group.");
+        ESP_LOGE(TAG, "Could not create event group.\n");
         result = ESP_FAIL;
         goto cleanup_event_group;
     }
@@ -85,49 +85,49 @@ esp_err_t hub_wifi_connect(wifi_config_t* config)
     result = esp_wifi_init(&wifi_init_config);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Wi-Fi initialization failed.");
+        ESP_LOGE(TAG, "Wi-Fi initialization failed.\n");
         goto cleanup_wifi_init;
     }
 
     result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler, NULL);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Event initialization failed.");
+        ESP_LOGE(TAG, "Event initialization failed.\n");
         goto cleanup_wifi_init;
     }
 
     result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler, NULL);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Event initialization failed.");
+        ESP_LOGE(TAG, "Event initialization failed.\n");
         goto cleanup_wifi_init;
     }
 
     result = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler, NULL);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Event initialization failed.");
+        ESP_LOGE(TAG, "Event initialization failed.\n");
         goto cleanup_event_handler_register;
     }
 
     result = esp_wifi_set_mode(WIFI_MODE_STA);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Setting WiFi mode failed.");
+        ESP_LOGE(TAG, "Setting WiFi mode failed.\n");
         goto cleanup_wifi_init;
     }
 
     result = esp_wifi_set_config(ESP_IF_WIFI_STA, config);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Setting WiFi configuration failed.");
+        ESP_LOGE(TAG, "Setting WiFi configuration failed.\n");
         goto cleanup_wifi_init;
     }
 
     result = esp_wifi_start();
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "WiFi start failed.");
+        ESP_LOGE(TAG, "WiFi start failed.\n");
         goto cleanup_wifi_init;
     }
 
@@ -137,17 +137,17 @@ esp_err_t hub_wifi_connect(wifi_config_t* config)
 
     if (bits & WIFI_CONNECTED_BIT)
     {
-        ESP_LOGI(TAG, "Connected to SSID: %s.", config->sta.ssid);
+        ESP_LOGI(TAG, "Connected to SSID: %s.\n", config->sta.ssid);
     }
     else if (bits & WIFI_FAIL_BIT)
     {
-        ESP_LOGW(TAG, "Failed connecting to SSID: %s.", config->sta.ssid);
+        ESP_LOGW(TAG, "Failed connecting to SSID: %s.\n", config->sta.ssid);
         result = ESP_FAIL;
         goto cleanup_wifi_connect;
     }
     else
     {
-        ESP_LOGW(TAG, "Unexpected event.");
+        ESP_LOGW(TAG, "Unexpected event.\n");
         result = ESP_FAIL;
         goto cleanup_wifi_connect;
     }
