@@ -29,7 +29,7 @@ class TestHomeIotHub(TestCase):
         """
         TEST WIFI CONNECT DISCONNECT
         """
-        TEST_UUID = 'faf397aa-05a7-40fe-b83a-599cd15800d0'
+        TEST_ID = 0
         pass
 
     def test_mqtt_echo(self):
@@ -37,7 +37,7 @@ class TestHomeIotHub(TestCase):
         TEST MQTT ECHO
         Send 128 random tokens to client.
         """
-        TEST_UUID = '8b9c7c5c-7f02-46dc-ad45-595709e6e2e5'
+        TEST_ID = 1
         topic_publish = '/hub_test/publish'
         topic_subscribe = '/hub_test/subscribe'
 
@@ -61,7 +61,7 @@ class TestHomeIotHub(TestCase):
         TEST MQTT ECHO REPEATED
         Send 128 random tokens to client, repeat 10 times.
         """
-        TEST_UUID = '3b593970-4a79-4fe5-9f0c-d52bef6aa11e'
+        TEST_ID = 2
         topic_publish = '/hub_test/publish'
         topic_subscribe = '/hub_test/subscribe'
         reruns = 10
