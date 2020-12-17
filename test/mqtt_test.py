@@ -23,7 +23,6 @@ class TestHomeIotHub(TestCase):
         self.client = mqtt.Client(client_id=self.client_id)
         self.client.connect(host=self.host, port=self.port)
         self.serial = serial.Serial('COM7', 74880, timeout=1)
-        self.serial.write(b'\xFF')
 
     def tearDown(self):
         self.serial.close()
@@ -50,20 +49,23 @@ class TestHomeIotHub(TestCase):
         test_string = token_hex(4)
         TestHomeIotHub.reset_payload()
 
-        self.serial.write(TEST_ID.to_bytes(1, byteorder='big'))
-        self.serial.write(b'\n')
-
         self.client.subscribe(topic_subscribe)
         self.client.on_message = TestHomeIotHub.on_message    
         self.client.loop_start()
+
+        self.serial.write(TEST_ID.to_bytes(1, byteorder='big'))
+        self.serial.write(b'\n')
+
         self.client.publish(topic_publish, test_string)
-        time.sleep(3)
-        self.client.loop_stop()
-        self.client.unsubscribe(topic_subscribe)
+
+        time.sleep(5.0)
 
         with TestHomeIotHub.PAYLOAD_LOCK:
             self.assertIsNotNone(TestHomeIotHub.PAYLOAD)
             self.assertEqual(test_string, str(TestHomeIotHub.PAYLOAD[:len(test_string)], 'utf-8'))
+
+        self.client.loop_stop()
+        self.client.unsubscribe(topic_subscribe)
 
     def test_mqtt_echo_repeated(self):
         """
@@ -75,24 +77,28 @@ class TestHomeIotHub(TestCase):
         topic_subscribe = '/test/subscribe'
         reruns = 10
 
+        self.client.subscribe(topic_subscribe)
+        self.client.on_message = TestHomeIotHub.on_message
+        self.client.loop_start()
+
         self.serial.write(TEST_ID.to_bytes(1, byteorder='big'))
         self.serial.write(b'\n')
 
         for i in range(0, reruns):
-            test_string = token_hex(4)
+            test_string = token_hex(128)
             TestHomeIotHub.reset_payload()
-
-            self.client.subscribe(topic_subscribe)
-            self.client.on_message = TestHomeIotHub.on_message    
+  
             self.client.loop_start()
             self.client.publish(topic_publish, test_string)
-            time.sleep(3)
-            self.client.loop_stop()
-            self.client.unsubscribe(topic_subscribe)
+
+            time.sleep(5.0)
 
             with TestHomeIotHub.PAYLOAD_LOCK:
                 self.assertIsNotNone(TestHomeIotHub.PAYLOAD)
                 self.assertEqual(test_string, str(TestHomeIotHub.PAYLOAD[:len(test_string)], 'utf-8'))
+
+        self.client.loop_stop()
+        self.client.unsubscribe(topic_subscribe)
 
     @staticmethod
     def on_message(client, userdata, message):

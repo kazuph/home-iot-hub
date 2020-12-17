@@ -45,8 +45,14 @@ menu "Home-IoT-Hub Wi-Fi Configuration"
             Can be left blank if the network has no security set.
 
     config MAXIMUM_RETRY
-        int "Maximum retry"
+        int "WiFi Connection Retries"
         default 5
         help
-            Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+            Maximum WiFi connection retries.
+endmenu
+
+menu "Home-IoT-Hub Test"
+    config TEST
+        bool "ENABLE TEST"
+        default n
 endmenu
