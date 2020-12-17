@@ -20,10 +20,20 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+static esp_err_t app_init();
+
 static const char* TAG = "HUB_MAIN";
 static hub_mqtt_client mqtt_client;
 
 void app_main()
+{
+    if (app_init() != ESP_OK)
+    {
+        esp_restart();
+    }
+}
+
+static esp_err_t app_init()
 {
     esp_err_t result = ESP_OK;
     wifi_config_t wifi_config = {
@@ -42,7 +52,7 @@ void app_main()
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "NVS flash initialization failed.");
-        goto restart;
+        return ESP_FAIL;
     }
 
     result = esp_event_loop_create_default();
@@ -80,7 +90,7 @@ void app_main()
         goto cleanup_mqtt_client;
     }
 
-    ESP_LOGI(TAG, "MQTT client initialization success.");
+    return result;
 
 cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
@@ -90,8 +100,8 @@ cleanup_event_loop:
     esp_event_loop_delete_default();
 cleanup_nvs:
     nvs_flash_deinit();
-restart:
-    esp_restart();
+
+    return result;
 }
 
 #else
