@@ -48,7 +48,8 @@ menu "Home-IoT-Hub Wi-Fi Configuration"
         int "WiFi Connection Retries"
         default 5
         help
-            Maximum WiFi connection retries.
+            Maximum WiFi connection retries. If set to -1, the number
+            of retries is infinite.
 endmenu
 
 menu "Home-IoT-Hub Test"
