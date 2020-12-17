@@ -16,8 +16,10 @@ esp_err_t hub_wifi_connect(wifi_config_t* config);
 esp_err_t hub_wifi_disconnect();
 
 /*
-*   Cleanup WiFi resources.
+*   Wait for WiFi connection. Number of retries is specified
+*   with CONFIG_MAXIMUM_RETRY macro that can be set in sdkconfig.
+*   If set to -1, number of retries is infinite.
 */
-esp_err_t hub_wifi_cleanup();
+esp_err_t hub_wifi_wait_for_connection();
 
 #endif
