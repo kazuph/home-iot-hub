@@ -1,3 +1,5 @@
+#ifndef CONFIG_TEST
+
 #include "hub_wifi.h"
 #include "hub_mqtt.h"
 
@@ -18,13 +20,23 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-const char* TAG = "HUB_MAIN";
-
-#ifndef CONFIG_TEST
+static const char* TAG = "HUB_MAIN";
+static hub_mqtt_client mqtt_client;
 
 void app_main()
 {
     esp_err_t result = ESP_OK;
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = CONFIG_WIFI_SSID,
+            .password = CONFIG_WIFI_PASSWORD,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK
+        },
+    };
+    hub_mqtt_client_config mqtt_client_config = {
+        .uri = CONFIG_MQTT_URI,
+        .port = CONFIG_MQTT_PORT
+    };
 
     result = nvs_flash_init();
     if (result != ESP_OK)
@@ -40,26 +52,19 @@ void app_main()
         goto cleanup_nvs;
     }
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK
-        },
-    };
-
-    result = hub_wifi_connect(&wifi_config);    
+    result = hub_wifi_connect(&wifi_config);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Wifi connection failed.");
+        ESP_LOGE(TAG, "Wifi initialization failed.");
         goto cleanup_event_loop;
     }
 
-    hub_mqtt_client mqtt_client;
-    hub_mqtt_client_config mqtt_client_config = {
-        .uri = CONFIG_MQTT_URI,
-        .port = CONFIG_MQTT_PORT
-    };
+    result = hub_wifi_wait_for_connection();
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Wifi connection failed.");
+        goto cleanup_wifi_connect;
+    }
 
     result = hub_mqtt_client_initialize(&mqtt_client, &mqtt_client_config);
     if (result != ESP_OK)
@@ -81,7 +86,6 @@ cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
 cleanup_wifi_connect:
     hub_wifi_disconnect();
-    hub_wifi_cleanup();
 cleanup_event_loop:
     esp_event_loop_delete_default();
 cleanup_nvs:
@@ -98,4 +102,5 @@ void app_main()
 {
     test_run();
 }
+
 #endif
