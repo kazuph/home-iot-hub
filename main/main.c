@@ -20,6 +20,8 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#define WIFI_CONNECTION_TIMEOUT 5000
+
 static esp_err_t app_init();
 
 static const char* TAG = "HUB_MAIN";
@@ -27,10 +29,16 @@ static hub_mqtt_client mqtt_client;
 
 void app_main()
 {
-    if (app_init() != ESP_OK)
+    esp_err_t result = ESP_OK;
+
+    result = app_init();
+    if (result != ESP_OK)
     {
-        esp_restart();
+        goto restart;
     }
+
+restart:
+    esp_restart();
 }
 
 static esp_err_t app_init()
@@ -69,7 +77,7 @@ static esp_err_t app_init()
         goto cleanup_event_loop;
     }
 
-    result = hub_wifi_wait_for_connection(5000);
+    result = hub_wifi_wait_for_connection(WIFI_CONNECTION_TIMEOUT);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Wifi connection failed.");
