@@ -27,7 +27,7 @@ struct hub_mqtt_client
 /*
 *   Initialize MQTT client with the specified config.
 */
-esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_client_config* config);
+esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config);
 
 /*
 *   Destroy MQTT client.

@@ -118,7 +118,7 @@ static esp_err_t _hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* c
     return ESP_OK;
 }
 
-esp_err_t hub_mqtt_client_initialize(hub_mqtt_client* client, const hub_mqtt_client_config* config)
+esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config)
 {
     client->start = &_hub_mqtt_client_start;
     client->stop = &_hub_mqtt_client_stop;

@@ -76,7 +76,7 @@ static esp_err_t app_init()
         goto cleanup_wifi_connect;
     }
 
-    result = hub_mqtt_client_initialize(&mqtt_client, &mqtt_client_config);
+    result = hub_mqtt_client_init(&mqtt_client, &mqtt_client_config);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.");

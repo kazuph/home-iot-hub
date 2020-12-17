@@ -214,7 +214,7 @@ static test_err_t test_mqtt_echo(int reruns)
         .port = CONFIG_MQTT_PORT
     };
 
-    result = hub_mqtt_client_initialize(&mqtt_client, &mqtt_client_config);
+    result = hub_mqtt_client_init(&mqtt_client, &mqtt_client_config);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.\n");
