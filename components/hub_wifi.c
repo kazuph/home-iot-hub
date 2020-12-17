@@ -175,7 +175,7 @@ esp_err_t hub_wifi_disconnect()
     return ESP_OK;
 }
 
-esp_err_t hub_wifi_wait_for_connection()
+esp_err_t hub_wifi_wait_for_connection(TickType_t timeout)
 {
     esp_err_t result = ESP_OK;
 
@@ -187,7 +187,7 @@ esp_err_t hub_wifi_wait_for_connection()
     }
 
 #ifndef RETRY_INFINITE
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, timeout);
 #else
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 #endif

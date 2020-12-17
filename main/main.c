@@ -59,7 +59,7 @@ void app_main()
         goto cleanup_event_loop;
     }
 
-    result = hub_wifi_wait_for_connection();
+    result = hub_wifi_wait_for_connection(5000);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Wifi connection failed.");

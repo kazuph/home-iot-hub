@@ -20,6 +20,6 @@ esp_err_t hub_wifi_disconnect();
 *   with CONFIG_MAXIMUM_RETRY macro that can be set in sdkconfig.
 *   If set to -1, number of retries is infinite.
 */
-esp_err_t hub_wifi_wait_for_connection();
+esp_err_t hub_wifi_wait_for_connection(TickType_t timeout);
 
 #endif
