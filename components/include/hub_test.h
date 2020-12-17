@@ -8,6 +8,10 @@ typedef enum test_err_t
     TEST_SETUP_FAILURE = -2
 } test_err_t;
 
+/*
+*   Run tests. Function waits for serial input, which specifies ID of the
+*   desired test.
+*/
 void test_run();
 
 #endif

@@ -45,7 +45,7 @@ static test_err_t test_wifi_connect_disconnect();
 
 // TEST_MQTT_ECHO and TEST_MQTT_ECHO_REPEATED
 static test_err_t test_mqtt_echo(int reruns);
-static void test_mqtt_echo_subscribe_callback(hub_mqtt_client* client, const char* topic, const void* data, int length);
+static void test_mqtt_echo_data_callback(hub_mqtt_client* client, const char* topic, const void* data, int length);
 
 void test_run()
 {
@@ -63,13 +63,11 @@ void test_run()
             char c = fgetc(stdin);
             if (c == '\n') 
             {
-                printf("%i\n", (int)c);
                 msg[count] = '\0';
                 break;
             } 
             else if (c > 0 && c < 127) 
             {
-                printf("%i\n", (int)c);
                 msg[count] = c;
                 ++count;
             }
@@ -81,24 +79,23 @@ void test_run()
 
         switch (test_id)
         {
-            case TEST_WIFI_CONNECT_DISCONNECT: 
-                ESP_LOGI(TAG, "TEST CONNECT DISCONNECT\n");  
-                test_result = test_wifi_connect_disconnect(); 
-                break;
-            case TEST_MQTT_ECHO:               
-                ESP_LOGI(TAG, "TEST MQTT ECHO\n");  
-                test_result = test_mqtt_echo(1);              
-                break;
-            case TEST_MQTT_ECHO_REPEATED:      
-                ESP_LOGI(TAG, "TEST MQTT ECHO REPEATED\n");  
-                test_result = test_mqtt_echo(TEST_MQTT_ECHO_REPEATED_RERUNS);             
-                break;
-            default: goto restart;
+        case TEST_WIFI_CONNECT_DISCONNECT: 
+            ESP_LOGI(TAG, "TEST CONNECT DISCONNECT\n");  
+            test_result = test_wifi_connect_disconnect(); 
+            break;
+        case TEST_MQTT_ECHO:               
+            ESP_LOGI(TAG, "TEST MQTT ECHO\n");  
+            test_result = test_mqtt_echo(1);              
+            break;
+        case TEST_MQTT_ECHO_REPEATED:      
+            ESP_LOGI(TAG, "TEST MQTT ECHO REPEATED\n");  
+            test_result = test_mqtt_echo(TEST_MQTT_ECHO_REPEATED_RERUNS);             
+            break;
+        default:
+            ESP_LOGW(TAG, "Unknown test ID.\n");  
+            break;
         }
     }
-
-restart:
-    esp_restart();
 }
 
 static esp_err_t stdin_stdout_config()
@@ -156,7 +153,6 @@ static test_err_t test_wifi_connect_disconnect()
     ESP_LOGI(TAG, "Wifi initialization success.\n");
 
     hub_wifi_disconnect();
-    hub_wifi_cleanup();
 
 cleanup_event_loop:
     esp_event_loop_delete_default();
@@ -242,7 +238,7 @@ static test_err_t test_mqtt_echo(int reruns)
         goto cleanup_mqtt_client;
     }
 
-    result = mqtt_client.register_subscribe_callback(&mqtt_client, &test_mqtt_echo_subscribe_callback);
+    result = mqtt_client.register_data_callback(&mqtt_client, &test_mqtt_echo_data_callback);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client could not register subscribe callback.\n");
@@ -271,7 +267,6 @@ cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
 cleanup_wifi_connect:
     hub_wifi_disconnect();
-    hub_wifi_cleanup();
 cleanup_event_loop:
     esp_event_loop_delete_default();
 cleanup_nvs:
@@ -282,7 +277,7 @@ no_cleanup:
     return test_result;
 }
 
-static void test_mqtt_echo_subscribe_callback(hub_mqtt_client* client, const char* topic, const void* data, int length)
+static void test_mqtt_echo_data_callback(hub_mqtt_client* client, const char* topic, const void* data, int length)
 {
     ESP_LOGI(TAG, "MESSAGE: %s\n", (const char*)data);
     client->publish(client, "/test/subscribe", (const char*)data);
