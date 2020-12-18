@@ -75,7 +75,6 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             ESP_LOGE(TAG, esp_err_to_name(result));
         }
 
-        s_retry_num++;
         ESP_LOGI(TAG, "Disconnected, retrying...\r");
 #endif
     }
@@ -175,7 +174,7 @@ esp_err_t hub_wifi_disconnect()
     return ESP_OK;
 }
 
-esp_err_t hub_wifi_wait_for_connection(TickType_t timeout)
+esp_err_t hub_wifi_wait_for_connection(int timeout)
 {
     esp_err_t result = ESP_OK;
 
@@ -187,9 +186,9 @@ esp_err_t hub_wifi_wait_for_connection(TickType_t timeout)
     }
 
 #ifndef RETRY_INFINITE
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, timeout);
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
 #else
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
 #endif
 
     if (bits & WIFI_CONNECTED_BIT)
