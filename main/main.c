@@ -1,4 +1,4 @@
-#ifndef CONFIG_TEST
+#if (CONFIG_TEST == 1)
 
 #include "hub_wifi.h"
 #include "hub_mqtt.h"

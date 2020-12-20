@@ -5,7 +5,9 @@ typedef enum test_err_t
 {
     TEST_SUCCESS = 0,
     TEST_FAILURE = -1,
-    TEST_SETUP_FAILURE = -2
+    TEST_SETUP_FAILURE = -2,
+    TEST_TIMEOUT = -3,
+    TEST_UNKNOWN_ID = -4
 } test_err_t;
 
 /*

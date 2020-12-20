@@ -23,22 +23,24 @@
 #include "esp_vfs_dev.h"
 #include "driver/uart.h"
 
-#define TEST_MSG_MAX_LEN (2 * sizeof(char))
-
 // TEST_WIFI_CONNECT_DISCONNECT
 #define TEST_WIFI_CONNECT_DISCONNECT 0
 
 // TEST_MQTT_ECHO and TEST_MQTT_ECHO_REPEATED
 #define TEST_MQTT_ECHO 1
 #define TEST_MQTT_ECHO_REPEATED 2
-#define TEST_MQTT_ECHO_TIMEOUT 10000
+#define TEST_MQTT_ECHO_TIMEOUT (TickType_t)5000 / portTICK_PERIOD_MS
 #define TEST_MQTT_ECHO_REPEATED_RERUNS 10
+
+// TEST_MQTT_JSON_RECEIVE
+#define TEST_MQTT_JSON_RECEIVE 3
 
 const char* TAG = "HUB_MAIN_TEST";
 
 static EventGroupHandle_t s_mqtt_wait_group;
 
-static esp_err_t stdin_stdout_config();
+static esp_err_t stdio_config();
+static esp_err_t wifi_config();
 
 // TEST_WIFI_CONNECT_DISCONNECT
 static test_err_t test_wifi_connect_disconnect();
@@ -47,35 +49,34 @@ static test_err_t test_wifi_connect_disconnect();
 static test_err_t test_mqtt_echo(int reruns);
 static void test_mqtt_echo_data_callback(hub_mqtt_client* client, const char* topic, const void* data, int length);
 
+// TEST_MQTT_JSON_RECEIVE
+static test_err_t test_mqtt_json_receive();
+
 void test_run()
 {
-    stdin_stdout_config();
+    stdio_config();
+
+    if (nvs_flash_init() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "NVS flash initialization failed.");
+        esp_restart();
+    }
+
+    if (esp_event_loop_create_default() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Default event loop creation failed.");
+        esp_restart();
+    }
 
     test_err_t test_result = TEST_SUCCESS;
     char test_id = -1;
     unsigned char count = 0;
-    char msg[TEST_MSG_MAX_LEN];
 
     while (1)
     {
-        while (count < TEST_MSG_MAX_LEN) 
-        {
-            char c = fgetc(stdin);
-            if (c == '\n') 
-            {
-                msg[count] = '\0';
-                break;
-            } 
-            else if (c > 0 && c < 127) 
-            {
-                msg[count] = c;
-                ++count;
-            }
-
-            vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-
-        test_id = msg[0];
+        printf("TEST ID: ");
+        test_id = fgetc(stdin);
+        count = 0;
 
         switch (test_id)
         {
@@ -91,14 +92,21 @@ void test_run()
             ESP_LOGI(TAG, "TEST MQTT ECHO REPEATED\n");  
             test_result = test_mqtt_echo(TEST_MQTT_ECHO_REPEATED_RERUNS);             
             break;
+        case TEST_MQTT_JSON_RECEIVE:
+            ESP_LOGI(TAG, "TEST MQTT JSON RECEIVE\n");  
+            test_result = test_mqtt_json_receive(); 
+            break;
         default:
-            ESP_LOGW(TAG, "Unknown test ID.\n");  
+            ESP_LOGW(TAG, "Unknown test ID.\n"); 
+            test_result = TEST_UNKNOWN_ID;
             break;
         }
+
+        printf("TEST RESULT: %i\n", (int)test_result);
     }
 }
 
-static esp_err_t stdin_stdout_config()
+static esp_err_t stdio_config()
 {
     // Initialize VFS & UART so we can use std::cout/cin
     setvbuf(stdin, NULL, _IONBF, 0);
@@ -113,26 +121,9 @@ static esp_err_t stdin_stdout_config()
     return ESP_OK;
 }
 
-static test_err_t test_wifi_connect_disconnect()
+static esp_err_t wifi_config()
 {
-    test_err_t test_result = TEST_SUCCESS;
     esp_err_t result = ESP_OK;
-
-    result = nvs_flash_init();
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "NVS flash initialization failed.\n");
-        test_result = TEST_SETUP_FAILURE;
-        goto no_cleanup;
-    }
-
-    result = esp_event_loop_create_default();
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Default event loop creation failed.\n");
-        test_result = TEST_SETUP_FAILURE;
-        goto cleanup_nvs;
-    }
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -146,18 +137,38 @@ static test_err_t test_wifi_connect_disconnect()
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Wifi connection failed.\n");
-        test_result = TEST_FAILURE;
-        goto cleanup_event_loop;
+        goto no_cleanup;
+    }
+
+    result = hub_wifi_wait_for_connection(5000);    
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Wifi connection failed.\n");
+        goto cleanup_wifi;
     }
 
     ESP_LOGI(TAG, "Wifi initialization success.\n");
 
-    hub_wifi_disconnect();
+    return result;
 
-cleanup_event_loop:
-    esp_event_loop_delete_default();
-cleanup_nvs:
-    nvs_flash_deinit();
+cleanup_wifi:
+    hub_wifi_disconnect();
+no_cleanup:
+    return result;
+}
+
+static test_err_t test_wifi_connect_disconnect()
+{
+    test_err_t test_result = TEST_SUCCESS;
+    esp_err_t result = wifi_config();
+
+    if (result != ESP_OK)
+    {
+        test_result = TEST_FAILURE;
+        goto no_cleanup;
+    }
+
+    hub_wifi_disconnect();
 no_cleanup:
     return test_result;
 }
@@ -176,36 +187,12 @@ static test_err_t test_mqtt_echo(int reruns)
         goto no_cleanup;
     }
 
-    result = nvs_flash_init();
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "NVS flash initialization failed.\n");
-        test_result = TEST_SETUP_FAILURE;
-        goto cleanup_event_group;
-    }
-
-    result = esp_event_loop_create_default();
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Default event loop creation failed.\n");
-        test_result = TEST_SETUP_FAILURE;
-        goto cleanup_nvs;
-    }
-
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK
-        },
-    };
-
-    result = hub_wifi_connect(&wifi_config);    
+    result = wifi_config(); 
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Wifi connection failed.\n");
         test_result = TEST_SETUP_FAILURE;
-        goto cleanup_event_loop;
+        goto cleanup_event_group;
     }
 
     hub_mqtt_client mqtt_client;
@@ -254,23 +241,17 @@ static test_err_t test_mqtt_echo(int reruns)
         if (!(bits & BIT0))
         {
             ESP_LOGE(TAG, "TIMEOUT.\n");
-            test_result = TEST_FAILURE;
+            test_result = TEST_TIMEOUT;
             goto cleanup_mqtt_client;
         }
 
         xEventGroupClearBits(s_mqtt_wait_group, BIT0);
     }
 
-    ESP_LOGI(TAG, "MQTT client initialization success.\n");
-
 cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
 cleanup_wifi_connect:
     hub_wifi_disconnect();
-cleanup_event_loop:
-    esp_event_loop_delete_default();
-cleanup_nvs:
-    nvs_flash_deinit();
 cleanup_event_group:
     vEventGroupDelete(s_mqtt_wait_group);
 no_cleanup:
@@ -282,4 +263,64 @@ static void test_mqtt_echo_data_callback(hub_mqtt_client* client, const char* to
     ESP_LOGI(TAG, "MESSAGE: %s\n", (const char*)data);
     client->publish(client, "/test/subscribe", (const char*)data);
     xEventGroupSetBits(s_mqtt_wait_group, BIT0);
+}
+
+static test_err_t test_mqtt_json_receive()
+{
+    test_err_t test_result = TEST_SUCCESS;
+    esp_err_t result = ESP_OK;
+
+    result = wifi_config();    
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Wifi connection failed.\n");
+        test_result = TEST_SETUP_FAILURE;
+        goto cleanup_wifi_connect;
+    }
+
+    hub_mqtt_client mqtt_client;
+    hub_mqtt_client_config mqtt_client_config = {
+        .uri = CONFIG_MQTT_URI,
+        .port = CONFIG_MQTT_PORT
+    };
+
+    result = hub_mqtt_client_init(&mqtt_client, &mqtt_client_config);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MQTT client initialization failed.\n");
+        test_result = TEST_FAILURE;
+        goto cleanup_wifi_connect;
+    }
+
+    result = mqtt_client.start(&mqtt_client);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MQTT client start failed.\n");
+        test_result = TEST_FAILURE;
+        goto cleanup_mqtt_client;
+    }
+
+    result = mqtt_client.publish(&mqtt_client, "/test/json", "\
+    {\
+        \"BLE_devices\": [\
+            \"Device1\",\
+            \"Device2\",\
+            \"Device3\",\
+            \"Device4\",\
+        ]\
+    }");
+
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MQTT client could not publish JSON.\n");
+        test_result = TEST_FAILURE;
+        goto cleanup_mqtt_client;
+    }
+
+cleanup_mqtt_client:
+    hub_mqtt_client_destroy(&mqtt_client);
+cleanup_wifi_connect:
+    hub_wifi_disconnect();
+
+    return test_result;
 }
