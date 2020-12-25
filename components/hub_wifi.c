@@ -11,9 +11,6 @@
 #include "esp_event.h"
 #include "esp_log.h"
 
-#include "nvs.h"
-#include "nvs_flash.h"
-
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
@@ -163,12 +160,12 @@ cleanup_wifi_init:
 }
 
 esp_err_t hub_wifi_disconnect()
-{
-    esp_wifi_disconnect();
-    esp_wifi_stop();
+{    
     esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
     esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
     esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
+    esp_wifi_disconnect();
+    esp_wifi_stop();
     esp_wifi_deinit();
 
     return ESP_OK;
