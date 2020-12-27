@@ -1,8 +1,6 @@
 #ifndef HUB_MQTT_H
 #define HUB_MQTT_H
 
-#include <stdint.h>
-
 #include "esp_err.h"
 #include "mqtt_client.h"
 

@@ -11,7 +11,6 @@
 #include "esp_event.h"
 #include "esp_log.h"
 
-#include "nvs.h"
 #include "nvs_flash.h"
 
 static const char* TAG = "HUB_MAIN_TEST";

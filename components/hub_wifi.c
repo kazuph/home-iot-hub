@@ -38,7 +38,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         result = esp_wifi_connect();
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, esp_err_to_name(result));
+            ESP_LOGE(TAG, "WiFi connection failed.");
         }
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
@@ -50,7 +50,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
             if (result != ESP_OK)
             {
-                ESP_LOGE(TAG, esp_err_to_name(result));
+                ESP_LOGE(TAG, "WiFi connection failed.");
             }
 
             s_retry_num++;
@@ -69,7 +69,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, esp_err_to_name(result));
+            ESP_LOGE(TAG, "WiFi connection failed.");
         }
 
         ESP_LOGI(TAG, "Disconnected, retrying...\r");
@@ -96,6 +96,7 @@ esp_err_t hub_wifi_connect(wifi_config_t* config)
     esp_err_t result = ESP_OK;
 
     esp_netif_init();
+    esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
     result = esp_wifi_init(&wifi_init_config);

@@ -1,4 +1,6 @@
-#if (CONFIG_TEST == 1)
+#include "sdkconfig.h"
+
+#ifndef CONFIG_TEST
 
 #include "hub_wifi.h"
 #include "hub_mqtt.h"
@@ -20,7 +22,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#define WIFI_CONNECTION_TIMEOUT 5000
+#define WIFI_CONNECTION_TIMEOUT 5000 // ms
 
 static esp_err_t app_init();
 
@@ -37,6 +39,14 @@ void app_main()
         goto restart;
     }
 
+    ESP_LOGI(TAG, "Setup successful");
+
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+    hub_mqtt_client_destroy(&mqtt_client);
+    hub_wifi_disconnect();
+    esp_event_loop_delete_default();
+    nvs_flash_deinit();
 restart:
     esp_restart();
 }
