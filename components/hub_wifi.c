@@ -196,7 +196,7 @@ esp_err_t hub_wifi_wait_for_connection(int timeout)
 #ifndef RETRY_INFINITE
     else if (bits & WIFI_FAIL_BIT)
     {
-        ESP_LOGW(TAG, "WiFi failed.\n");
+        ESP_LOGW(TAG, "WiFi connection failed.\n");
         result = ESP_FAIL;
     }
 #endif

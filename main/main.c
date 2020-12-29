@@ -4,6 +4,7 @@
 
 #include "hub_wifi.h"
 #include "hub_mqtt.h"
+#include "hub_ble.h"
 
 #include <stdio.h>
 #include <stddef.h>
@@ -25,6 +26,7 @@
 #define WIFI_CONNECTION_TIMEOUT 5000 // ms
 
 static esp_err_t app_init();
+static esp_err_t app_cleanup();
 
 static const char* TAG = "HUB_MAIN";
 static hub_mqtt_client mqtt_client;
@@ -41,12 +43,9 @@ void app_main()
 
     ESP_LOGI(TAG, "Setup successful");
 
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    vTaskDelay(30000 / portTICK_PERIOD_MS);
 
-    hub_mqtt_client_destroy(&mqtt_client);
-    hub_wifi_disconnect();
-    esp_event_loop_delete_default();
-    nvs_flash_deinit();
+    app_cleanup();
 restart:
     esp_restart();
 }
@@ -108,6 +107,13 @@ static esp_err_t app_init()
         goto cleanup_mqtt_client;
     }
 
+    result = hub_ble_init();
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE initialization failed.");
+        goto cleanup_mqtt_client;
+    }
+
     return result;
 
 cleanup_mqtt_client:
@@ -120,6 +126,16 @@ cleanup_nvs:
     nvs_flash_deinit();
 
     return result;
+}
+
+static esp_err_t app_cleanup()
+{
+    hub_mqtt_client_destroy(&mqtt_client);
+    hub_wifi_disconnect();
+    esp_event_loop_delete_default();
+    nvs_flash_deinit();
+
+    return ESP_OK;
 }
 
 #else
