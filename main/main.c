@@ -27,6 +27,7 @@
 
 static esp_err_t app_init();
 static esp_err_t app_cleanup();
+static void ble_scan_callback(esp_bd_addr_t address, const char* device_name);
 
 static const char* TAG = "HUB_MAIN";
 static hub_mqtt_client mqtt_client;
@@ -43,7 +44,7 @@ void app_main()
 
     ESP_LOGI(TAG, "Setup successful");
 
-    vTaskDelay(30000 / portTICK_PERIOD_MS);
+    vTaskDelay(3600000 / portTICK_PERIOD_MS);
 
     app_cleanup();
 restart:
@@ -107,6 +108,13 @@ static esp_err_t app_init()
         goto cleanup_mqtt_client;
     }
 
+    result = hub_ble_register_scan_callback(&ble_scan_callback);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE scan callback register failed.");
+        goto cleanup_mqtt_client;
+    }
+
     result = hub_ble_init();
     if (result != ESP_OK)
     {
@@ -136,6 +144,14 @@ static esp_err_t app_cleanup()
     nvs_flash_deinit();
 
     return ESP_OK;
+}
+
+static void ble_scan_callback(esp_bd_addr_t address, const char* device_name)
+{
+    ESP_LOGI(TAG, "Found device %s.", device_name);
+    static char buff[64];
+    sprintf(buff, "{\"name\":\"%s\"}", device_name);
+    mqtt_client.publish(&mqtt_client, "hub/scan", buff);
 }
 
 #else

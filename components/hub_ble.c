@@ -35,6 +35,8 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
 
 static const char* TAG = "HUB_BLE";
 
+static scan_callback_t scan_callback;
+
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
@@ -52,7 +54,66 @@ static gattc_profile_t gl_profile_tab[PROFILE_NUM] = {
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
+    uint8_t *adv_name = NULL;
+    uint8_t adv_name_len = 0;
 
+    switch (event)
+    {
+    case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
+        ESP_LOGI(TAG, "Set scan parameters complete.");
+        esp_ble_gap_start_scanning(30U /* seconds */);
+        break;
+    case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
+        //scan start complete event to indicate scan start successfully or failed
+        if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
+        {
+            ESP_LOGE(TAG, "Scan start failed, error: %x", param->scan_start_cmpl.status);
+            break;
+        }
+        ESP_LOGI(TAG, "Scan started...");
+        break;
+    case ESP_GAP_BLE_SCAN_RESULT_EVT:
+        ESP_LOGI(TAG, "Scan complete!");
+        switch (param->scan_rst.search_evt)
+        {
+        case ESP_GAP_SEARCH_INQ_RES_EVT:
+            //esp_log_buffer_hex(TAG, param->scan_rst.bda, 6);
+            //ESP_LOGI(TAG, "Searched Adv Data Len %d, Scan Response Len %d", param->scan_rst.adv_data_len, param->scan_rst.scan_rsp_len);
+            adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
+            //ESP_LOGI(TAG, "Searched Device Name Len %d", adv_name_len);
+            //esp_log_buffer_char(TAG, adv_name, adv_name_len);
+
+            if (scan_callback != NULL)
+            {
+                if (adv_name != NULL && strlen((const char*)adv_name) != 0)
+                {
+                    scan_callback(param->scan_rst.bda, (const char*)adv_name);
+                }
+            }
+            break;
+        case ESP_GAP_SEARCH_INQ_CMPL_EVT:
+            break;
+        default: break;
+        }
+    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
+        if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
+        {
+            ESP_LOGE(TAG, "Scan stop failed, wrror: %x", param->scan_stop_cmpl.status);
+            break;
+        }
+        ESP_LOGI(TAG, "Scan stopped successfully");
+        break;
+    case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+        ESP_LOGI(TAG, "Update connection params:\nstatus = %d,\nmin_int = %d,\nmax_int = %d,\nconn_int = %d,\nlatency = %d,\ntimeout = %d",
+            param->update_conn_params.status,
+            param->update_conn_params.min_int,
+            param->update_conn_params.max_int,
+            param->update_conn_params.conn_int,
+            param->update_conn_params.latency,
+            param->update_conn_params.timeout);
+        break;
+    default: break;
+    }
 }
 
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
@@ -66,7 +127,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
         else
         {
-            ESP_LOGI(TAG, "reg app failed, app_id %04x, status %d", param->reg.app_id, param->reg.status);
+            ESP_LOGI(TAG, "Register app failed, app_id %04x, status %d", param->reg.app_id, param->reg.status);
             return;
         }
     }
@@ -96,14 +157,8 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
         result = esp_ble_gap_set_scan_params(&ble_scan_params);
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "set scan params error, error code = %x", result);
+            ESP_LOGE(TAG, "Set scan parameters failed in function %s with error code %x.\n", __func__, result);
         }
-        break;
-    case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
-        esp_ble_gap_start_scanning(30U /* seconds */);
-        break;
-    case ESP_GAP_BLE_SCAN_RESULT_EVT:
-
         break;
     default: break;
     }
@@ -175,5 +230,16 @@ esp_err_t hub_ble_init()
 
 esp_err_t hub_ble_deinit()
 {
+    return ESP_OK;
+}
+
+esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
+{
+    if (callback == NULL)
+    {
+        return ESP_FAIL;
+    }
+
+    scan_callback = callback;
     return ESP_OK;
 }
