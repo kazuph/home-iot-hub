@@ -24,7 +24,7 @@
 
 static const char *TAG = "HUB WIFI";
 
-static EventGroupHandle_t s_wifi_event_group;
+static EventGroupHandle_t wifi_event_group;
 
 static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -60,7 +60,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         {
             if (s_wifi_event_group != NULL)
             {
-                xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+                xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
                 ESP_LOGI(TAG, "Connect to the access point failed.\n");
             }
         }
@@ -84,9 +84,9 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         s_retry_num = 0;
 #endif
 
-        if (s_wifi_event_group != NULL)
+        if (wifi_event_group != NULL)
         {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+            xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
         }
     }
 }
@@ -94,6 +94,13 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 esp_err_t hub_wifi_connect(wifi_config_t* config)
 {
     esp_err_t result = ESP_OK;
+
+    wifi_event_group = xEventGroupCreate();
+    if (wifi_event_group == NULL)
+    {
+        ESP_LOGE(TAG, "Could not create event group.\n");
+        return ESP_FAIL;
+    }
 
     esp_netif_init();
     esp_netif_create_default_wifi_sta();
@@ -168,6 +175,7 @@ esp_err_t hub_wifi_disconnect()
     esp_wifi_disconnect();
     esp_wifi_stop();
     esp_wifi_deinit();
+    vEventGroupDelete(wifi_event_group);
 
     return ESP_OK;
 }
@@ -176,17 +184,10 @@ esp_err_t hub_wifi_wait_for_connection(int timeout)
 {
     esp_err_t result = ESP_OK;
 
-    s_wifi_event_group = xEventGroupCreate();
-    if (s_wifi_event_group == NULL)
-    {
-        ESP_LOGE(TAG, "Could not create event group.\n");
-        return ESP_FAIL;
-    }
-
 #ifndef RETRY_INFINITE
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
 #else
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
 #endif
 
     if (bits & WIFI_CONNECTED_BIT)
@@ -206,6 +207,5 @@ esp_err_t hub_wifi_wait_for_connection(int timeout)
         result = ESP_FAIL;
     }
 
-    vEventGroupDelete(s_wifi_event_group);
     return result;
 }
