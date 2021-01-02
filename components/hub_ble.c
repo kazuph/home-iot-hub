@@ -6,38 +6,27 @@
 #include <stdio.h>
 
 #include "esp_bt.h"
-#include "esp_gap_ble_api.h"
-#include "esp_gattc_api.h"
 #include "esp_gatt_defs.h"
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
 #include "esp_log.h"
+
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
 
-#define PROFILE_NUM 1
-#define PROFILE_A_APP_ID 0
-
-typedef struct gattc_profile_t
-{
-    esp_gattc_cb_t gattc_cb;
-    uint16_t gattc_if;
-    uint16_t app_id;
-    uint16_t conn_id;
-    uint16_t service_start_handle;
-    uint16_t service_end_handle;
-    uint16_t char_handle;
-    esp_bd_addr_t remote_bda;
-} gattc_profile_t;
+#define WRITE_CHAR_BIT  BIT0
+#define READ_CHAR_BIT   BIT1
+#define WRITE_DESCR_BIT BIT2
+#define READ_DESCR_BIT  BIT3
+#define FAIL_BIT        BIT7
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
-static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
-static const char* TAG = "HUB_BLE";
+/* GLOBAL IMPLEMENTATIONS */
 
-static scan_callback_t scan_callback;
-
-static esp_ble_scan_params_t ble_scan_params = {
+esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
@@ -45,12 +34,15 @@ static esp_ble_scan_params_t ble_scan_params = {
     .scan_window = 0x30
 };
 
-static gattc_profile_t gl_profile_tab[PROFILE_NUM] = {
-    [PROFILE_A_APP_ID] = {
-        .gattc_cb = &gattc_profile_event_handler,
-        .gattc_if = ESP_GATT_IF_NONE, /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
-    },
-};
+gattc_profile_t gl_profile_tab[PROFILE_NUM];
+
+/* END OF GLOBAL IMPLEMENTATIONS */
+
+static const char* TAG = "HUB_BLE";
+
+static int registered_apps;
+static scan_callback_t scan_callback;
+static EventGroupHandle_t ble_event_group;
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -73,21 +65,25 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGI(TAG, "Scan started...");
         break;
     case ESP_GAP_BLE_SCAN_RESULT_EVT:
-        ESP_LOGI(TAG, "Scan complete!");
+        ESP_LOGI(TAG, "Scan complete!");      
         switch (param->scan_rst.search_evt)
         {
         case ESP_GAP_SEARCH_INQ_RES_EVT:
-            //esp_log_buffer_hex(TAG, param->scan_rst.bda, 6);
-            //ESP_LOGI(TAG, "Searched Adv Data Len %d, Scan Response Len %d", param->scan_rst.adv_data_len, param->scan_rst.scan_rsp_len);
             adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
-            //ESP_LOGI(TAG, "Searched Device Name Len %d", adv_name_len);
-            //esp_log_buffer_char(TAG, adv_name, adv_name_len);
 
-            if (scan_callback != NULL)
+            if (adv_name != NULL && strlen((const char*)adv_name) != 0)
             {
-                if (adv_name != NULL && strlen((const char*)adv_name) != 0)
+                if (scan_callback != NULL)
                 {
+                    ESP_LOGI(TAG, "Calling scan callback...");
                     scan_callback(param->scan_rst.bda, (const char*)adv_name);
+                }
+
+                if (strncmp((char*)adv_name, "MiKettle", adv_name_len) == 0)
+                {
+                    ESP_LOGI(TAG, "Device found!");
+                    esp_ble_gap_stop_scanning();
+                    esp_ble_gattc_open(gl_profile_tab[0].gattc_if, param->scan_rst.bda, param->scan_rst.ble_addr_type, true);
                 }
             }
             break;
@@ -95,6 +91,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
             break;
         default: break;
         }
+        break;
     case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
         if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
@@ -118,47 +115,83 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
 
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
 {
-    /* If event is register event, store the gattc_if for each profile */
-    if (event == ESP_GATTC_REG_EVT)
+    esp_err_t result = ESP_OK;
+    gattc_profile_t* client = &gl_profile_tab[param->reg.app_id];
+    client->_last_event = event;
+    client->_data = *param;
+
+    switch (event)
     {
+    case ESP_GATTC_REG_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_REG_EVT");
+
         if (param->reg.status == ESP_GATT_OK)
         {
-            gl_profile_tab[param->reg.app_id].gattc_if = gattc_if;
+            client->gattc_if = gattc_if;
+            client->app_id = param->reg.app_id;
+
+            esp_err_t result = esp_ble_gap_set_scan_params(&ble_scan_params);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Set scan parameters failed in function %s with error code %x.\n", __func__, result);
+            }
         }
         else
         {
             ESP_LOGI(TAG, "Register app failed, app_id %04x, status %d", param->reg.app_id, param->reg.status);
             return;
         }
-    }
 
-    for (int i = 0; i < PROFILE_NUM; i++)
-    {
-        if (gattc_if == ESP_GATT_IF_NONE || gattc_if == gl_profile_tab[i].gattc_if)
-        {
-            if (gl_profile_tab[i].gattc_cb == NULL)
-            {
-                continue;
-            }
+        break;
+    case ESP_GATTC_CONNECT_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_CONNECT_EVT");
 
-            gl_profile_tab[i].gattc_cb(event, gattc_if, param);
-        }
-    }
-}
+        client->conn_id = param->connect.conn_id;
+        memcpy(client->remote_bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
 
-static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
-{
-    esp_err_t result = ESP_OK;
-
-    switch (event)
-    {
-    case ESP_GATTC_REG_EVT:
-        ESP_LOGI(TAG, "REG_EVT");
-        result = esp_ble_gap_set_scan_params(&ble_scan_params);
+        result = esp_ble_gattc_send_mtu_req(gattc_if, param->connect.conn_id);
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Set scan parameters failed in function %s with error code %x.\n", __func__, result);
+            ESP_LOGE(TAG, "MTU configuration failed, error: %x", result);
+            break;
         }
+        break;
+    case ESP_GATTC_OPEN_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_OPEN_EVT");
+        break;
+    case ESP_GATTC_DIS_SRVC_CMPL_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_DIS_SRVC_CMPL_EVT");
+        break;
+    case ESP_GATTC_CFG_MTU_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_CFG_MTU_EVT");
+        break;
+    case ESP_GATTC_SEARCH_RES_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_SEARCH_RES_EVT");
+        break;
+    case ESP_GATTC_SEARCH_CMPL_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_SEARCH_CMPL_EVT");
+        break;
+    case ESP_GATTC_REG_FOR_NOTIFY_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_REG_FOR_NOTIFY_EVT");
+        break;
+    case ESP_GATTC_NOTIFY_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_NOTIFY_EVT");
+        break;
+    case ESP_GATTC_READ_CHAR_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_READ_CHAR_EVT");
+        break;
+    case ESP_GATTC_WRITE_DESCR_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_WRITE_DESCR_EVT");
+        break;
+    case ESP_GATTC_SRVC_CHG_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_SRVC_CHG_EVT");
+        break;
+    case ESP_GATTC_WRITE_CHAR_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
+        xEventGroupSetBits(ble_event_group, WRITE_CHAR_BIT);
+        break;
+    case ESP_GATTC_DISCONNECT_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_DISCONNECT_EVT");
         break;
     default: break;
     }
@@ -204,17 +237,17 @@ esp_err_t hub_ble_init()
         return result;
     }
 
+    ble_event_group = xEventGroupCreate();
+    if (ble_event_group == NULL)
+    {
+        ESP_LOGE(TAG, "Could not create event group.\n");
+        return ESP_FAIL;
+    }
+
     result = esp_ble_gattc_register_callback(esp_gattc_callback);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GATC callback register failed in function %s with error code %x.\n", __func__, result);
-        return result;
-    }
-
-    result = esp_ble_gattc_app_register(PROFILE_A_APP_ID);
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
         return result;
     }
 
@@ -225,11 +258,14 @@ esp_err_t hub_ble_init()
         return result;
     }
 
+    registered_apps = 0;
+
     return result;
 }
 
 esp_err_t hub_ble_deinit()
 {
+    vEventGroupDelete(ble_event_group);
     return ESP_OK;
 }
 
@@ -242,4 +278,76 @@ esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 
     scan_callback = callback;
     return ESP_OK;
+}
+
+esp_err_t hub_ble_client_init(gattc_profile_t* ble_client)
+{
+    esp_err_t result = ESP_OK;
+
+    ble_client->gattc_if = ESP_GATT_IF_NONE;
+    result = esp_ble_gattc_app_register(registered_apps);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
+        return result;
+    }
+
+    registered_apps++;
+
+    return result;
+}
+
+esp_err_t hub_ble_client_destroy(gattc_profile_t* ble_client)
+{
+    esp_err_t result = ESP_OK;
+
+    return result;
+}
+
+esp_err_t hub_ble_client_connect(gattc_profile_t* ble_client)
+{
+    esp_err_t result = ESP_OK;
+
+    return result;
+}
+
+esp_err_t hub_ble_client_search_service(gattc_profile_t* ble_client)
+{
+    esp_err_t result = ESP_OK;
+
+    return result;
+}
+
+esp_err_t hub_ble_client_write_characteristic(gattc_profile_t* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+{
+    esp_err_t result = ESP_OK;
+
+    result = esp_ble_gattc_write_char(
+        ble_client->gattc_if, 
+        ble_client->conn_id,
+        handle,
+        value_length,
+        value,
+        ESP_GATT_WRITE_TYPE_NO_RSP,
+        ESP_GATT_AUTH_REQ_NONE);
+
+    EventBits_t bits = xEventGroupWaitBits(ble_event_group, WRITE_CHAR_BIT, pdTRUE, pdFALSE, 5000 / portTICK_PERIOD_MS);
+
+    if (bits & WRITE_CHAR_BIT)
+    {
+        ESP_LOGI(TAG, "Write characteristic success.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Write characteristic error.");
+    }
+
+    return result;
+}
+
+esp_err_t hub_ble_client_read_characteristic(gattc_profile_t* ble_client)
+{
+    esp_err_t result = ESP_OK;
+
+    return result;
 }
