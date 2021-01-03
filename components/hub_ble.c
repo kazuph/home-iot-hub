@@ -19,6 +19,7 @@
 
 #define CONNECT_BIT             BIT0
 #define SEARCH_SERVICE_BIT      BIT1
+#define WRITE_CHAR_BIT          BIT2
 #define FAIL_BIT                BIT15
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -212,6 +213,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         break;
     case ESP_GATTC_WRITE_CHAR_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
+        xEventGroupSetBits(ble_event_group, WRITE_CHAR_BIT);
         break;
     case ESP_GATTC_DISCONNECT_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_DISCONNECT_EVT");
@@ -419,8 +421,24 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
         handle,
         value_length,
         value,
-        ESP_GATT_WRITE_TYPE_NO_RSP,
+        ESP_GATT_WRITE_TYPE_RSP,
         ESP_GATT_AUTH_REQ_NONE);
+
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Write characteristic failed.");
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (!(bits & WRITE_CHAR_BIT))
+    {
+        ESP_LOGE(TAG, "Connection failed.");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Write characteristic success.");
 
     return result;
 }
