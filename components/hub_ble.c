@@ -6,29 +6,32 @@
 #include <stdio.h>
 
 #include "esp_bt.h"
-#include "esp_gatt_defs.h"
 #include "esp_bt_main.h"
+#include "esp_gatt_defs.h"
 #include "esp_gatt_common_api.h"
+#include "esp_gattc_api.h"
+#include "esp_gap_ble_api.h"
 #include "esp_log.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
 
 #define BLE_TIMEOUT (TickType_t)10000 / portTICK_PERIOD_MS
 
 #define CONNECT_BIT             BIT0
 #define SEARCH_SERVICE_BIT      BIT1
 #define WRITE_CHAR_BIT          BIT2
+#define READ_CHAR_BIT           BIT3
+#define WRITE_DESCR_BIT         BIT4
+#define READ_DESCR_BIT          BIT5
 #define FAIL_BIT                BIT15
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 static hub_ble_client* get_client(esp_gatt_if_t gattc_if);
 
-/* GLOBAL IMPLEMENTATIONS */
+static scan_callback_t scan_callback;
 
-esp_ble_scan_params_t ble_scan_params = {
+static const char* TAG = "HUB_BLE";
+
+static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
@@ -36,15 +39,8 @@ esp_ble_scan_params_t ble_scan_params = {
     .scan_window = 0x30
 };
 
-hub_ble_client* gl_profile_tab[PROFILE_NUM];
-
-/* END OF GLOBAL IMPLEMENTATIONS */
-
-static const char* TAG = "HUB_BLE";
-
+static hub_ble_client* gl_profile_tab[PROFILE_NUM];
 static int registered_apps;
-static scan_callback_t scan_callback;
-static EventGroupHandle_t ble_event_group;
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -162,7 +158,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         result = esp_ble_gattc_send_mtu_req(gattc_if, param->connect.conn_id);
         if (result != ESP_OK)
         {
-            xEventGroupSetBits(ble_event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
             ESP_LOGE(TAG, "MTU configuration failed, error: %x", result);
             break;
         }
@@ -176,7 +172,15 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         break;
     case ESP_GATTC_CFG_MTU_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_CFG_MTU_EVT");
-        xEventGroupSetBits(ble_event_group, CONNECT_BIT);
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, CONNECT_BIT);
         break;
     case ESP_GATTC_SEARCH_RES_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_SEARCH_RES_EVT");
@@ -185,7 +189,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (client == NULL)
         {
             ESP_LOGE(TAG, "Client not found.");
-            xEventGroupSetBits(ble_event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
             break;
         }
 
@@ -194,7 +198,15 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         break;
     case ESP_GATTC_SEARCH_CMPL_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_SEARCH_CMPL_EVT");
-        xEventGroupSetBits(ble_event_group, SEARCH_SERVICE_BIT);
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, SEARCH_SERVICE_BIT);
         break;
     case ESP_GATTC_REG_FOR_NOTIFY_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_REG_FOR_NOTIFY_EVT");
@@ -207,13 +219,30 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         break;
     case ESP_GATTC_WRITE_DESCR_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_WRITE_DESCR_EVT");
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, WRITE_DESCR_BIT);
         break;
     case ESP_GATTC_SRVC_CHG_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_SRVC_CHG_EVT");
         break;
     case ESP_GATTC_WRITE_CHAR_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
-        xEventGroupSetBits(ble_event_group, WRITE_CHAR_BIT);
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, WRITE_CHAR_BIT);
         break;
     case ESP_GATTC_DISCONNECT_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_DISCONNECT_EVT");
@@ -293,7 +322,6 @@ esp_err_t hub_ble_init()
         return result;
     }
 
-    ble_event_group = xEventGroupCreate();
     registered_apps = 0;
 
     ESP_LOGI(TAG, "BLE initialized.");
@@ -305,9 +333,12 @@ esp_err_t hub_ble_deinit()
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
 
-    vEventGroupDelete(ble_event_group);
-
     return ESP_OK;
+}
+
+esp_err_t hub_ble_start_scanning(uint16_t scan_time)
+{
+    return esp_ble_gap_start_scanning(scan_time);
 }
 
 esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
@@ -326,7 +357,6 @@ esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
-
     esp_err_t result = ESP_OK;
 
     ble_client->gattc_if = ESP_GATT_IF_NONE;
@@ -340,6 +370,7 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
     }
 
     registered_apps++;
+    ble_client->event_group = xEventGroupCreate();
     return result;
 }
 
@@ -347,15 +378,14 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
 
-    esp_err_t result = ESP_OK;
+    vEventGroupDelete(ble_client->event_group);
 
-    return result;
+    return ESP_OK;
 }
 
 esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
-
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gap_stop_scanning();
@@ -372,7 +402,7 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
         return result;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(ble_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
     if (!(bits & CONNECT_BIT))
     {
@@ -387,7 +417,6 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
 esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
-
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
@@ -397,7 +426,7 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
         return result;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(ble_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
     if (!(bits & SEARCH_SERVICE_BIT))
     {
@@ -412,7 +441,6 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
 esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
-
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_write_char(
@@ -430,11 +458,11 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
         return result;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(ble_event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
     if (!(bits & WRITE_CHAR_BIT))
     {
-        ESP_LOGE(TAG, "Connection failed.");
+        ESP_LOGE(TAG, "Write characteristic failed.");
         return ESP_FAIL;
     }
 
@@ -446,8 +474,69 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
 esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
-
     esp_err_t result = ESP_OK;
 
+    return result;
+}
+
+esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count)
+{
+    ESP_LOGI(TAG, "Function: %s", __func__);
+    esp_gatt_status_t result = ESP_GATT_OK;
+
+    if (descr != NULL)
+    {
+        result = esp_ble_gattc_get_all_descr(
+            ble_client->gattc_if, 
+            ble_client->conn_id,
+            char_handle,
+            descr,
+            count,
+            0);
+    }
+    else
+    {
+        result = esp_ble_gattc_get_attr_count(
+            ble_client->gattc_if, 
+            ble_client->conn_id,
+            ESP_GATT_DB_DESCRIPTOR,
+            0,
+            0,
+            char_handle,
+            count);
+    }
+
+    return result;
+}
+
+esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+{
+    ESP_LOGI(TAG, "Function: %s", __func__);
+    esp_err_t result = ESP_OK;
+
+    result = esp_ble_gattc_write_char_descr(
+        ble_client->gattc_if, 
+        ble_client->conn_id,
+        handle,
+        value_length,
+        value,
+        ESP_GATT_WRITE_TYPE_RSP,
+        ESP_GATT_AUTH_REQ_NONE);
+
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Write descriptor failed.");
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, WRITE_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (!(bits & WRITE_DESCR_BIT))
+    {
+        ESP_LOGE(TAG, "Write descriptor failed.");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Write descriptor success.");
     return result;
 }
