@@ -15,11 +15,15 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
+#define BLE_TIMEOUT (TickType_t)10000 / portTICK_PERIOD_MS
+
 #define CONNECT_BIT             BIT0
 #define SEARCH_SERVICE_BIT      BIT1
+#define FAIL_BIT                BIT15
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
+static hub_ble_client* get_client(esp_gatt_if_t gattc_if);
 
 /* GLOBAL IMPLEMENTATIONS */
 
@@ -120,8 +124,6 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         ESP_LOGI(TAG, "ESP_GATTC_REG_EVT");
 
         client = gl_profile_tab[param->reg.app_id];
-        client->_last_event = event;
-        client->_data = *param;
 
         if (param->reg.status == ESP_GATT_OK)
         {
@@ -130,7 +132,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
             ESP_LOGI(TAG, "Register app success, app_id %04x.", client->app_id);
 
-            esp_err_t result = esp_ble_gap_set_scan_params(&ble_scan_params);
+            result = esp_ble_gap_set_scan_params(&ble_scan_params);
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Set scan parameters failed in function %s with error code %x.\n", __func__, result);
@@ -146,9 +148,12 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
     case ESP_GATTC_CONNECT_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_CONNECT_EVT");
 
-        client = gl_profile_tab[param->reg.app_id];
-        client->_last_event = event;
-        client->_data = *param;
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
 
         client->conn_id = param->connect.conn_id;
         memcpy(client->remote_bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
@@ -156,6 +161,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         result = esp_ble_gattc_send_mtu_req(gattc_if, param->connect.conn_id);
         if (result != ESP_OK)
         {
+            xEventGroupSetBits(ble_event_group, FAIL_BIT);
             ESP_LOGE(TAG, "MTU configuration failed, error: %x", result);
             break;
         }
@@ -174,15 +180,13 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
     case ESP_GATTC_SEARCH_RES_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_SEARCH_RES_EVT");
 
-        if (param->reg.app_id >= PROFILE_NUM)
+        client = get_client(gattc_if);
+        if (client == NULL)
         {
-            ESP_LOGE(TAG, "Bad app id: %x", param->reg.app_id);
+            ESP_LOGE(TAG, "Client not found.");
+            xEventGroupSetBits(ble_event_group, FAIL_BIT);
             break;
         }
-
-        client = gl_profile_tab[param->reg.app_id];
-        client->_last_event = event;
-        client->_data = *param;
 
         client->service_start_handle = param->search_res.start_handle;
         client->service_end_handle = param->search_res.end_handle;
@@ -216,6 +220,19 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         ESP_LOGW(TAG, "Other GATTC event: %i.", event);
         break;
     }
+}
+
+static hub_ble_client* get_client(esp_gatt_if_t gattc_if)
+{
+    for (int i = 0; i < PROFILE_NUM; i++)
+    {
+        if (gl_profile_tab[i] != NULL && gl_profile_tab[i]->gattc_if != ESP_GATT_IF_NONE && gl_profile_tab[i]->gattc_if == gattc_if)
+        {
+            return gl_profile_tab[i];
+        }
+    }
+
+    return NULL;
 }
 
 esp_err_t hub_ble_init()
@@ -353,7 +370,7 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
         return result;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(ble_event_group, CONNECT_BIT, pdTRUE, pdFALSE, (TickType_t)10000 / portTICK_PERIOD_MS);
+    EventBits_t bits = xEventGroupWaitBits(ble_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
     if (!(bits & CONNECT_BIT))
     {
@@ -361,7 +378,7 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Connection success.");
+    ESP_LOGI(TAG, "BLE client connection success.");
     return result;
 }
 
@@ -378,7 +395,7 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
         return result;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(ble_event_group, SEARCH_SERVICE_BIT, pdTRUE, pdFALSE, (TickType_t)10000 / portTICK_PERIOD_MS);
+    EventBits_t bits = xEventGroupWaitBits(ble_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
     if (!(bits & SEARCH_SERVICE_BIT))
     {

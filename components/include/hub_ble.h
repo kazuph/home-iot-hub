@@ -20,8 +20,6 @@ typedef struct hub_ble_client
     uint16_t char_handle;
     esp_ble_addr_type_t addr_type;
     esp_bd_addr_t remote_bda;
-    esp_ble_gattc_cb_param_t _data;
-    esp_gattc_cb_event_t _last_event;
 } hub_ble_client;
 
 typedef void (*scan_callback_t)(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
