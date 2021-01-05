@@ -26,8 +26,10 @@ def get_payload():
         return PAYLOAD
 
 def on_mqtt_message(client, userdata, message):
-    with PAYLOAD_LOCK:
-        PAYLOAD = message.payload
+    #with PAYLOAD_LOCK:
+        #PAYLOAD = message.payload
+    PAYLOAD = dict(json.loads(str(message.payload, 'utf-8')))
+    print(f'Found device: {PAYLOAD.get("name")}.')
 
 class TestHomeIotHub(TestCase):
 
@@ -97,4 +99,11 @@ class TestHomeIotHub(TestCase):
                 return
 
 if __name__ == '__main__':
-    unittest.main()
+    #unittest.main()
+    client = mqtt.Client(client_id='fd147369-ed28-456e-abf1-1eaa195f8d75')
+    client.connect(host='192.168.0.109', port=1883)
+    client.subscribe('hub/scan')
+    client.on_message = on_mqtt_message
+    client.loop_start()
+    time.sleep(60.0)
+    client.loop_stop()

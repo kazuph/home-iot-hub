@@ -1,7 +1,3 @@
-#include "sdkconfig.h"
-
-#ifndef CONFIG_TEST
-
 #include "hub_wifi.h"
 #include "hub_mqtt.h"
 #include "hub_ble.h"
@@ -23,29 +19,52 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "device_mikettle.h"
+
 #define WIFI_CONNECTION_TIMEOUT 5000 // ms
 
 static esp_err_t app_init();
 static esp_err_t app_cleanup();
-static void ble_scan_callback(esp_bd_addr_t address, const char* device_name);
+static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
+static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
 
 static const char* TAG = "HUB_MAIN";
 static hub_mqtt_client mqtt_client;
+static hub_ble_client mikettle;
+static bool address_set;
 
 void app_main()
 {
-    esp_err_t result = ESP_OK;
+    address_set = false;
 
-    result = app_init();
-    if (result != ESP_OK)
+    if (app_init() != ESP_OK)
     {
+        ESP_LOGE(TAG, "Application initialization failed.");
         goto restart;
     }
-
     ESP_LOGI(TAG, "Setup successful");
 
-    vTaskDelay(3600000 / portTICK_PERIOD_MS);
+    if (hub_ble_start_scanning(360U /* seconds */) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Start scanning failed.");
+        goto cleanup;
+    }
+    ESP_LOGI(TAG, "Scanning started...");
 
+    while (!address_set)
+    {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
+    if (mikettle_authorize(&mikettle, &ble_notify_cb) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not connect to %s.", MIKETTLE_DEVICE_NAME);
+        goto cleanup;
+    }
+
+    return;
+
+cleanup:
     app_cleanup();
 restart:
     esp_restart();
@@ -54,6 +73,7 @@ restart:
 static esp_err_t app_init()
 {
     esp_err_t result = ESP_OK;
+
     wifi_config_t wifi_config = {
         .sta = {
             .ssid = CONFIG_WIFI_SSID,
@@ -61,6 +81,7 @@ static esp_err_t app_init()
             .threshold.authmode = WIFI_AUTH_WPA2_PSK
         },
     };
+    
     hub_mqtt_client_config mqtt_client_config = {
         .uri = CONFIG_MQTT_URI,
         .port = CONFIG_MQTT_PORT
@@ -101,17 +122,10 @@ static esp_err_t app_init()
         goto cleanup_wifi_connect;
     }
 
-    result = mqtt_client.start(&mqtt_client);
+    result = hub_mqtt_client_start(&mqtt_client);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "MQTT client initialization failed.");
-        goto cleanup_mqtt_client;
-    }
-
-    result = hub_ble_register_scan_callback(&ble_scan_callback);
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "BLE scan callback register failed.");
         goto cleanup_mqtt_client;
     }
 
@@ -122,8 +136,24 @@ static esp_err_t app_init()
         goto cleanup_mqtt_client;
     }
 
+    result = hub_ble_register_scan_callback(&ble_scan_callback);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE scan callback register failed.");
+        goto cleanup_mqtt_client;
+    }
+
+    result = hub_ble_client_init(&mikettle);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE initialization failed.");
+        goto cleanup_ble;
+    }
+
     return result;
 
+cleanup_ble:
+    hub_ble_deinit();
 cleanup_mqtt_client:
     hub_mqtt_client_destroy(&mqtt_client);
 cleanup_wifi_connect:
@@ -138,6 +168,8 @@ cleanup_nvs:
 
 static esp_err_t app_cleanup()
 {
+    hub_ble_client_destroy(&mikettle);
+    hub_ble_deinit();
     hub_mqtt_client_destroy(&mqtt_client);
     hub_wifi_disconnect();
     esp_event_loop_delete_default();
@@ -146,21 +178,35 @@ static esp_err_t app_cleanup()
     return ESP_OK;
 }
 
-static void ble_scan_callback(esp_bd_addr_t address, const char* device_name)
+static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type)
 {
-    ESP_LOGI(TAG, "Found device %s.", device_name);
-    static char buff[64];
+    ESP_LOGI(TAG, "Function: %s", __func__);
+
+    char* buff = (char*)malloc(64 * sizeof(char));
+
     sprintf(buff, "{\"name\":\"%s\"}", device_name);
-    mqtt_client.publish(&mqtt_client, "hub/scan", buff);
+    if (hub_mqtt_client_publish(&mqtt_client, "hub/scan", buff) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Client publish failed.");
+    }
+    
+    free(buff);
+
+    if (strncmp(device_name, MIKETTLE_DEVICE_NAME, sizeof(MIKETTLE_DEVICE_NAME)) == 0)
+    {
+        memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
+        mikettle.addr_type = address_type;
+        address_set = true;
+    }
 }
 
-#else
-
-#include "hub_test.h"
-
-void app_main()
+static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
 {
-    test_run();
-}
+    ESP_LOGI(TAG, "Function: %s", __func__);
 
-#endif
+    if (param->handle == MIKETTLE_HANDLE_STATUS)
+    {
+        ESP_LOGI(TAG, "Received data:");
+        ESP_LOG_BUFFER_HEX(TAG, param->value, param->value_len);
+    }
+}

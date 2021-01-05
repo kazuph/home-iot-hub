@@ -1,1 +1,1 @@
-idf_component_register(SRCS "hub_test.c" "hub_mqtt.c" "hub_wifi.c" "hub_ble.c" INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt")
+idf_component_register(SRCS "hub_test.c" "hub_mqtt.c" "hub_wifi.c" "hub_ble.c" "device_mikettle.c" INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt")
