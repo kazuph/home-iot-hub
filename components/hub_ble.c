@@ -21,6 +21,7 @@
 #define WRITE_DESCR_BIT         BIT4
 #define READ_DESCR_BIT          BIT5
 #define REG_FOR_NOTIFY_BIT      BIT6
+#define UNREG_FOR_NOTIFY_BIT    BIT7
 #define FAIL_BIT                BIT15
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -40,7 +41,6 @@ static esp_ble_scan_params_t ble_scan_params = {
 };
 
 static hub_ble_client* gl_profile_tab[PROFILE_NUM];
-static int registered_apps;
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -52,9 +52,11 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
     switch (event)
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
+        ESP_LOGI(TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT");
         ESP_LOGI(TAG, "Set scan parameters complete.");
         break;
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
+        ESP_LOGI(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
         //scan start complete event to indicate scan start successfully or failed
         if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
@@ -64,7 +66,6 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGI(TAG, "Scan started...");
         break;
     case ESP_GAP_BLE_SCAN_RESULT_EVT:
-        ESP_LOGI(TAG, "Scan complete!");      
         switch (param->scan_rst.search_evt)
         {
         case ESP_GAP_SEARCH_INQ_RES_EVT:
@@ -72,6 +73,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
 
             if (adv_name != NULL && strlen((const char*)adv_name) != 0)
             {
+                ESP_LOGI(TAG, "Found device %s.", adv_name); 
                 if (scan_callback != NULL)
                 {
                     ESP_LOGI(TAG, "Calling scan callback...");
@@ -80,6 +82,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
             }
             break;
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
+            ESP_LOGI(TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT");
             break;
         default: break;
         }
@@ -220,6 +223,18 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         xEventGroupSetBits(client->event_group, REG_FOR_NOTIFY_BIT);
         break;
+    case ESP_GATTC_UNREG_FOR_NOTIFY_EVT:
+        ESP_LOGI(TAG, "ESP_GATTC_UNREG_FOR_NOTIFY_EVT");
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, UNREG_FOR_NOTIFY_BIT);
+        break;
     case ESP_GATTC_NOTIFY_EVT:
         ESP_LOGI(TAG, "ESP_GATTC_NOTIFY_EVT");
 
@@ -318,47 +333,63 @@ esp_err_t hub_ble_init()
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE controller enable failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bt_controller_init;
     }
 
     result = esp_bluedroid_init();
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Bluedroid initialization failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bt_controller_enable;
     }
 
     result = esp_bluedroid_enable();
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Bluedroid enable failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bluedroid_init;
     }
 
     result = esp_ble_gap_register_callback(&esp_gap_callback);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GAP callback register failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bluedroid_enable;
     }
 
     result = esp_ble_gattc_register_callback(&esp_gattc_callback);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GATC callback register failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bluedroid_enable;
     }
 
     result = esp_ble_gatt_set_local_mtu(500);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GATT set local MTU failed in function %s with error code %x.\n", __func__, result);
-        return result;
+        goto cleanup_bluedroid_enable;
     }
 
-    registered_apps = 0;
+    scan_callback = NULL;
+
+    for (uint8_t i = 0; i < PROFILE_NUM; i++)
+    {
+        gl_profile_tab[i] = NULL;
+    }
 
     ESP_LOGI(TAG, "BLE initialized.");
+
+    return result;
+
+cleanup_bluedroid_enable:
+    esp_bluedroid_disable();
+cleanup_bluedroid_init:
+    esp_bluedroid_deinit();
+cleanup_bt_controller_enable:
+    esp_bt_controller_disable();
+cleanup_bt_controller_init:
+    esp_bt_controller_deinit();
 
     return result;
 }
@@ -367,11 +398,24 @@ esp_err_t hub_ble_deinit()
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
 
+    for (uint8_t i = 0; i < PROFILE_NUM; i++)
+    {
+        gl_profile_tab[i] = NULL;
+    }
+
+    scan_callback = NULL;
+
+    esp_bluedroid_disable();
+    esp_bluedroid_deinit();
+    esp_bt_controller_disable();
+    esp_bt_controller_deinit();
+
     return ESP_OK;
 }
 
-esp_err_t hub_ble_start_scanning(uint16_t scan_time)
+esp_err_t hub_ble_start_scanning(uint32_t scan_time)
 {
+    ESP_LOGI(TAG, "Function: %s", __func__);
     return esp_ble_gap_start_scanning(scan_time);
 }
 
@@ -381,10 +425,12 @@ esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 
     if (callback == NULL)
     {
+        ESP_LOGE(TAG, "Callback is NULL.");
         return ESP_FAIL;
     }
 
     scan_callback = callback;
+    ESP_LOGI(TAG, "Callback set.");
     return ESP_OK;
 }
 
@@ -392,28 +438,57 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
     esp_err_t result = ESP_OK;
+    uint8_t app_id = 0;
 
     ble_client->gattc_if = ESP_GATT_IF_NONE;
-    gl_profile_tab[registered_apps] = ble_client;
-    result = esp_ble_gattc_app_register(registered_apps);
+
+    while (app_id != PROFILE_NUM)
+    {
+        if (gl_profile_tab[app_id] == NULL)
+        {
+            gl_profile_tab[app_id] = ble_client;
+            break;
+        }
+        app_id++;
+    }
+
+    if (app_id == PROFILE_NUM)
+    {
+        ESP_LOGE(TAG, "Maximum number of devices already connected.");
+        return ESP_FAIL;
+    }
+
+    result = esp_ble_gattc_app_register(app_id);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
-        gl_profile_tab[registered_apps] = NULL;
+        gl_profile_tab[app_id] = NULL;
         return result;
     }
 
-    registered_apps++;
     ble_client->event_group = xEventGroupCreate();
+
+    ESP_LOGI(TAG, "BLE client initialized.");
     return result;
 }
 
 esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
 {
     ESP_LOGI(TAG, "Function: %s", __func__);
+    esp_err_t result = ESP_OK;
 
     vEventGroupDelete(ble_client->event_group);
 
+    result = esp_ble_gattc_app_unregister(ble_client->gattc_if);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
+        return result;
+    }
+
+    ble_client = NULL;
+
+    ESP_LOGI(TAG, "BLE client destroyed.");
     return ESP_OK;
 }
 
@@ -471,6 +546,30 @@ esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_
     ble_client->notify_cb = callback;
 
     ESP_LOGI(TAG, "Register for notify success.");
+    return result;
+}
+
+esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint16_t handle)
+{
+    ESP_LOGI(TAG, "Function: %s", __func__);
+    esp_err_t result = ESP_OK;
+
+    result = esp_ble_gattc_unregister_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Unregister for notify failed, error: %i.", result);
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, UNREG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (!(bits & UNREG_FOR_NOTIFY_BIT))
+    {
+        ESP_LOGE(TAG, "Unregister for notify failed.");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Unregister for notify success.");
     return result;
 }
 

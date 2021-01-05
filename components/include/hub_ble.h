@@ -2,6 +2,7 @@
 #define HUB_BLE_H
 
 #include "stdint.h"
+
 #include "esp_err.h"
 #include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
@@ -37,7 +38,7 @@ esp_err_t hub_ble_init();
 
 esp_err_t hub_ble_deinit();
 
-esp_err_t hub_ble_start_scanning(uint16_t scan_time);
+esp_err_t hub_ble_start_scanning(uint32_t scan_time);
 
 esp_err_t hub_ble_register_scan_callback(scan_callback_t callback);
 
@@ -48,6 +49,8 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client);
 esp_err_t hub_ble_client_connect(hub_ble_client* ble_client);
 
 esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle, notify_callback_t callback);
+
+esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint16_t handle);
 
 esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid);
 
