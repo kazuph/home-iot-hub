@@ -222,7 +222,7 @@ static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_pa
 
     if (param->handle == MIKETTLE_HANDLE_STATUS)
     {
-        mikettle_status* status = NULL;
+        static mikettle_status status;
         char* buff = NULL;
 
         if (param->value_len <= sizeof(mikettle_status))
@@ -231,8 +231,14 @@ static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_pa
             return;
         }
 
-        status = (mikettle_status*)((param->value));
+        // Avoid sending the same status several times
+        if (memcmp(status.data, param->value, sizeof(mikettle_status)) == 0)
+        {
+            return;
+        }
 
+        memcpy(status.data, param->value, sizeof(mikettle_status));
+        
         buff = (char*)malloc(256);
         if (buff == NULL)
         {
@@ -243,12 +249,12 @@ static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_pa
         if (sprintf(
             buff, 
             MIKETTLE_JSON_FORMAT, 
-            status->temperature_current,
-            status->temperature_set,
-            status->action,
-            status->mode,
-            status->keep_warm_type,
-            status->keep_warm_time,
+            status.temperature_current,
+            status.temperature_set,
+            status.action,
+            status.mode,
+            status.keep_warm_type,
+            status.keep_warm_time,
             12,
             1) < 0)
         {
