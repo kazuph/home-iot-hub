@@ -17,11 +17,13 @@ static const char *TAG = "HUB MQTT";
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) 
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
     
     switch (event->event_id) {
         case MQTT_EVENT_DATA:
-            ESP_LOGI(TAG, "MQTT_EVENT_DATA\n");
+            ESP_LOGV(TAG, "MQTT_EVENT_DATA\n");
             hub_mqtt_client* client = (hub_mqtt_client*)handler_args;
 
             if (client == NULL)
@@ -49,6 +51,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 esp_err_t hub_mqtt_client_start(hub_mqtt_client* client)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     esp_err_t result = ESP_OK;
 
     if (client->_client_handle == NULL)
@@ -77,11 +81,14 @@ esp_err_t hub_mqtt_client_start(hub_mqtt_client* client)
 
 esp_err_t hub_mqtt_client_stop(hub_mqtt_client* client)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     return esp_mqtt_client_stop(client->_client_handle);;
 }
 
 esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, const char* data)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     int message_id = esp_mqtt_client_publish(client->_client_handle, topic, data, strlen(data), 1, 0);
     
     if (message_id == -1)
@@ -96,6 +103,8 @@ esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, co
 
 esp_err_t hub_mqtt_client_subscribe(hub_mqtt_client* client, const char* topic)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     int message_id = esp_mqtt_client_subscribe(client->_client_handle, topic, 0);
 
     if (message_id == -1)
@@ -110,6 +119,8 @@ esp_err_t hub_mqtt_client_subscribe(hub_mqtt_client* client, const char* topic)
 
 esp_err_t hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const char* topic)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     int message_id = esp_mqtt_client_unsubscribe(client->_client_handle, topic);
 
     if (message_id == -1)
@@ -124,12 +135,16 @@ esp_err_t hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const char* topic
 
 esp_err_t hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* client, hub_mqtt_client_data_callback_t callback)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     client->_data_callback = callback;
     return ESP_OK;
 }
 
 esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     client->_data_callback = NULL;
     client->_client_handle = esp_mqtt_client_init(config);
     if (client->_client_handle == NULL)
@@ -143,6 +158,8 @@ esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_co
 
 esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    
     esp_err_t result = ESP_OK;
 
     client->_data_callback = NULL;

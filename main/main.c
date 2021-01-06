@@ -35,6 +35,7 @@ static bool address_set;
 
 void app_main()
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     address_set = false;
 
     if (app_init() != ESP_OK)
@@ -72,6 +73,7 @@ restart:
 
 static esp_err_t app_init()
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     wifi_config_t wifi_config = {
@@ -180,17 +182,28 @@ static esp_err_t app_cleanup()
 
 static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
-    char* buff = (char*)malloc(64 * sizeof(char));
+    char* buff = NULL;
 
-    sprintf(buff, "{\"name\":\"%s\"}", device_name);
+    buff = (char*)malloc(64 * sizeof(char));
+    if (buff == NULL)
+    {
+        ESP_LOGE(TAG, "Could not allocate memory.");
+        return;
+    }
+
+    if (sprintf(buff, "{\"name\":\"%s\"}", device_name) < 0)
+    {
+        ESP_LOGE(TAG, "JSON formatting failed.");
+        goto cleanup;
+    }
+
     if (hub_mqtt_client_publish(&mqtt_client, "hub/scan", buff) != ESP_OK)
     {
         ESP_LOGE(TAG, "Client publish failed.");
+        goto cleanup;
     }
-    
-    free(buff);
 
     if (strncmp(device_name, MIKETTLE_DEVICE_NAME, sizeof(MIKETTLE_DEVICE_NAME)) == 0)
     {
@@ -198,15 +211,60 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
         mikettle.addr_type = address_type;
         address_set = true;
     }
+
+cleanup:
+    free(buff);
 }
 
 static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
     if (param->handle == MIKETTLE_HANDLE_STATUS)
     {
-        ESP_LOGI(TAG, "Received data:");
-        ESP_LOG_BUFFER_HEX(TAG, param->value, param->value_len);
+        mikettle_status* status = NULL;
+        char* buff = NULL;
+
+        if (param->value_len <= sizeof(mikettle_status))
+        {
+            ESP_LOGE(TAG, "Bad data size.");
+            return;
+        }
+
+        status = (mikettle_status*)((param->value));
+
+        buff = (char*)malloc(256);
+        if (buff == NULL)
+        {
+            ESP_LOGE(TAG, "Could not allocate memory.");
+            return;
+        }
+
+        if (sprintf(
+            buff, 
+            MIKETTLE_JSON_FORMAT, 
+            status->temperature_current,
+            status->temperature_set,
+            status->action,
+            status->mode,
+            status->keep_warm_type,
+            status->keep_warm_time,
+            12,
+            1) < 0)
+        {
+            ESP_LOGE(TAG, "JSON formatting failed.");
+            goto cleanup;
+        }
+
+        if (hub_mqtt_client_publish(&mqtt_client, MIKETTLE_MQTT_TOPIC, buff) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Client publish failed.");
+            goto cleanup;
+        }
+
+        ESP_LOGI(TAG, "Received data: %s.", buff);
+
+cleanup:
+        free(buff);
     }
 }

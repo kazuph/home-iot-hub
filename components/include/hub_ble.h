@@ -12,7 +12,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
-#define PROFILE_NUM 1
+#define HUB_BLE_MAX_CLIENTS CONFIG_BTDM_CTRL_BLE_MAX_CONN
 
 struct hub_ble_client;
 typedef struct hub_ble_client hub_ble_client;

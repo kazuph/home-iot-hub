@@ -6,7 +6,8 @@
 #include "hub_ble.h"
 
 #define MIKETTLE_DEVICE_NAME                "MiKettle"
-#define MIKETTLE_JSON_FORMAT                "{\"temperature\":%i{\"current\":%i,\"set\":%i}\"action\":%i,\"mode\":%i,\"keep_warm\":%i{\"type\":%i,\"time\":%i,\"time_limit\":%i}\"boil_mode\":%i}"
+#define MIKETTLE_MQTT_TOPIC                 "/mikettle"
+#define MIKETTLE_JSON_FORMAT                "{\"temperature\":{\"current\":%i,\"set\":%i},\"action\":%i,\"mode\":%i,\"keep_warm\":{\"type\":%i,\"time\":%i,\"time_limit\":%i},\"boil_mode\":%i}"
 #define MIKETTLE_PRODUCT_ID                 275
 
 /* MiKettle services */
@@ -33,6 +34,21 @@
 #define MIKETTLE_HANDLE_STATUS                  61
 #define MIKETTLE_HANDLE_TIME_LIMIT              65
 #define MIKETTLE_HANDLE_BOIL_MODE               68
+
+typedef union mikettle_status
+{
+    struct 
+    {
+        uint8_t action;
+        uint8_t mode;
+        uint16_t unknown;
+        uint8_t temperature_set;
+        uint8_t temperature_current;
+        uint8_t keep_warm_type;
+        uint16_t keep_warm_time;
+    };
+    uint8_t data[9];
+} mikettle_status;
 
 esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callback);
 

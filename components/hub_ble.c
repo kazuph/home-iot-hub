@@ -40,11 +40,11 @@ static esp_ble_scan_params_t ble_scan_params = {
     .scan_window = 0x30
 };
 
-static hub_ble_client* gl_profile_tab[PROFILE_NUM];
+static hub_ble_client* gl_profile_tab[HUB_BLE_MAX_CLIENTS];
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
     uint8_t *adv_name = NULL;
     uint8_t adv_name_len = 0;
@@ -52,12 +52,11 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
     switch (event)
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
-        ESP_LOGI(TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT");
+        ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT");
         ESP_LOGI(TAG, "Set scan parameters complete.");
         break;
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
-        ESP_LOGI(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
-        //scan start complete event to indicate scan start successfully or failed
+        ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
         if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
             ESP_LOGE(TAG, "Scan start failed, error: %x", param->scan_start_cmpl.status);
@@ -66,6 +65,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGI(TAG, "Scan started...");
         break;
     case ESP_GAP_BLE_SCAN_RESULT_EVT:
+        ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_RESULT_EVT");
         switch (param->scan_rst.search_evt)
         {
         case ESP_GAP_SEARCH_INQ_RES_EVT:
@@ -82,12 +82,13 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
             }
             break;
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
-            ESP_LOGI(TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT");
+            ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT");
             break;
         default: break;
         }
         break;
     case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
+        ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
         if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
             ESP_LOGE(TAG, "Scan stop failed, wrror: %x", param->scan_stop_cmpl.status);
@@ -97,6 +98,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGI(TAG, "Scan stopped successfully");
         break;
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+        ESP_LOGV(TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT");
         ESP_LOGI(TAG, "Update connection params:\nstatus = %d,\nmin_int = %d,\nmax_int = %d,\nconn_int = %d,\nlatency = %d,\ntimeout = %d",
             param->update_conn_params.status,
             param->update_conn_params.min_int,
@@ -113,7 +115,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
 
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s", __func__);
 
     esp_err_t result = ESP_OK;
     hub_ble_client* client = NULL;
@@ -121,7 +123,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
     switch (event)
     {
     case ESP_GATTC_REG_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_REG_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_REG_EVT");
 
         client = gl_profile_tab[param->reg.app_id];
 
@@ -146,7 +148,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         break;
     case ESP_GATTC_CONNECT_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_CONNECT_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_CONNECT_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -168,13 +170,13 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         ESP_LOGI(TAG, "MTU configuration success.");
         break;
     case ESP_GATTC_OPEN_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_OPEN_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_OPEN_EVT");
         break;
     case ESP_GATTC_DIS_SRVC_CMPL_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_DIS_SRVC_CMPL_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_DIS_SRVC_CMPL_EVT");
         break;
     case ESP_GATTC_CFG_MTU_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_CFG_MTU_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_CFG_MTU_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -186,7 +188,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, CONNECT_BIT);
         break;
     case ESP_GATTC_SEARCH_RES_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_SEARCH_RES_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_SEARCH_RES_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -200,7 +202,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         client->service_end_handle = param->search_res.end_handle;
         break;
     case ESP_GATTC_SEARCH_CMPL_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_SEARCH_CMPL_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_SEARCH_CMPL_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -212,7 +214,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, SEARCH_SERVICE_BIT);
         break;
     case ESP_GATTC_REG_FOR_NOTIFY_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_REG_FOR_NOTIFY_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_REG_FOR_NOTIFY_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -224,7 +226,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, REG_FOR_NOTIFY_BIT);
         break;
     case ESP_GATTC_UNREG_FOR_NOTIFY_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_UNREG_FOR_NOTIFY_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_UNREG_FOR_NOTIFY_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -236,7 +238,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, UNREG_FOR_NOTIFY_BIT);
         break;
     case ESP_GATTC_NOTIFY_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_NOTIFY_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_NOTIFY_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -254,7 +256,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         break;
     case ESP_GATTC_READ_CHAR_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_READ_CHAR_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_READ_CHAR_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -267,7 +269,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         break;
     case ESP_GATTC_WRITE_DESCR_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_WRITE_DESCR_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_WRITE_DESCR_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -279,10 +281,10 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, WRITE_DESCR_BIT);
         break;
     case ESP_GATTC_SRVC_CHG_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_SRVC_CHG_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_SRVC_CHG_EVT");
         break;
     case ESP_GATTC_WRITE_CHAR_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -294,7 +296,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         xEventGroupSetBits(client->event_group, WRITE_CHAR_BIT);
         break;
     case ESP_GATTC_DISCONNECT_EVT:
-        ESP_LOGI(TAG, "ESP_GATTC_DISCONNECT_EVT");
+        ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
         break;
     default:
         ESP_LOGW(TAG, "Other GATTC event: %i.", event);
@@ -304,7 +306,9 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
 static hub_ble_client* get_client(esp_gatt_if_t gattc_if)
 {
-    for (int i = 0; i < PROFILE_NUM; i++)
+    ESP_LOGD(TAG, "Function: %s", __func__);
+    
+    for (int i = 0; i < HUB_BLE_MAX_CLIENTS; i++)
     {
         if (gl_profile_tab[i] != NULL && gl_profile_tab[i]->gattc_if != ESP_GATT_IF_NONE && gl_profile_tab[i]->gattc_if == gattc_if)
         {
@@ -317,7 +321,7 @@ static hub_ble_client* get_client(esp_gatt_if_t gattc_if)
 
 esp_err_t hub_ble_init()
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
     esp_err_t result = ESP_OK;
 
@@ -373,7 +377,7 @@ esp_err_t hub_ble_init()
 
     scan_callback = NULL;
 
-    for (uint8_t i = 0; i < PROFILE_NUM; i++)
+    for (uint8_t i = 0; i < HUB_BLE_MAX_CLIENTS; i++)
     {
         gl_profile_tab[i] = NULL;
     }
@@ -396,9 +400,9 @@ cleanup_bt_controller_init:
 
 esp_err_t hub_ble_deinit()
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
-    for (uint8_t i = 0; i < PROFILE_NUM; i++)
+    for (uint8_t i = 0; i < HUB_BLE_MAX_CLIENTS; i++)
     {
         gl_profile_tab[i] = NULL;
     }
@@ -415,13 +419,13 @@ esp_err_t hub_ble_deinit()
 
 esp_err_t hub_ble_start_scanning(uint32_t scan_time)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     return esp_ble_gap_start_scanning(scan_time);
 }
 
 esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
 
     if (callback == NULL)
     {
@@ -436,13 +440,13 @@ esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 
 esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
     uint8_t app_id = 0;
 
     ble_client->gattc_if = ESP_GATT_IF_NONE;
 
-    while (app_id != PROFILE_NUM)
+    while (app_id != HUB_BLE_MAX_CLIENTS)
     {
         if (gl_profile_tab[app_id] == NULL)
         {
@@ -452,7 +456,7 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
         app_id++;
     }
 
-    if (app_id == PROFILE_NUM)
+    if (app_id == HUB_BLE_MAX_CLIENTS)
     {
         ESP_LOGE(TAG, "Maximum number of devices already connected.");
         return ESP_FAIL;
@@ -467,6 +471,11 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
     }
 
     ble_client->event_group = xEventGroupCreate();
+    if (ble_client->event_group == NULL)
+    {
+        ESP_LOGE(TAG, "Event group create failed.");
+        return ESP_FAIL;
+    }
 
     ESP_LOGI(TAG, "BLE client initialized.");
     return result;
@@ -474,7 +483,7 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
 
 esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     vEventGroupDelete(ble_client->event_group);
@@ -494,7 +503,7 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
 
 esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gap_stop_scanning();
@@ -525,7 +534,7 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
 
 esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle, notify_callback_t callback)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_register_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
@@ -551,7 +560,7 @@ esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_
 
 esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint16_t handle)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_unregister_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
@@ -575,7 +584,7 @@ esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint1
 
 esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
@@ -599,7 +608,7 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
 
 esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_write_char(
@@ -632,7 +641,7 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
 
 esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_read_char(
@@ -662,7 +671,7 @@ esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_
 
 esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_gatt_status_t result = ESP_GATT_OK;
 
     if (descr != NULL)
@@ -697,7 +706,7 @@ esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uin
 
 esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
-    ESP_LOGI(TAG, "Function: %s", __func__);
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
     result = esp_ble_gattc_write_char_descr(

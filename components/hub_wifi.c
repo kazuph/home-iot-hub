@@ -28,6 +28,8 @@ static EventGroupHandle_t wifi_event_group;
 
 static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
 #ifndef RETRY_INFINITE
     static int s_retry_num = 0;
 #endif
@@ -93,6 +95,8 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
 esp_err_t hub_wifi_connect(wifi_config_t* config)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     esp_err_t result = ESP_OK;
 
     wifi_event_group = xEventGroupCreate();
@@ -168,7 +172,9 @@ cleanup_wifi_init:
 }
 
 esp_err_t hub_wifi_disconnect()
-{    
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
     esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &hub_wifi_event_handler);
     esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &hub_wifi_event_handler);
     esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &hub_wifi_event_handler);
@@ -182,6 +188,8 @@ esp_err_t hub_wifi_disconnect()
 
 esp_err_t hub_wifi_wait_for_connection(int timeout)
 {
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    
     esp_err_t result = ESP_OK;
 
 #ifndef RETRY_INFINITE
