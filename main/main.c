@@ -1,6 +1,7 @@
 #include "hub_wifi.h"
 #include "hub_mqtt.h"
 #include "hub_ble.h"
+#include "hub_dispatch_queue.h"
 
 #include <stdio.h>
 #include <stddef.h>
@@ -21,22 +22,35 @@
 
 #include "device_mikettle.h"
 
-#define WIFI_CONNECTION_TIMEOUT 5000 // ms
+/* HUB macros */
+#define HUB_UUID "0072513f-dbec-4a5c-a6f5-d4bf89ba13a4"
+
+/* WiFi macros */
+#define WIFI_CONNECTION_TIMEOUT 5000U // ms
+
+/* BLE macros */
+#define BLE_SCAN_TIME 3600U // s
+
+/* MQTT macros */
+#define MQTT_BLE_SCAN_TOPIC "scan/" HUB_UUID
+#define MQTT_DEVICE_TOPIC_FORMAT "device/%s"
+
+static const char* TAG = "HUB_MAIN";
 
 static esp_err_t app_init();
 static esp_err_t app_cleanup();
 static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
-static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
+static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
+static void ble_disconnect_callback(hub_ble_client* ble_client);
+static void mikettle_connect();
 
-static const char* TAG = "HUB_MAIN";
 static hub_mqtt_client mqtt_client;
 static hub_ble_client mikettle;
-static bool address_set;
+static hub_dispatch_queue connect_queue;
 
 void app_main()
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    address_set = false;
 
     if (app_init() != ESP_OK)
     {
@@ -45,23 +59,12 @@ void app_main()
     }
     ESP_LOGI(TAG, "Setup successful");
 
-    if (hub_ble_start_scanning(360U /* seconds */) != ESP_OK)
+    if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
     {
         ESP_LOGE(TAG, "Start scanning failed.");
         goto cleanup;
     }
     ESP_LOGI(TAG, "Scanning started...");
-
-    while (!address_set)
-    {
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-
-    if (mikettle_authorize(&mikettle, &ble_notify_cb) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not connect to %s.", MIKETTLE_DEVICE_NAME);
-        goto cleanup;
-    }
 
     return;
 
@@ -142,15 +145,16 @@ static esp_err_t app_init()
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE scan callback register failed.");
-        goto cleanup_mqtt_client;
-    }
-
-    result = hub_ble_client_init(&mikettle);
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "BLE initialization failed.");
         goto cleanup_ble;
     }
+
+    if (hub_ble_client_init(&mikettle) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not initialze MiKettle.");
+        goto cleanup_ble;
+    }
+
+    hub_dispatch_queue_init(&connect_queue);
 
     return result;
 
@@ -170,6 +174,7 @@ cleanup_nvs:
 
 static esp_err_t app_cleanup()
 {
+    hub_dispatch_queue_destroy(&connect_queue);
     hub_ble_client_destroy(&mikettle);
     hub_ble_deinit();
     hub_mqtt_client_destroy(&mqtt_client);
@@ -199,7 +204,7 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
         goto cleanup;
     }
 
-    if (hub_mqtt_client_publish(&mqtt_client, "hub/scan", buff) != ESP_OK)
+    if (hub_mqtt_client_publish(&mqtt_client, MQTT_BLE_SCAN_TOPIC, buff) != ESP_OK)
     {
         ESP_LOGE(TAG, "Client publish failed.");
         goto cleanup;
@@ -209,14 +214,14 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
     {
         memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
         mikettle.addr_type = address_type;
-        address_set = true;
+        hub_dispatch_queue_push(&connect_queue, &mikettle_connect);
     }
 
 cleanup:
     free(buff);
 }
 
-static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
+static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -273,4 +278,42 @@ static void ble_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_pa
 cleanup:
         free(buff);
     }
+}
+
+static void ble_disconnect_callback(hub_ble_client* ble_client)
+{
+    hub_ble_start_scanning(BLE_SCAN_TIME);
+}
+
+static void mikettle_connect()
+{
+    if (hub_ble_client_connect(&mikettle) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not connect to MiKettle.");
+        goto retry;
+    }
+
+    if (mikettle_authorize(&mikettle) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not authorize to MiKettle.");
+        goto retry;
+    }
+
+    if (hub_ble_client_register_notify_callback(&mikettle, &ble_notify_callback) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Register notify callback failed.");
+        goto retry;
+    }
+
+    if (hub_ble_client_register_disconnect_callback(&mikettle, &ble_disconnect_callback) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Disconnect callback register failed.");
+        goto retry;
+    }
+
+    return;
+
+retry:
+    ESP_LOGI(TAG, "Retrying...");
+    hub_ble_start_scanning(BLE_SCAN_TIME);
 }

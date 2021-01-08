@@ -22,15 +22,16 @@
 #define READ_DESCR_BIT          BIT5
 #define REG_FOR_NOTIFY_BIT      BIT6
 #define UNREG_FOR_NOTIFY_BIT    BIT7
+#define DISCONNECT_BIT          BIT8
 #define FAIL_BIT                BIT15
+
+static const char* TAG = "HUB_BLE";
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 static hub_ble_client* get_client(esp_gatt_if_t gattc_if);
 
 static scan_callback_t scan_callback;
-
-static const char* TAG = "HUB_BLE";
 
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
@@ -69,6 +70,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         switch (param->scan_rst.search_evt)
         {
         case ESP_GAP_SEARCH_INQ_RES_EVT:
+            ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_RES_EVT");
             adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
 
             if (adv_name != NULL && strlen((const char*)adv_name) != 0)
@@ -76,7 +78,6 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
                 ESP_LOGI(TAG, "Found device %s.", adv_name); 
                 if (scan_callback != NULL)
                 {
-                    ESP_LOGI(TAG, "Calling scan callback...");
                     scan_callback(param->scan_rst.bda, (const char*)adv_name, param->scan_rst.ble_addr_type);
                 }
             }
@@ -297,6 +298,22 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         break;
     case ESP_GATTC_DISCONNECT_EVT:
         ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, DISCONNECT_BIT);
+
+        if (client->disconnect_cb == NULL)
+        {
+            break;
+        }
+
+        client->disconnect_cb(client);
         break;
     default:
         ESP_LOGW(TAG, "Other GATTC event: %i.", event);
@@ -445,6 +462,8 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
     uint8_t app_id = 0;
 
     ble_client->gattc_if = ESP_GATT_IF_NONE;
+    ble_client->notify_cb = NULL;
+    ble_client->disconnect_cb = NULL;
 
     while (app_id != HUB_BLE_MAX_CLIENTS)
     {
@@ -495,7 +514,10 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
         return result;
     }
 
-    ble_client = NULL;
+    gl_profile_tab[ble_client->app_id] = NULL;
+    ble_client->gattc_if = ESP_GATT_IF_NONE;
+    ble_client->notify_cb = NULL;
+    ble_client->disconnect_cb = NULL;
 
     ESP_LOGI(TAG, "BLE client destroyed.");
     return ESP_OK;
@@ -532,7 +554,31 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
     return result;
 }
 
-esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle, notify_callback_t callback)
+esp_err_t hub_ble_client_disconnect(hub_ble_client* ble_client)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    result = esp_ble_gattc_close(ble_client->gattc_if, ble_client->conn_id);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GATT disconnect failed, error: %i.", result);
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (!(bits & DISCONNECT_BIT))
+    {
+        ESP_LOGE(TAG, "Disconnect failed.");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "BLE client disconnect success.");
+    return result;
+}
+
+esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
@@ -551,8 +597,6 @@ esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_
         ESP_LOGE(TAG, "Register for notify failed.");
         return ESP_FAIL;
     }
-
-    ble_client->notify_cb = callback;
 
     ESP_LOGI(TAG, "Register for notify success.");
     return result;
@@ -580,6 +624,34 @@ esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint1
 
     ESP_LOGI(TAG, "Unregister for notify success.");
     return result;
+}
+
+esp_err_t hub_ble_client_register_notify_callback(hub_ble_client* ble_client, notify_callback_t callback)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
+    if (callback == NULL)
+    {
+        ESP_LOGE(TAG, "Callback is NULL.");
+        return ESP_FAIL;
+    }
+
+    ble_client->notify_cb = callback;
+    return ESP_OK;
+}
+
+esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client, disconnect_callback_t callback)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+
+    if (callback == NULL)
+    {
+        ESP_LOGE(TAG, "Callback is NULL.");
+        return ESP_FAIL;
+    }
+
+    ble_client->disconnect_cb = callback;
+    return ESP_OK;
 }
 
 esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)

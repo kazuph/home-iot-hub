@@ -43,7 +43,7 @@ static const esp_bt_uuid_t uuid_service_kettle = {
 
 static bool auth_notify;
 
-esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callback)
+esp_err_t mikettle_authorize(hub_ble_client* ble_client)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -55,13 +55,6 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callb
     uint8_t* ciphered = NULL;
 
     auth_notify = false;
-
-    result = hub_ble_client_connect(ble_client);
-    if (result != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not connect to MiKettle.");
-        return result;
-    }
 
     result = hub_ble_client_search_service(ble_client, &uuid_service_kettle);
     if (result != ESP_OK)
@@ -77,7 +70,14 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callb
         return result;
     }
 
-    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_AUTH, &auth_notify_cb);
+    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_AUTH);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Register for notify failed.");
+        return result;
+    }
+
+    result = hub_ble_client_register_notify_callback(ble_client, &auth_notify_cb);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Register for notify failed.");
@@ -175,7 +175,7 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callb
         goto cleanup;
     }
 
-    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_STATUS, callback);
+    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_STATUS);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Register for notify failed.");

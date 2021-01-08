@@ -19,6 +19,7 @@ typedef struct hub_ble_client hub_ble_client;
 
 typedef void (*scan_callback_t)(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
 typedef void (*notify_callback_t)(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
+typedef void (*disconnect_callback_t)(hub_ble_client* ble_client);
 
 struct hub_ble_client
 {
@@ -32,6 +33,7 @@ struct hub_ble_client
     esp_bd_addr_t remote_bda;
     EventGroupHandle_t event_group;
     notify_callback_t notify_cb;
+    disconnect_callback_t disconnect_cb;
 };
 
 esp_err_t hub_ble_init();
@@ -48,9 +50,15 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client);
 
 esp_err_t hub_ble_client_connect(hub_ble_client* ble_client);
 
-esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle, notify_callback_t callback);
+esp_err_t hub_ble_client_disconnect(hub_ble_client* ble_client);
+
+esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle);
 
 esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint16_t handle);
+
+esp_err_t hub_ble_client_register_notify_callback(hub_ble_client* ble_client, notify_callback_t callback);
+
+esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client, disconnect_callback_t callback);
 
 esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid);
 

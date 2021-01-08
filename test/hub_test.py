@@ -102,7 +102,7 @@ if __name__ == '__main__':
     #unittest.main()
     client = mqtt.Client(client_id='fd147369-ed28-456e-abf1-1eaa195f8d75')
     client.connect(host='192.168.0.109', port=1883)
-    client.subscribe('/mikettle')
+    client.subscribe('#')
     client.on_message = on_mqtt_message
     client.loop_start()
     time.sleep(360.0)

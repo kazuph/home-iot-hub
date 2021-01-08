@@ -6,7 +6,7 @@
 #include "hub_ble.h"
 
 #define MIKETTLE_DEVICE_NAME                "MiKettle"
-#define MIKETTLE_MQTT_TOPIC                 "/mikettle"
+#define MIKETTLE_MQTT_TOPIC                 "mikettle"
 #define MIKETTLE_JSON_FORMAT                "{\"temperature\":{\"current\":%i,\"set\":%i},\"action\":%i,\"mode\":%i,\"keep_warm\":{\"type\":%i,\"time\":%i,\"time_limit\":%i},\"boil_mode\":%i}"
 #define MIKETTLE_PRODUCT_ID                 275
 
@@ -50,6 +50,6 @@ typedef union mikettle_status
     uint8_t data[9];
 } mikettle_status;
 
-esp_err_t mikettle_authorize(hub_ble_client* ble_client, notify_callback_t callback);
+esp_err_t mikettle_authorize(hub_ble_client* ble_client);
 
 #endif
