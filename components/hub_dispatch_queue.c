@@ -1,7 +1,6 @@
 #include "hub_dispatch_queue.h"
 
 #include <string.h>
-#include <stdbool.h>
 
 #include "esp_log.h"
 
@@ -15,39 +14,50 @@ static const char* TAG = "HUB_DISPATCH_QUEUE";
 
 static void dispatch_fun(void* args);
 static dispatch_queue_fun_t pop(hub_dispatch_queue* queue);
-static void push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun);
+static esp_err_t push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun);
 
-void hub_dispatch_queue_init(hub_dispatch_queue* queue)
+esp_err_t hub_dispatch_queue_init(hub_dispatch_queue* queue)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
-    BaseType_t result = pdPASS;
+    esp_err_t result = ESP_OK;
 
     queue->message_queue = xQueueCreate(DISPATCH_QUEUE_SIZE, (UBaseType_t)sizeof(dispatch_queue_fun_t));
     if (queue->message_queue == NULL)
     {
         ESP_LOGE(TAG, "Queue create failed.");
-        return;
+        return ESP_FAIL;
     }
 
     queue->event_group = xEventGroupCreate();
     if (queue->event_group == NULL)
     {
         ESP_LOGE(TAG, "Event group create failed.");
-        return;
+        result = ESP_FAIL;
+        goto cleanup_queue;
     }
 
-    result = xTaskCreate(&dispatch_fun, TASK_NAME, 2048, queue, tskIDLE_PRIORITY, &queue->task);
-    if (result != pdPASS)
+    if (xTaskCreate(&dispatch_fun, TASK_NAME, 2048, queue, tskIDLE_PRIORITY, &queue->task) != pdPASS)
     {
         ESP_LOGE(TAG, "Task create failed.");
-        return;
+        result = ESP_FAIL;
+        goto cleanup_task;
     }
 
     ESP_LOGI(TAG, "Dispatch queue created.");
+    return result;
+
+cleanup_task:
+    vTaskDelete(queue->task);
+    queue->task = NULL;
+cleanup_queue:
+    vQueueDelete(queue->message_queue);
+    queue->message_queue = NULL;
+
+    return result;
 }
 
-void hub_dispatch_queue_destroy(hub_dispatch_queue* queue)
+esp_err_t hub_dispatch_queue_destroy(hub_dispatch_queue* queue)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -56,22 +66,30 @@ void hub_dispatch_queue_destroy(hub_dispatch_queue* queue)
     vEventGroupDelete(queue->event_group);
     queue->event_group = NULL;
     vQueueDelete(queue->message_queue);
+    queue->message_queue = NULL;
+
+    return ESP_OK;
 }
 
-void hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
+esp_err_t hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    push(queue, fun);
+    return push(queue, fun);
 }
 
-void hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length)
+esp_err_t hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    for (uint16_t i = 0; i < length; i++)
+
+    esp_err_t result = ESP_OK;
+
+    for (uint16_t i = 0; i < length || result != ESP_OK; i++)
     {
-        push(queue, fun[i]);
+        result = push(queue, fun[i]);
         fun++;
     }
+
+    return result;
 }
 
 static void dispatch_fun(void* args)
@@ -113,7 +131,7 @@ static dispatch_queue_fun_t pop(hub_dispatch_queue* queue)
     return fun;
 }
 
-static void push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
+static esp_err_t push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -121,5 +139,8 @@ static void push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
     if (result != pdTRUE)
     {
         ESP_LOGE(TAG, "Message queue send failed.");
+        return ESP_FAIL;
     }
+
+    return ESP_OK;
 }

@@ -1,6 +1,8 @@
 #ifndef HUB_DISPATCH_QUEUE_H
 #define HUB_DISPATCH_QUEUE_H
 
+#include "esp_err.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -31,12 +33,12 @@ typedef struct hub_dispatch_queue
     QueueHandle_t message_queue;
 } hub_dispatch_queue;
 
-void hub_dispatch_queue_init(hub_dispatch_queue* queue);
+esp_err_t hub_dispatch_queue_init(hub_dispatch_queue* queue);
 
-void hub_dispatch_queue_destroy(hub_dispatch_queue* queue);
+esp_err_t hub_dispatch_queue_destroy(hub_dispatch_queue* queue);
 
-void hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun);
+esp_err_t hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun);
 
-void hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length);
+esp_err_t hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length);
 
 #endif

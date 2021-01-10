@@ -148,16 +148,24 @@ static esp_err_t app_init()
         goto cleanup_ble;
     }
 
-    if (hub_ble_client_init(&mikettle) != ESP_OK)
+    result = hub_ble_client_init(&mikettle);
+    if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialze MiKettle.");
         goto cleanup_ble;
     }
 
-    hub_dispatch_queue_init(&connect_queue);
+    result = hub_dispatch_queue_init(&connect_queue);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not initialze dispatch queue.");
+        goto cleanup_ble_client;
+    }
 
     return result;
 
+cleanup_ble_client:
+    hub_ble_client_destroy(&mikettle);
 cleanup_ble:
     hub_ble_deinit();
 cleanup_mqtt_client:
@@ -201,23 +209,28 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
     if (sprintf(buff, "{\"name\":\"%s\"}", device_name) < 0)
     {
         ESP_LOGE(TAG, "JSON formatting failed.");
-        goto cleanup;
+        goto cleanup_buff;
     }
 
     if (hub_mqtt_client_publish(&mqtt_client, MQTT_BLE_SCAN_TOPIC, buff) != ESP_OK)
     {
         ESP_LOGE(TAG, "Client publish failed.");
-        goto cleanup;
+        goto cleanup_buff;
     }
 
     if (strncmp(device_name, MIKETTLE_DEVICE_NAME, sizeof(MIKETTLE_DEVICE_NAME)) == 0)
     {
         memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
         mikettle.addr_type = address_type;
-        hub_dispatch_queue_push(&connect_queue, &mikettle_connect);
+
+        if (hub_dispatch_queue_push(&connect_queue, &mikettle_connect) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Push to dispatch queue failed.");
+            goto cleanup_buff;
+        }
     }
 
-cleanup:
+cleanup_buff:
     free(buff);
 }
 
@@ -264,25 +277,28 @@ static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_
             1) < 0)
         {
             ESP_LOGE(TAG, "JSON formatting failed.");
-            goto cleanup;
+            goto cleanup_buff;
         }
 
         if (hub_mqtt_client_publish(&mqtt_client, MIKETTLE_MQTT_TOPIC, buff) != ESP_OK)
         {
             ESP_LOGE(TAG, "Client publish failed.");
-            goto cleanup;
+            goto cleanup_buff;
         }
 
         ESP_LOGI(TAG, "Received data: %s.", buff);
 
-cleanup:
+cleanup_buff:
         free(buff);
     }
 }
 
 static void ble_disconnect_callback(hub_ble_client* ble_client)
 {
-    hub_ble_start_scanning(BLE_SCAN_TIME);
+    if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Retry failed.");
+    }
 }
 
 static void mikettle_connect()
@@ -315,5 +331,8 @@ static void mikettle_connect()
 
 retry:
     ESP_LOGI(TAG, "Retrying...");
-    hub_ble_start_scanning(BLE_SCAN_TIME);
+    if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Retry failed.");
+    }
 }
