@@ -2,6 +2,7 @@
 #define HUB_MQTT_H
 
 #include "esp_err.h"
+#include "stdbool.h"
 #include "mqtt_client.h"
 
 struct hub_mqtt_client;
@@ -12,8 +13,8 @@ typedef void (*hub_mqtt_client_data_callback_t)(hub_mqtt_client* client, const c
 
 struct hub_mqtt_client
 {
-    esp_mqtt_client_handle_t _client_handle;
-    hub_mqtt_client_data_callback_t _data_callback;
+    esp_mqtt_client_handle_t client_handle;
+    hub_mqtt_client_data_callback_t data_callback;
 };
 
 esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config);
@@ -24,7 +25,7 @@ esp_err_t hub_mqtt_client_start(hub_mqtt_client* client);
 
 esp_err_t hub_mqtt_client_stop(hub_mqtt_client* client);
 
-esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, const char* data);
+esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, const char* data, bool retain);
 
 esp_err_t hub_mqtt_client_subscribe(hub_mqtt_client* client, const char* topic);
 
