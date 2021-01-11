@@ -40,7 +40,7 @@ static const char* TAG = "HUB_MAIN";
 static esp_err_t app_init();
 static esp_err_t app_cleanup();
 static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
-static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
+static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uint8_t *value, uint16_t value_length);
 static void ble_disconnect_callback(hub_ble_client* ble_client);
 static void mikettle_connect();
 
@@ -212,7 +212,7 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
         goto cleanup_buff;
     }
 
-    if (hub_mqtt_client_publish(&mqtt_client, MQTT_BLE_SCAN_TOPIC, buff) != ESP_OK)
+    if (hub_mqtt_client_publish(&mqtt_client, MQTT_BLE_SCAN_TOPIC, buff, true) != ESP_OK)
     {
         ESP_LOGE(TAG, "Client publish failed.");
         goto cleanup_buff;
@@ -234,28 +234,28 @@ cleanup_buff:
     free(buff);
 }
 
-static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
+static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uint8_t *value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
-    if (param->handle == MIKETTLE_HANDLE_STATUS)
+    if (handle == MIKETTLE_HANDLE_STATUS)
     {
         static mikettle_status status;
         char* buff = NULL;
 
-        if (param->value_len <= sizeof(mikettle_status))
+        if (value_length <= sizeof(mikettle_status))
         {
             ESP_LOGE(TAG, "Bad data size.");
             return;
         }
 
         // Avoid sending the same status several times
-        if (memcmp(status.data, param->value, sizeof(mikettle_status)) == 0)
+        if (memcmp(status.data, value, sizeof(mikettle_status)) == 0)
         {
             return;
         }
 
-        memcpy(status.data, param->value, sizeof(mikettle_status));
+        memcpy(status.data, value, sizeof(mikettle_status));
         
         buff = (char*)malloc(256);
         if (buff == NULL)
@@ -280,7 +280,7 @@ static void ble_notify_callback(hub_ble_client* ble_client, struct gattc_notify_
             goto cleanup_buff;
         }
 
-        if (hub_mqtt_client_publish(&mqtt_client, MIKETTLE_MQTT_TOPIC, buff) != ESP_OK)
+        if (hub_mqtt_client_publish(&mqtt_client, MIKETTLE_MQTT_TOPIC, buff, true) != ESP_OK)
         {
             ESP_LOGE(TAG, "Client publish failed.");
             goto cleanup_buff;

@@ -56,7 +56,7 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
 
     auth_notify = false;
 
-    result = hub_ble_client_search_service(ble_client, &uuid_service_kettle);
+    result = hub_ble_client_get_service(ble_client, &uuid_service_kettle);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Could find services.");
@@ -161,7 +161,7 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
         goto cleanup;
     }
 
-    result = hub_ble_client_read_characteristic(ble_client, MIKETTLE_HANDLE_VERSION);
+    result = hub_ble_client_read_characteristic(ble_client, MIKETTLE_HANDLE_VERSION, NULL, NULL);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not read characteristics.");
