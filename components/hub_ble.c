@@ -281,7 +281,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (client->_buff_length == NULL)
         {
             ESP_LOGE(TAG, "Buffer length pointer not supplied.");
-            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
             break;
         }
 
@@ -296,7 +296,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (client->_buff == NULL)
         {
             ESP_LOGE(TAG, "Buffer not supplied.");
-            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
             break;
         }
 
@@ -330,7 +330,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (client->_buff_length == NULL)
         {
             ESP_LOGE(TAG, "Buffer length pointer not supplied.");
-            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
             break;
         }
 
@@ -345,7 +345,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (client->_buff == NULL)
         {
             ESP_LOGE(TAG, "Buffer not supplied.");
-            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
             break;
         }
 
