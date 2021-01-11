@@ -28,12 +28,12 @@ struct hub_ble_client
     uint16_t conn_id;
     uint16_t service_start_handle;
     uint16_t service_end_handle;
-    uint16_t _buff_length;
     esp_bd_addr_t remote_bda;
     esp_ble_addr_type_t addr_type;
     EventGroupHandle_t event_group;
     notify_callback_t notify_cb;
     disconnect_callback_t disconnect_cb;
+    uint16_t* _buff_length;
     void* _buff;
 };
 
@@ -61,18 +61,20 @@ esp_err_t hub_ble_client_register_notify_callback(hub_ble_client* ble_client, no
 
 esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client, disconnect_callback_t callback);
 
-esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid);
+esp_err_t hub_ble_client_get_services(hub_ble_client* ble_client, esp_gattc_service_elem_t* services, uint16_t* count);
+
+esp_err_t hub_ble_client_get_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid);
 
 esp_err_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gattc_char_elem_t* characteristics, uint16_t* count);
 
 esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length);
 
-esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle);
+esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length);
 
 esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count);
 
 esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length);
 
-esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length);
+esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length);
 
 #endif

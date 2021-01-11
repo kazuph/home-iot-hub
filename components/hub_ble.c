@@ -278,6 +278,31 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             break;
         }
 
+        if (client->_buff_length == NULL)
+        {
+            ESP_LOGE(TAG, "Buffer length pointer not supplied.");
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            break;
+        }
+
+        // If the length of the buffer is not set by the previous call, we only provide a required buffer length
+        if (*(client->_buff_length) != param->read.value_len)
+        {
+            *(client->_buff_length) = param->read.value_len;
+            xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
+            break;
+        }
+
+        if (client->_buff == NULL)
+        {
+            ESP_LOGE(TAG, "Buffer not supplied.");
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            break;
+        }
+
+        // If the buffer is prepared correctly and the length matches, we copy the content of the characteristic
+        memcpy(client->_buff, param->read.value, client->_buff_length);
+
         xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
         break;
     case ESP_GATTC_WRITE_DESCR_EVT:
@@ -301,6 +326,31 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             ESP_LOGE(TAG, "Client not found.");
             break;
         }
+
+        if (client->_buff_length == NULL)
+        {
+            ESP_LOGE(TAG, "Buffer length pointer not supplied.");
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            break;
+        }
+
+        // If the length of the buffer is not set by the previous call, we only provide a required buffer length
+        if (*(client->_buff_length) != param->read.value_len)
+        {
+            *(client->_buff_length) = param->read.value_len;
+            xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
+            break;
+        }
+
+        if (client->_buff == NULL)
+        {
+            ESP_LOGE(TAG, "Buffer not supplied.");
+            xEventGroupSetBits(client->event_group, FAIL_BIT);
+            break;
+        }
+
+        // If the buffer is prepared correctly and the length matches, we copy the content of the descriptor
+        memcpy(client->_buff, param->read.value, client->_buff_length);
 
         xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
         break;
@@ -665,7 +715,17 @@ esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client
     return ESP_OK;
 }
 
-esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)
+esp_err_t hub_ble_client_get_services(hub_ble_client* ble_client, esp_gattc_service_elem_t* services, uint16_t* count)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+
+
+    return result;
+}
+
+esp_err_t hub_ble_client_get_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
@@ -673,7 +733,7 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Search service failed, error: %i.", result);
+        ESP_LOGE(TAG, "Get service failed, error: %i.", result);
         return result;
     }
 
@@ -685,7 +745,7 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Search service success.");
+    ESP_LOGI(TAG, "Get service success.");
     return result;
 }
 
@@ -758,10 +818,13 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
     return result;
 }
 
-esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle)
+esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    ble_client->_buff = value;
+    ble_client->_buff_length = value_length;
 
     result = esp_ble_gattc_read_char(
         ble_client->gattc_if, 
@@ -783,6 +846,9 @@ esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_
         ESP_LOGE(TAG, "Read characteristic failed.");
         return ESP_FAIL;
     }
+
+    ble_client->_buff = NULL;
+    ble_client->_buff_length = NULL;
 
     ESP_LOGI(TAG, "Read characteristic success.");
     return result;
@@ -855,10 +921,13 @@ esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t h
     return result;
 }
 
-esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    ble_client->_buff = value;
+    ble_client->_buff_length = value_length;
 
     result = esp_ble_gattc_read_char_descr(
         ble_client->gattc_if, 
@@ -869,7 +938,7 @@ esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t ha
 
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Read characteristic failed, error: %i.", result);
+        ESP_LOGE(TAG, "Read descriptor failed, error: %i.", result);
         return result;
     }
 
@@ -877,11 +946,13 @@ esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t ha
 
     if (!(bits & READ_CHAR_BIT))
     {
-        ESP_LOGE(TAG, "Read characteristic failed.");
+        ESP_LOGE(TAG, "Read descriptor failed.");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Read characteristic success.");
+    ble_client->_buff = NULL;
+    ble_client->_buff_length = NULL;
 
+    ESP_LOGI(TAG, "Read descriptor success.");
     return result;
 }
