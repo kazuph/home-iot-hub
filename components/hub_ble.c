@@ -253,8 +253,20 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             break;
         }
 
-        client->notify_cb(client, param);
+        client->notify_cb(client, param->notify.handle, param->notify.value, param->notify.value_len);
 
+        break;
+    case ESP_GATTC_WRITE_CHAR_EVT:
+        ESP_LOGV(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
+
+        client = get_client(gattc_if);
+        if (client == NULL)
+        {
+            ESP_LOGE(TAG, "Client not found.");
+            break;
+        }
+
+        xEventGroupSetBits(client->event_group, WRITE_CHAR_BIT);
         break;
     case ESP_GATTC_READ_CHAR_EVT:
         ESP_LOGV(TAG, "ESP_GATTC_READ_CHAR_EVT");
@@ -267,7 +279,6 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
-
         break;
     case ESP_GATTC_WRITE_DESCR_EVT:
         ESP_LOGV(TAG, "ESP_GATTC_WRITE_DESCR_EVT");
@@ -281,11 +292,8 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         xEventGroupSetBits(client->event_group, WRITE_DESCR_BIT);
         break;
-    case ESP_GATTC_SRVC_CHG_EVT:
-        ESP_LOGV(TAG, "ESP_GATTC_SRVC_CHG_EVT");
-        break;
-    case ESP_GATTC_WRITE_CHAR_EVT:
-        ESP_LOGV(TAG, "ESP_GATTC_WRITE_CHAR_EVT");
+    case ESP_GATTC_READ_DESCR_EVT:
+        ESP_LOGV(TAG, "ESP_GATTC_READ_DESCR_EVT");
 
         client = get_client(gattc_if);
         if (client == NULL)
@@ -294,7 +302,10 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             break;
         }
 
-        xEventGroupSetBits(client->event_group, WRITE_CHAR_BIT);
+        xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
+        break;
+    case ESP_GATTC_SRVC_CHG_EVT:
+        ESP_LOGV(TAG, "ESP_GATTC_SRVC_CHG_EVT");
         break;
     case ESP_GATTC_DISCONNECT_EVT:
         ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
@@ -678,6 +689,42 @@ esp_err_t hub_ble_client_search_service(hub_ble_client* ble_client, esp_bt_uuid_
     return result;
 }
 
+esp_err_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gattc_char_elem_t* characteristics, uint16_t* count)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    if (characteristics != NULL)
+    {
+        result = esp_ble_gattc_get_all_char(
+            ble_client->gattc_if, 
+            ble_client->conn_id,
+            ble_client->service_start_handle,
+            ble_client->service_end_handle,
+            characteristics,
+            count,
+            0);
+    }
+    else
+    {
+        result = esp_ble_gattc_get_attr_count(
+            ble_client->gattc_if, 
+            ble_client->conn_id,
+            ESP_GATT_DB_CHARACTERISTIC,
+            ble_client->service_start_handle,
+            ble_client->service_end_handle,
+            ESP_GATT_ILLEGAL_HANDLE,
+            count);
+    }
+
+    if (result != ESP_GATT_OK)
+    {
+        ESP_LOGE(TAG, "Get descriptors failed, error: %i.", result);
+    }
+
+    return result;
+}
+
 esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -805,5 +852,36 @@ esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t h
     }
 
     ESP_LOGI(TAG, "Write descriptor success.");
+    return result;
+}
+
+esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    result = esp_ble_gattc_read_char_descr(
+        ble_client->gattc_if, 
+        ble_client->conn_id,
+        handle,
+        ESP_GATT_AUTH_REQ_NONE
+    );
+
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Read characteristic failed, error: %i.", result);
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, READ_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (!(bits & READ_CHAR_BIT))
+    {
+        ESP_LOGE(TAG, "Read characteristic failed.");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Read characteristic success.");
+
     return result;
 }
