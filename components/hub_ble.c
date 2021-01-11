@@ -818,7 +818,7 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
     return result;
 }
 
-esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
