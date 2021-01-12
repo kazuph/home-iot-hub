@@ -60,7 +60,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
         if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan start failed, error: %x", param->scan_start_cmpl.status);
+            ESP_LOGE(TAG, "Scan start failed with error code %i.", param->scan_start_cmpl.status);
             break;
         }
         ESP_LOGI(TAG, "Scan started...");
@@ -92,7 +92,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
         if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan stop failed, wrror: %x", param->scan_stop_cmpl.status);
+            ESP_LOGE(TAG, "Scan stop failed failed with error code %i.", param->scan_stop_cmpl.status);
             break;
         }
 
@@ -100,14 +100,6 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         break;
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT");
-        ESP_LOGI(TAG, "Update connection params:\nstatus = %d,\nmin_int = %d,\nmax_int = %d,\nconn_int = %d,\nlatency = %d,\ntimeout = %d",
-            param->update_conn_params.status,
-            param->update_conn_params.min_int,
-            param->update_conn_params.max_int,
-            param->update_conn_params.conn_int,
-            param->update_conn_params.latency,
-            param->update_conn_params.timeout);
-        break;
     default:
         ESP_LOGW(TAG, "Other GAP event: %i.", event);
         break;
@@ -138,7 +130,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             result = esp_ble_gap_set_scan_params(&ble_scan_params);
             if (result != ESP_OK)
             {
-                ESP_LOGE(TAG, "Set scan parameters failed in function %s with error code %x.\n", __func__, result);
+                ESP_LOGE(TAG, "Set scan parameters failed with error code %x [%s].", result, esp_err_to_name(result));
             }
         }
         else
@@ -280,7 +272,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         if (client->_buff_length == NULL)
         {
-            ESP_LOGE(TAG, "Buffer length pointer not supplied.");
+            ESP_LOGW(TAG, "Buffer length pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
             break;
         }
@@ -295,7 +287,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         if (client->_buff == NULL)
         {
-            ESP_LOGE(TAG, "Buffer not supplied.");
+            ESP_LOGW(TAG, "Buffer not pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
             break;
         }
@@ -329,7 +321,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         if (client->_buff_length == NULL)
         {
-            ESP_LOGE(TAG, "Buffer length pointer not supplied.");
+            ESP_LOGW(TAG, "Buffer length pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
             break;
         }
@@ -344,7 +336,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 
         if (client->_buff == NULL)
         {
-            ESP_LOGE(TAG, "Buffer not supplied.");
+            ESP_LOGW(TAG, "Buffer pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
             break;
         }
@@ -375,6 +367,9 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         client->disconnect_cb(client);
+        break;
+    case ESP_GATTC_CLOSE_EVT:
+        ESP_LOGV(TAG, "ESP_GATTC_CLOSE_EVT");
         break;
     default:
         ESP_LOGW(TAG, "Other GATTC event: %i.", event);
@@ -407,49 +402,49 @@ esp_err_t hub_ble_init()
     result = esp_bt_controller_init(&bt_config);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE initialization failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE initialization failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     result = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE controller enable failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE controller enable failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bt_controller_init;
     }
 
     result = esp_bluedroid_init();
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Bluedroid initialization failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "Bluedroid initialization failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bt_controller_enable;
     }
 
     result = esp_bluedroid_enable();
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Bluedroid enable failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "Bluedroid enable failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bluedroid_init;
     }
 
     result = esp_ble_gap_register_callback(&esp_gap_callback);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE GAP callback register failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE GAP callback register failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bluedroid_enable;
     }
 
     result = esp_ble_gattc_register_callback(&esp_gattc_callback);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE GATC callback register failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE GATC callback register failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bluedroid_enable;
     }
 
     result = esp_ble_gatt_set_local_mtu(500);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE GATT set local MTU failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE GATT set local MTU failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup_bluedroid_enable;
     }
 
@@ -498,21 +493,22 @@ esp_err_t hub_ble_deinit()
 esp_err_t hub_ble_start_scanning(uint32_t scan_time)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    return esp_ble_gap_start_scanning(scan_time);
+    return  esp_ble_gap_start_scanning(scan_time);
+}
+
+esp_err_t hub_ble_stop_scanning()
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    return esp_ble_gap_stop_scanning();
 }
 
 esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
-    if (callback == NULL)
-    {
-        ESP_LOGE(TAG, "Callback is NULL.");
-        return ESP_FAIL;
-    }
-
     scan_callback = callback;
-    ESP_LOGI(TAG, "Callback set.");
+    ESP_LOGI(TAG, "Register callback set.");
+
     return ESP_OK;
 }
 
@@ -545,7 +541,7 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
     result = esp_ble_gattc_app_register(app_id);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE GATC app register failed with error code %x [%s].", result, esp_err_to_name(result));
         gl_profile_tab[app_id] = NULL;
         return result;
     }
@@ -571,7 +567,7 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
     result = esp_ble_gattc_app_unregister(ble_client->gattc_if);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "BLE GATC app register failed in function %s with error code %x.\n", __func__, result);
+        ESP_LOGE(TAG, "BLE GATC app register failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
@@ -592,26 +588,34 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
     result = esp_ble_gap_stop_scanning();
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Scan stop failed, error: %i.", result);
-        return result;
+        ESP_LOGW(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
+        //return result;
     }
 
     result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "GATT connect failed, error: %i.", result);
+        ESP_LOGE(TAG, "GATT connect failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & CONNECT_BIT))
+    if (bits & CONNECT_BIT)
     {
-        ESP_LOGE(TAG, "Connection failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Connection success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "BLE client connection success.");
     return result;
 }
 
@@ -623,19 +627,27 @@ esp_err_t hub_ble_client_disconnect(hub_ble_client* ble_client)
     result = esp_ble_gattc_close(ble_client->gattc_if, ble_client->conn_id);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "GATT disconnect failed, error: %i.", result);
+        ESP_LOGE(TAG, "GATT disconnect failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & DISCONNECT_BIT))
+    if (bits & DISCONNECT_BIT)
     {
-        ESP_LOGE(TAG, "Disconnect failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Disconnect success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Disconnect failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Disconnect failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "BLE client disconnect success.");
     return result;
 }
 
@@ -647,19 +659,27 @@ esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_
     result = esp_ble_gattc_register_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Register for notify failed, error: %i.", result);
+        ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, REG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & REG_FOR_NOTIFY_BIT))
+    if (bits & REG_FOR_NOTIFY_BIT)
     {
-        ESP_LOGE(TAG, "Register for notify failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Register for notify success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "Register for notify success.");
     return result;
 }
 
@@ -671,19 +691,29 @@ esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint1
     result = esp_ble_gattc_unregister_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Unregister for notify failed, error: %i.", result);
+        ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, UNREG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & UNREG_FOR_NOTIFY_BIT))
+    ESP_LOGI(TAG, "Unregister for notify success.");
+
+    if (bits & UNREG_FOR_NOTIFY_BIT)
     {
-        ESP_LOGE(TAG, "Unregister for notify failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Unregister for notify success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "Unregister for notify success.");
     return result;
 }
 
@@ -733,26 +763,34 @@ esp_err_t hub_ble_client_get_service(hub_ble_client* ble_client, esp_bt_uuid_t* 
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Get service failed, error: %i.", result);
+        ESP_LOGE(TAG, "Get service failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & SEARCH_SERVICE_BIT))
+    if (bits & SEARCH_SERVICE_BIT)
     {
-        ESP_LOGE(TAG, "Connection failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Get service success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Get service failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Get service failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "Get service success.");
     return result;
 }
 
-esp_err_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gattc_char_elem_t* characteristics, uint16_t* count)
+esp_gatt_status_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gattc_char_elem_t* characteristics, uint16_t* count)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    esp_err_t result = ESP_OK;
+    esp_gatt_status_t result = ESP_GATT_OK;
 
     if (characteristics != NULL)
     {
@@ -779,7 +817,7 @@ esp_err_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gat
 
     if (result != ESP_GATT_OK)
     {
-        ESP_LOGE(TAG, "Get descriptors failed, error: %i.", result);
+        ESP_LOGE(TAG, "Get characteristics failed with error code %x.\n", result);
     }
 
     return result;
@@ -801,19 +839,26 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
 
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Write characteristic failed, error: %i.", result);
+        ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & WRITE_CHAR_BIT))
+    if (bits & WRITE_CHAR_BIT)
     {
-        ESP_LOGE(TAG, "Write characteristic failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Write characteristic success.");
     }
-
-    ESP_LOGI(TAG, "Write characteristic success.");
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
 
     return result;
 }
@@ -835,22 +880,30 @@ esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_
 
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Read characteristic failed, error: %i.", result);
+        ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, READ_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & READ_CHAR_BIT))
+    if (bits & READ_CHAR_BIT)
     {
-        ESP_LOGE(TAG, "Read characteristic failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Read characteristic success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
     ble_client->_buff = NULL;
     ble_client->_buff_length = NULL;
 
-    ESP_LOGI(TAG, "Read characteristic success.");
     return result;
 }
 
@@ -883,7 +936,7 @@ esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uin
 
     if (result != ESP_GATT_OK)
     {
-        ESP_LOGE(TAG, "Get descriptors failed, error: %i.", result);
+        ESP_LOGE(TAG, "Get descriptors failed with error code %i.", result);
     }
 
     return result;
@@ -905,19 +958,27 @@ esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t h
 
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Write descriptor failed, error: %i.", result);
+        ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, WRITE_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & WRITE_DESCR_BIT))
+    if (bits & WRITE_DESCR_BIT)
     {
-        ESP_LOGE(TAG, "Write descriptor failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Write descriptor success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ESP_LOGI(TAG, "Write descriptor success.");
     return result;
 }
 
@@ -938,21 +999,29 @@ esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t ha
 
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "Read descriptor failed, error: %i.", result);
+        ESP_LOGE(TAG, "Read descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, READ_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
 
-    if (!(bits & READ_CHAR_BIT))
+    if (bits & READ_DESCR_BIT)
     {
-        ESP_LOGE(TAG, "Read descriptor failed.");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "Read descriptor success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Read descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Read descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
     ble_client->_buff = NULL;
     ble_client->_buff_length = NULL;
 
-    ESP_LOGI(TAG, "Read descriptor success.");
     return result;
 }

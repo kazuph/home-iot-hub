@@ -21,7 +21,7 @@
 #endif
 
 #ifndef DISPATCH_QUEUE_POP_TIMEOUT
-#define DISPATCH_QUEUE_POP_TIMEOUT          DISPATCH_QUEUE_TIMEOUT_DEFAULT
+#define DISPATCH_QUEUE_POP_TIMEOUT          portMAX_DELAY
 #endif
 
 typedef void (*dispatch_queue_fun_t)();

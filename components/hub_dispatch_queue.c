@@ -74,7 +74,16 @@ esp_err_t hub_dispatch_queue_destroy(hub_dispatch_queue* queue)
 esp_err_t hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    return push(queue, fun);
+    esp_err_t result = push(queue, fun);
+
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Push to message queue failed.");
+    }
+
+    ESP_LOGI(TAG, "Push to dispatch queue success.");
+    ESP_LOGI(TAG, "Current queue count: %i/%i.", (DISPATCH_QUEUE_SIZE - (int)uxQueueSpacesAvailable(queue->message_queue)), DISPATCH_QUEUE_SIZE);
+    return result;
 }
 
 esp_err_t hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length)
@@ -138,7 +147,6 @@ static esp_err_t push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
     BaseType_t result = xQueueSendToBack(queue->message_queue, (const void*)&fun, DISPATCH_QUEUE_PUSH_TIMEOUT);
     if (result != pdTRUE)
     {
-        ESP_LOGE(TAG, "Message queue send failed.");
         return ESP_FAIL;
     }
 

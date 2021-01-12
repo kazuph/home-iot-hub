@@ -23,31 +23,31 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     
     switch (event->event_id) {
         case MQTT_EVENT_DATA:
-            ESP_LOGV(TAG, "MQTT_EVENT_DATA\n");
+            ESP_LOGV(TAG, "MQTT_EVENT_DATA");
             hub_mqtt_client* client = (hub_mqtt_client*)handler_args;
 
             if (client == NULL)
             {
-                ESP_LOGE(TAG, "MQTT client not recognized.");
+                ESP_LOGE(TAG, "Client not recognized.");
                 break;
             }
 
             if (client->data_callback == NULL)
             {
-                ESP_LOGE(TAG, "MQTT client data callback not valid.");
+                ESP_LOGE(TAG, "Client data callback not valid.");
                 break;
             }
 
             client->data_callback(client, event->topic, event->data, event->data_len);           
             break;
         case MQTT_EVENT_ERROR:
-            ESP_LOGE(TAG, "MQTT_EVENT_ERROR\n");
+            ESP_LOGW(TAG, "MQTT_EVENT_ERROR");
             break;
         case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED\n");
+            ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
         default:
-            ESP_LOGW(TAG, "Unknown event. ID: %d\n", event->event_id);
+            ESP_LOGW(TAG, "Unknown event. ID: %d.", event->event_id);
             break;
     }
 }
@@ -60,25 +60,26 @@ esp_err_t hub_mqtt_client_start(hub_mqtt_client* client)
 
     if (client->client_handle == NULL)
     {
-        ESP_LOGE(TAG, "MQTT client handle not initialized.\n");
+        ESP_LOGE(TAG, "Client handle not initialized.");
         result = ESP_FAIL;
         return result;
     }
 
-    result = esp_mqtt_client_register_event(client->client_handle, MQTT_EVENT_DATA | MQTT_EVENT_ERROR, mqtt_event_handler, client);
+    result = esp_mqtt_client_register_event(client->client_handle, MQTT_EVENT_DATA | MQTT_EVENT_ERROR | MQTT_EVENT_DISCONNECTED, mqtt_event_handler, client);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "MQTT event registration failed.\n");
+        ESP_LOGE(TAG, "Event registration failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
     result = esp_mqtt_client_start(client->client_handle);
     if (result != ESP_OK)
     {
-        ESP_LOGE(TAG, "MQTT client start failed.\n");
+        ESP_LOGE(TAG, "Client start failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
+    ESP_LOGI(TAG, "Client start success.");
     return result;
 }
 
@@ -96,11 +97,11 @@ esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, co
     
     if (message_id == -1)
     {
-        ESP_LOGE(TAG, "Client publish failed.\n");
+        ESP_LOGE(TAG, "Client publish failed.");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Client publish successful, message_id = %d\n", message_id);
+    ESP_LOGI(TAG, "Client publish success.");
     return ESP_OK;
 }
 
@@ -112,11 +113,11 @@ esp_err_t hub_mqtt_client_subscribe(hub_mqtt_client* client, const char* topic)
 
     if (message_id == -1)
     {
-        ESP_LOGE(TAG, "Client subscribe failed.\n");
+        ESP_LOGE(TAG, "Client subscribe failed.");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Client subscribe successful, message_id = %d\n", message_id);
+    ESP_LOGI(TAG, "Client subscribe success");
     return ESP_OK;
 }
 
@@ -128,11 +129,11 @@ esp_err_t hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const char* topic
 
     if (message_id == -1)
     {
-        ESP_LOGE(TAG, "Client unsubscribe failed.\n");
+        ESP_LOGE(TAG, "Client unsubscribe failed.");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Client unsubscribe successful, message_id = %d\n", message_id);
+    ESP_LOGI(TAG, "Client unsubscribe success.");
     return ESP_OK;
 }
 
@@ -141,6 +142,8 @@ esp_err_t hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* client, h
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
     client->data_callback = callback;
+
+    ESP_LOGI(TAG, "Client callback set.");
     return ESP_OK;
 }
 
@@ -150,12 +153,14 @@ esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_co
 
     client->data_callback = NULL;
     client->client_handle = esp_mqtt_client_init(config);
+
     if (client->client_handle == NULL)
     {
-        ESP_LOGE(TAG, "MQTT client handle initialization failed.\n");
+        ESP_LOGE(TAG, "MQTT client handle initialization failed.");
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "Client initialize success.");
     return ESP_OK;
 }
 
@@ -166,8 +171,16 @@ esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client)
     esp_err_t result = ESP_OK;
 
     client->data_callback = NULL;
+
     result = esp_mqtt_client_destroy(client->client_handle);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Client destroy failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
     client->client_handle = NULL;
 
+    ESP_LOGI(TAG, "Client destroy success.");
     return result;
 }
