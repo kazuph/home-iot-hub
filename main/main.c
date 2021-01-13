@@ -42,6 +42,8 @@ static esp_err_t app_cleanup();
 static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
 static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uint8_t *value, uint16_t value_length);
 static void ble_disconnect_callback(hub_ble_client* ble_client);
+static void ble_start_scanning();
+static void ble_stop_scanning();
 static void mikettle_connect();
 
 static hub_mqtt_client mqtt_client;
@@ -59,11 +61,12 @@ void app_main()
     }
     ESP_LOGI(TAG, "Setup successful");
 
-    if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
+    if (hub_dispatch_queue_push(&connect_queue, &ble_start_scanning) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Start scanning failed.");
+        ESP_LOGE(TAG, "Push to dispatch queue failed.");
         goto cleanup;
     }
+
     ESP_LOGI(TAG, "Scanning started...");
 
     return;
@@ -223,7 +226,7 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
         memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
         mikettle.addr_type = address_type;
 
-        if (hub_dispatch_queue_push(&connect_queue, &hub_ble_stop_scanning) != ESP_OK)
+        if (hub_dispatch_queue_push(&connect_queue, &ble_stop_scanning) != ESP_OK)
         {
             ESP_LOGE(TAG, "Push to dispatch queue failed.");
             goto cleanup_buff;
@@ -301,9 +304,25 @@ cleanup_buff:
 
 static void ble_disconnect_callback(hub_ble_client* ble_client)
 {
+    if (hub_dispatch_queue_push(&connect_queue, &ble_start_scanning) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Push to dispatch queue failed.");
+    }
+}
+
+static void ble_start_scanning()
+{
     if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Retry failed.");
+        ESP_LOGE(TAG, "Scan start failed.");
+    }
+}
+
+static void ble_stop_scanning()
+{
+    if (hub_ble_stop_scanning() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Scan stop failed.");
     }
 }
 
@@ -337,8 +356,8 @@ static void mikettle_connect()
 
 retry:
     ESP_LOGI(TAG, "Retrying...");
-    if (hub_ble_start_scanning(BLE_SCAN_TIME) != ESP_OK)
+    if (hub_dispatch_queue_push(&connect_queue, &ble_start_scanning) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Retry failed.");
+        ESP_LOGE(TAG, "Push to dispatch queue failed.");
     }
 }
