@@ -14,6 +14,9 @@
 
 #define BLE_TIMEOUT (TickType_t)10000 / portTICK_PERIOD_MS
 
+#define FAIL_BIT BIT15
+
+/* Bits used by hub_ble_client */
 #define CONNECT_BIT             BIT0
 #define SEARCH_SERVICE_BIT      BIT1
 #define WRITE_CHAR_BIT          BIT2
@@ -23,7 +26,10 @@
 #define REG_FOR_NOTIFY_BIT      BIT6
 #define UNREG_FOR_NOTIFY_BIT    BIT7
 #define DISCONNECT_BIT          BIT8
-#define FAIL_BIT                BIT15
+
+/* Bits used by GAP */
+#define SCAN_START_BIT  BIT0
+#define SCAN_STOP_BIT   BIT1
 
 static const char* TAG = "HUB_BLE";
 
@@ -32,6 +38,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
 static hub_ble_client* get_client(esp_gatt_if_t gattc_if);
 
 static scan_callback_t scan_callback;
+static EventGroupHandle_t scan_event_group;
 
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
@@ -54,16 +61,18 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT");
-        ESP_LOGI(TAG, "Set scan parameters complete.");
         break;
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
+
         if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
+            xEventGroupSetBits(scan_event_group, FAIL_BIT);
             ESP_LOGE(TAG, "Scan start failed with error code %x.", param->scan_start_cmpl.status);
             break;
         }
-        ESP_LOGI(TAG, "Scan started...");
+
+        xEventGroupSetBits(scan_event_group, SCAN_START_BIT);
         break;
     case ESP_GAP_BLE_SCAN_RESULT_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_RESULT_EVT");
@@ -81,6 +90,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
                     scan_callback(param->scan_rst.bda, (const char*)adv_name, param->scan_rst.ble_addr_type);
                 }
             }
+
             break;
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
             ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT");
@@ -92,11 +102,12 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
         if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
+            xEventGroupSetBits(scan_event_group, FAIL_BIT);
             ESP_LOGE(TAG, "Scan stop failed with error code %x.", param->scan_stop_cmpl.status);
             break;
         }
 
-        ESP_LOGI(TAG, "Scan stopped successfully");
+        xEventGroupSetBits(scan_event_group, SCAN_STOP_BIT);
         break;
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT");
@@ -450,6 +461,13 @@ esp_err_t hub_ble_init()
 
     scan_callback = NULL;
 
+    scan_event_group = xEventGroupCreate();
+    if (scan_event_group == NULL)
+    {
+        ESP_LOGE(TAG, "Event group create failed.");
+        goto cleanup_bluedroid_enable;
+    }
+
     for (uint8_t i = 0; i < HUB_BLE_MAX_CLIENTS; i++)
     {
         gl_profile_tab[i] = NULL;
@@ -481,6 +499,7 @@ esp_err_t hub_ble_deinit()
     }
 
     scan_callback = NULL;
+    vEventGroupDelete(scan_event_group);
 
     esp_bluedroid_disable();
     esp_bluedroid_deinit();
@@ -493,13 +512,51 @@ esp_err_t hub_ble_deinit()
 esp_err_t hub_ble_start_scanning(uint32_t scan_time)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    return  esp_ble_gap_start_scanning(scan_time);
+    esp_err_t result = esp_ble_gap_start_scanning(scan_time);
+
+    EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (bits & SCAN_START_BIT)
+    {
+        ESP_LOGI(TAG, "Scan started successfully.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+
+    return result;
 }
 
 esp_err_t hub_ble_stop_scanning()
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
-    return esp_ble_gap_stop_scanning();
+    esp_err_t result = esp_ble_gap_stop_scanning();
+
+    EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (bits & SCAN_STOP_BIT)
+    {
+        ESP_LOGI(TAG, "Scan stopped successfully.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+
+    return result;
 }
 
 esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
