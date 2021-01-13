@@ -60,7 +60,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
         if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan start failed with error code %i.", param->scan_start_cmpl.status);
+            ESP_LOGE(TAG, "Scan start failed with error code %x.", param->scan_start_cmpl.status);
             break;
         }
         ESP_LOGI(TAG, "Scan started...");
@@ -92,7 +92,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
         ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
         if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan stop failed failed with error code %i.", param->scan_stop_cmpl.status);
+            ESP_LOGE(TAG, "Scan stop failed with error code %x.", param->scan_stop_cmpl.status);
             break;
         }
 
@@ -101,7 +101,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
         ESP_LOGV(TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT");
     default:
-        ESP_LOGW(TAG, "Other GAP event: %i.", event);
+        ESP_LOGW(TAG, "Other GAP event: %x.", event);
         break;
     }
 }
@@ -157,7 +157,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         if (result != ESP_OK)
         {
             xEventGroupSetBits(client->event_group, FAIL_BIT);
-            ESP_LOGE(TAG, "MTU configuration failed, error: %x", result);
+            ESP_LOGE(TAG, "MTU configuration failed with error code %x [%s].", result, esp_err_to_name(result));
             break;
         }
         ESP_LOGI(TAG, "MTU configuration success.");
@@ -585,12 +585,12 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
 
-    result = esp_ble_gap_stop_scanning();
+    /*result = esp_ble_gap_stop_scanning();
     if (result != ESP_OK)
     {
         ESP_LOGW(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
-        //return result;
-    }
+        return result;
+    }*/
 
     result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
     if (result != ESP_OK)
@@ -936,7 +936,7 @@ esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uin
 
     if (result != ESP_GATT_OK)
     {
-        ESP_LOGE(TAG, "Get descriptors failed with error code %i.", result);
+        ESP_LOGE(TAG, "Get descriptors failed with error code %x.", result);
     }
 
     return result;

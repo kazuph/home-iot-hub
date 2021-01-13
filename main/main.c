@@ -223,6 +223,11 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
         memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
         mikettle.addr_type = address_type;
 
+        if (hub_ble_stop_scanning() != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Scan not active.");
+        }
+
         if (hub_dispatch_queue_push(&connect_queue, &mikettle_connect) != ESP_OK)
         {
             ESP_LOGE(TAG, "Push to dispatch queue failed.");
