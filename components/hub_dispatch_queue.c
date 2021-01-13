@@ -5,10 +5,6 @@
 #include "esp_log.h"
 
 #define TASK_NAME "DISPATCH QUEUE MAIN"
-#define INIT_SIZE 4
-
-#define EMPTY_BIT   BIT0
-#define FULL_BIT    BIT1
 
 static const char* TAG = "HUB_DISPATCH_QUEUE";
 
@@ -29,27 +25,16 @@ esp_err_t hub_dispatch_queue_init(hub_dispatch_queue* queue)
         return ESP_FAIL;
     }
 
-    queue->event_group = xEventGroupCreate();
-    if (queue->event_group == NULL)
-    {
-        ESP_LOGE(TAG, "Event group create failed.");
-        result = ESP_FAIL;
-        goto cleanup_queue;
-    }
-
     if (xTaskCreate(&dispatch_fun, TASK_NAME, 2048, queue, tskIDLE_PRIORITY, &queue->task) != pdPASS)
     {
         ESP_LOGE(TAG, "Task create failed.");
         result = ESP_FAIL;
-        goto cleanup_task;
+        goto cleanup_queue;
     }
 
     ESP_LOGI(TAG, "Dispatch queue created.");
     return result;
 
-cleanup_task:
-    vTaskDelete(queue->task);
-    queue->task = NULL;
 cleanup_queue:
     vQueueDelete(queue->message_queue);
     queue->message_queue = NULL;
@@ -63,8 +48,6 @@ esp_err_t hub_dispatch_queue_destroy(hub_dispatch_queue* queue)
 
     vTaskDelete(queue->task);
     queue->task = NULL;
-    vEventGroupDelete(queue->event_group);
-    queue->event_group = NULL;
     vQueueDelete(queue->message_queue);
     queue->message_queue = NULL;
 
@@ -147,7 +130,7 @@ static esp_err_t push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun)
     BaseType_t result = xQueueSendToBack(queue->message_queue, (const void*)&fun, DISPATCH_QUEUE_PUSH_TIMEOUT);
     if (result != pdTRUE)
     {
-        return ESP_FAIL;
+        return ESP_ERR_TIMEOUT;
     }
 
     return ESP_OK;
