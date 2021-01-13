@@ -62,6 +62,7 @@ esp_err_t hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Push to message queue failed.");
+        return result;
     }
 
     ESP_LOGI(TAG, "Push to dispatch queue success.");
