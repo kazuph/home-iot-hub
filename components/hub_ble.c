@@ -31,14 +31,30 @@
 #define SCAN_START_BIT  BIT0
 #define SCAN_STOP_BIT   BIT1
 
+typedef struct hub_ble_client
+{
+    uint16_t gattc_if;
+    uint16_t app_id;
+    uint16_t conn_id;
+    uint16_t service_start_handle;
+    uint16_t service_end_handle;
+    esp_bd_addr_t remote_bda;
+    esp_ble_addr_type_t addr_type;
+    EventGroupHandle_t event_group;
+    notify_callback_t notify_cb;
+    disconnect_callback_t disconnect_cb;
+    uint16_t* _buff_length;
+    void* _buff;
+} hub_ble_client;
+
 static const char* TAG = "HUB_BLE";
 
 static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 static hub_ble_client* get_client(esp_gatt_if_t gattc_if);
 
-static scan_callback_t scan_callback;
-static EventGroupHandle_t scan_event_group;
+static scan_callback_t scan_callback = NULL;
+static EventGroupHandle_t scan_event_group = NULL;
 
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
@@ -87,7 +103,7 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
                 ESP_LOGI(TAG, "Found device %s.", adv_name); 
                 if (scan_callback != NULL)
                 {
-                    scan_callback(param->scan_rst.bda, (const char*)adv_name, param->scan_rst.ble_addr_type);
+                    scan_callback((const char*)adv_name, param->scan_rst.bda, param->scan_rst.ble_addr_type);
                 }
             }
 
@@ -569,21 +585,18 @@ esp_err_t hub_ble_register_scan_callback(scan_callback_t callback)
     return ESP_OK;
 }
 
-esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
+esp_err_t hub_ble_client_init(hub_ble_client_handle_t* client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
     uint8_t app_id = 0;
-
-    ble_client->gattc_if = ESP_GATT_IF_NONE;
-    ble_client->notify_cb = NULL;
-    ble_client->disconnect_cb = NULL;
+    hub_ble_client* ble_client = NULL;
 
     while (app_id != HUB_BLE_MAX_CLIENTS)
     {
         if (gl_profile_tab[app_id] == NULL)
         {
-            gl_profile_tab[app_id] = ble_client;
+            gl_profile_tab[app_id] = (hub_ble_client*)malloc(sizeof(hub_ble_client));
             break;
         }
         app_id++;
@@ -592,32 +605,55 @@ esp_err_t hub_ble_client_init(hub_ble_client* ble_client)
     if (app_id == HUB_BLE_MAX_CLIENTS)
     {
         ESP_LOGE(TAG, "Maximum number of devices already connected.");
-        return ESP_FAIL;
+        result = ESP_FAIL;
+        return result;
     }
+
+    ble_client = gl_profile_tab[app_id];
+    if (ble_client == NULL)
+    {
+        ESP_LOGE(TAG, "Memory allocation failed.");
+        result = ESP_ERR_NO_MEM;
+        return result;
+    }
+
+    ble_client->gattc_if = ESP_GATT_IF_NONE;
+    ble_client->notify_cb = NULL;
+    ble_client->disconnect_cb = NULL;
 
     result = esp_ble_gattc_app_register(app_id);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "BLE GATC app register failed with error code %x [%s].", result, esp_err_to_name(result));
-        gl_profile_tab[app_id] = NULL;
-        return result;
+        result = ESP_FAIL;
+        goto cleanup_client;
     }
 
     ble_client->event_group = xEventGroupCreate();
     if (ble_client->event_group == NULL)
     {
         ESP_LOGE(TAG, "Event group create failed.");
-        return ESP_FAIL;
+        result = ESP_FAIL;
+        goto cleanup_client;
     }
+
+    *client_handle = app_id;
 
     ESP_LOGI(TAG, "BLE client initialized.");
     return result;
+
+cleanup_client:
+    free(ble_client);
+    gl_profile_tab[app_id] = NULL;
+
+    return result;
 }
 
-esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
+esp_err_t hub_ble_client_destroy(const hub_ble_client_handle_t client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     vEventGroupDelete(ble_client->event_group);
 
@@ -629,18 +665,20 @@ esp_err_t hub_ble_client_destroy(hub_ble_client* ble_client)
     }
 
     gl_profile_tab[ble_client->app_id] = NULL;
-    ble_client->gattc_if = ESP_GATT_IF_NONE;
-    ble_client->notify_cb = NULL;
-    ble_client->disconnect_cb = NULL;
+    free(ble_client);
 
     ESP_LOGI(TAG, "BLE client destroyed.");
     return ESP_OK;
 }
 
-esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
+esp_err_t hub_ble_client_connect(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address, esp_ble_addr_type_t address_type)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
+
+    memcpy(ble_client->remote_bda, address, sizeof(ble_client->remote_bda));
+    ble_client->addr_type = address_type;
 
     /*result = esp_ble_gap_stop_scanning();
     if (result != ESP_OK)
@@ -676,10 +714,11 @@ esp_err_t hub_ble_client_connect(hub_ble_client* ble_client)
     return result;
 }
 
-esp_err_t hub_ble_client_disconnect(hub_ble_client* ble_client)
+esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_close(ble_client->gattc_if, ble_client->conn_id);
     if (result != ESP_OK)
@@ -708,10 +747,11 @@ esp_err_t hub_ble_client_disconnect(hub_ble_client* ble_client)
     return result;
 }
 
-esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_t handle)
+esp_err_t hub_ble_client_register_for_notify(const hub_ble_client_handle_t client_handle, uint16_t handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_register_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
     if (result != ESP_OK)
@@ -740,10 +780,11 @@ esp_err_t hub_ble_client_register_for_notify(hub_ble_client* ble_client, uint16_
     return result;
 }
 
-esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint16_t handle)
+esp_err_t hub_ble_client_unregister_for_notify(const hub_ble_client_handle_t client_handle, uint16_t handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_unregister_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
     if (result != ESP_OK)
@@ -774,9 +815,10 @@ esp_err_t hub_ble_client_unregister_for_notify(hub_ble_client* ble_client, uint1
     return result;
 }
 
-esp_err_t hub_ble_client_register_notify_callback(hub_ble_client* ble_client, notify_callback_t callback)
+esp_err_t hub_ble_client_register_notify_callback(const hub_ble_client_handle_t client_handle, notify_callback_t callback)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (callback == NULL)
     {
@@ -788,9 +830,10 @@ esp_err_t hub_ble_client_register_notify_callback(hub_ble_client* ble_client, no
     return ESP_OK;
 }
 
-esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client, disconnect_callback_t callback)
+esp_err_t hub_ble_client_register_disconnect_callback(const hub_ble_client_handle_t client_handle, disconnect_callback_t callback)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (callback == NULL)
     {
@@ -802,20 +845,22 @@ esp_err_t hub_ble_client_register_disconnect_callback(hub_ble_client* ble_client
     return ESP_OK;
 }
 
-esp_err_t hub_ble_client_get_services(hub_ble_client* ble_client, esp_gattc_service_elem_t* services, uint16_t* count)
+esp_err_t hub_ble_client_get_services(const hub_ble_client_handle_t client_handle, esp_gattc_service_elem_t* services, uint16_t* count)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
 
 
     return result;
 }
 
-esp_err_t hub_ble_client_get_service(hub_ble_client* ble_client, esp_bt_uuid_t* uuid)
+esp_err_t hub_ble_client_get_service(const hub_ble_client_handle_t client_handle, esp_bt_uuid_t* uuid)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
     if (result != ESP_OK)
@@ -844,10 +889,11 @@ esp_err_t hub_ble_client_get_service(hub_ble_client* ble_client, esp_bt_uuid_t* 
     return result;
 }
 
-esp_gatt_status_t hub_ble_client_get_characteristics(hub_ble_client* ble_client, esp_gattc_char_elem_t* characteristics, uint16_t* count)
+esp_gatt_status_t hub_ble_client_get_characteristics(const hub_ble_client_handle_t client_handle, esp_gattc_char_elem_t* characteristics, uint16_t* count)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_gatt_status_t result = ESP_GATT_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (characteristics != NULL)
     {
@@ -880,10 +926,11 @@ esp_gatt_status_t hub_ble_client_get_characteristics(hub_ble_client* ble_client,
     return result;
 }
 
-esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+esp_err_t hub_ble_client_write_characteristic(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_write_char(
         ble_client->gattc_if, 
@@ -920,10 +967,11 @@ esp_err_t hub_ble_client_write_characteristic(hub_ble_client* ble_client, uint16
     return result;
 }
 
-esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length)
+esp_err_t hub_ble_client_read_characteristic(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t* value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     ble_client->_buff = value;
     ble_client->_buff_length = value_length;
@@ -964,10 +1012,11 @@ esp_err_t hub_ble_client_read_characteristic(hub_ble_client* ble_client, uint16_
     return result;
 }
 
-esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count)
+esp_gatt_status_t hub_ble_client_get_descriptors(const hub_ble_client_handle_t client_handle, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_gatt_status_t result = ESP_GATT_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (descr != NULL)
     {
@@ -999,10 +1048,11 @@ esp_gatt_status_t hub_ble_client_get_descriptors(hub_ble_client* ble_client, uin
     return result;
 }
 
-esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t value_length)
+esp_err_t hub_ble_client_write_descriptor(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_write_char_descr(
         ble_client->gattc_if, 
@@ -1039,10 +1089,11 @@ esp_err_t hub_ble_client_write_descriptor(hub_ble_client* ble_client, uint16_t h
     return result;
 }
 
-esp_err_t hub_ble_client_read_descriptor(hub_ble_client* ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length)
+esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t* value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     ble_client->_buff = value;
     ble_client->_buff_length = value_length;

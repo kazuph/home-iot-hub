@@ -20,7 +20,7 @@
 
 const char* TAG = "MIKETTLE";
 
-static void auth_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param);
+static void auth_notify_cb(const hub_ble_client_handle_t client_handle, struct gattc_notify_evt_param* param);
 static void cipher_init(uint8_t* key_first, const uint8_t* key_last, uint8_t* out_first, const uint8_t* out_last);
 static void cipher_crypt(uint8_t* in_first, const uint8_t* in_last, uint8_t* perm_first, uint8_t* out_first);
 static void cipher(uint8_t* key_first, const uint8_t* key_last, uint8_t* in_first, const uint8_t* in_last, uint8_t* out_first);
@@ -43,7 +43,7 @@ static const esp_bt_uuid_t uuid_service_kettle = {
 
 static bool auth_notify;
 
-esp_err_t mikettle_authorize(hub_ble_client* ble_client)
+esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -56,35 +56,35 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
 
     auth_notify = false;
 
-    result = hub_ble_client_get_service(ble_client, &uuid_service_kettle);
+    result = hub_ble_client_get_service(client_handle, &uuid_service_kettle);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Find services failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
-    result = hub_ble_client_write_characteristic(ble_client, MIKETTLE_HANDLE_AUTH_INIT, key1, KEY_LENGTH);
+    result = hub_ble_client_write_characteristic(client_handle, MIKETTLE_HANDLE_AUTH_INIT, key1, KEY_LENGTH);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
-    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_AUTH);
+    result = hub_ble_client_register_for_notify(client_handle, MIKETTLE_HANDLE_AUTH);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
-    result = hub_ble_client_register_notify_callback(ble_client, &auth_notify_cb);
+    result = hub_ble_client_register_notify_callback(client_handle, &auth_notify_cb);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         return result;
     }
 
-    result = hub_ble_client_get_descriptors(ble_client, MIKETTLE_HANDLE_AUTH, NULL, &descr_count);
+    result = hub_ble_client_get_descriptors(client_handle, MIKETTLE_HANDLE_AUTH, NULL, &descr_count);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Get descriptor count failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -99,7 +99,7 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
         return ESP_FAIL;
     }
 
-    if (hub_ble_client_get_descriptors(ble_client, MIKETTLE_HANDLE_AUTH, descr, &descr_count) != ESP_GATT_OK)
+    if (hub_ble_client_get_descriptors(client_handle, MIKETTLE_HANDLE_AUTH, descr, &descr_count) != ESP_GATT_OK)
     {
         ESP_LOGE(TAG, "Get descriptors failed.");
         goto cleanup;
@@ -107,7 +107,7 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
 
     ESP_LOGI(TAG, "Found %i descriptors.", descr_count);
 
-    result = hub_ble_client_write_descriptor(ble_client, descr[0].handle, subscribe, sizeof(subscribe));
+    result = hub_ble_client_write_descriptor(client_handle, descr[0].handle, subscribe, sizeof(subscribe));
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -140,11 +140,11 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
         goto cleanup;
     }
 
-    reverse_mac((uint8_t*)ble_client->remote_bda, (uint8_t*)ble_client->remote_bda + sizeof(esp_bd_addr_t), reversed_mac);
+    reverse_mac((uint8_t*)address, (uint8_t*)address + sizeof(esp_bd_addr_t), reversed_mac);
     mix_a(reversed_mac, MIKETTLE_PRODUCT_ID, mac_id_mix);
     cipher(mac_id_mix, mac_id_mix + sizeof(uint16_t) + sizeof(esp_bd_addr_t), token, token + TOKEN_LENGTH, ciphered);
 
-    result = hub_ble_client_write_characteristic(ble_client, MIKETTLE_HANDLE_AUTH, ciphered, TOKEN_LENGTH);
+    result = hub_ble_client_write_characteristic(client_handle, MIKETTLE_HANDLE_AUTH, ciphered, TOKEN_LENGTH);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -160,35 +160,35 @@ esp_err_t mikettle_authorize(hub_ble_client* ble_client)
     
     cipher(token, token + TOKEN_LENGTH, key2, key2 + KEY_LENGTH, ciphered);
 
-    result = hub_ble_client_write_characteristic(ble_client, MIKETTLE_HANDLE_AUTH, ciphered, KEY_LENGTH);
+    result = hub_ble_client_write_characteristic(client_handle, MIKETTLE_HANDLE_AUTH, ciphered, KEY_LENGTH);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup;
     }
 
-    result = hub_ble_client_read_characteristic(ble_client, MIKETTLE_HANDLE_VERSION, NULL, NULL);
+    result = hub_ble_client_read_characteristic(client_handle, MIKETTLE_HANDLE_VERSION, NULL, NULL);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup;
     }
 
-    result = hub_ble_client_unregister_for_notify(ble_client, MIKETTLE_HANDLE_AUTH);
+    result = hub_ble_client_unregister_for_notify(client_handle, MIKETTLE_HANDLE_AUTH);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup;
     }
 
-    result = hub_ble_client_register_for_notify(ble_client, MIKETTLE_HANDLE_STATUS);
+    result = hub_ble_client_register_for_notify(client_handle, MIKETTLE_HANDLE_STATUS);
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
         goto cleanup;
     }
 
-    result = hub_ble_client_write_descriptor(ble_client, MIKETTLE_HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
+    result = hub_ble_client_write_descriptor(client_handle, MIKETTLE_HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -224,7 +224,7 @@ cleanup:
     return result;
 }
 
-static void auth_notify_cb(hub_ble_client* ble_client, struct gattc_notify_evt_param* param)
+static void auth_notify_cb(const hub_ble_client_handle_t client_handle, struct gattc_notify_evt_param* param)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 

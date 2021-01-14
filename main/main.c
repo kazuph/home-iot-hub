@@ -39,16 +39,17 @@ static const char* TAG = "HUB_MAIN";
 
 static esp_err_t app_init();
 static esp_err_t app_cleanup();
-static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type);
-static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uint8_t *value, uint16_t value_length);
-static void ble_disconnect_callback(hub_ble_client* ble_client);
+static void ble_scan_callback(const char* device_name, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
+static void ble_notify_callback(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length);
+static void ble_disconnect_callback(const hub_ble_client_handle_t client_handle);
 static void ble_start_scanning();
 static void ble_stop_scanning();
 static void mikettle_connect();
 
 static hub_mqtt_client mqtt_client;
-static hub_ble_client mikettle;
 static hub_dispatch_queue connect_queue;
+
+static device_mikettle mikettle;
 
 void app_main()
 {
@@ -151,7 +152,7 @@ static esp_err_t app_init()
         goto cleanup_ble;
     }
 
-    result = hub_ble_client_init(&mikettle);
+    result = hub_ble_client_init(&(mikettle.client_handle));
     if (result != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialze MiKettle.");
@@ -168,7 +169,7 @@ static esp_err_t app_init()
     return result;
 
 cleanup_ble_client:
-    hub_ble_client_destroy(&mikettle);
+    hub_ble_client_destroy(mikettle.client_handle);
 cleanup_ble:
     hub_ble_deinit();
 cleanup_mqtt_client:
@@ -186,7 +187,7 @@ cleanup_nvs:
 static esp_err_t app_cleanup()
 {
     hub_dispatch_queue_destroy(&connect_queue);
-    hub_ble_client_destroy(&mikettle);
+    hub_ble_client_destroy(mikettle.client_handle);
     hub_ble_deinit();
     hub_mqtt_client_destroy(&mqtt_client);
     hub_wifi_disconnect();
@@ -196,7 +197,7 @@ static esp_err_t app_cleanup()
     return ESP_OK;
 }
 
-static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, esp_ble_addr_type_t address_type)
+static void ble_scan_callback(const char* device_name, esp_bd_addr_t address, esp_ble_addr_type_t address_type)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -223,8 +224,8 @@ static void ble_scan_callback(esp_bd_addr_t address, const char* device_name, es
 
     if (strncmp(device_name, MIKETTLE_DEVICE_NAME, sizeof(MIKETTLE_DEVICE_NAME)) == 0)
     {
-        memcpy(mikettle.remote_bda, address, sizeof(mikettle.remote_bda));
-        mikettle.addr_type = address_type;
+        memcpy(mikettle.address, address, sizeof(mikettle.address));
+        mikettle.address_type = address_type;
 
         if (hub_dispatch_queue_push(&connect_queue, &ble_stop_scanning) != ESP_OK)
         {
@@ -243,13 +244,12 @@ cleanup_buff:
     free(buff);
 }
 
-static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uint8_t *value, uint16_t value_length)
+static void ble_notify_callback(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
     if (handle == MIKETTLE_HANDLE_STATUS)
     {
-        static mikettle_status status;
         char* buff = NULL;
 
         if (value_length <= sizeof(mikettle_status))
@@ -259,12 +259,12 @@ static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uin
         }
 
         // Avoid sending the same status several times
-        if (memcmp(status.data, value, sizeof(mikettle_status)) == 0)
+        if (memcmp(mikettle.status.data, value, sizeof(mikettle_status)) == 0)
         {
             return;
         }
 
-        memcpy(status.data, value, sizeof(mikettle_status));
+        memcpy(mikettle.status.data, value, sizeof(mikettle_status));
         
         buff = (char*)malloc(256);
         if (buff == NULL)
@@ -276,12 +276,12 @@ static void ble_notify_callback(hub_ble_client* ble_client, uint16_t handle, uin
         if (sprintf(
             buff, 
             MIKETTLE_JSON_FORMAT, 
-            status.temperature_current,
-            status.temperature_set,
-            status.action,
-            status.mode,
-            status.keep_warm_type,
-            status.keep_warm_time,
+            mikettle.status.temperature_current,
+            mikettle.status.temperature_set,
+            mikettle.status.action,
+            mikettle.status.mode,
+            mikettle.status.keep_warm_type,
+            mikettle.status.keep_warm_time,
             12,
             1) < 0)
         {
@@ -302,7 +302,7 @@ cleanup_buff:
     }
 }
 
-static void ble_disconnect_callback(hub_ble_client* ble_client)
+static void ble_disconnect_callback(const hub_ble_client_handle_t client_handle)
 {
     if (hub_dispatch_queue_push(&connect_queue, &ble_start_scanning) != ESP_OK)
     {
@@ -328,25 +328,25 @@ static void ble_stop_scanning()
 
 static void mikettle_connect()
 {
-    if (hub_ble_client_connect(&mikettle) != ESP_OK)
+    if (hub_ble_client_connect(mikettle.client_handle, mikettle.address, mikettle.address_type) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not connect to MiKettle.");
         goto retry;
     }
 
-    if (mikettle_authorize(&mikettle) != ESP_OK)
+    if (mikettle_authorize(mikettle.client_handle, mikettle.address) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not authorize to MiKettle.");
         goto retry;
     }
 
-    if (hub_ble_client_register_notify_callback(&mikettle, &ble_notify_callback) != ESP_OK)
+    if (hub_ble_client_register_notify_callback(mikettle.client_handle, &ble_notify_callback) != ESP_OK)
     {
         ESP_LOGE(TAG, "Register notify callback failed.");
         goto retry;
     }
 
-    if (hub_ble_client_register_disconnect_callback(&mikettle, &ble_disconnect_callback) != ESP_OK)
+    if (hub_ble_client_register_disconnect_callback(mikettle.client_handle, &ble_disconnect_callback) != ESP_OK)
     {
         ESP_LOGE(TAG, "Disconnect callback register failed.");
         goto retry;

@@ -50,6 +50,14 @@ typedef union mikettle_status
     uint8_t data[9];
 } mikettle_status;
 
-esp_err_t mikettle_authorize(hub_ble_client* ble_client);
+typedef struct device_mikettle
+{
+    hub_ble_client_handle_t client_handle;
+    esp_bd_addr_t address;
+    esp_ble_addr_type_t address_type;
+    mikettle_status status;
+} device_mikettle;
+
+esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address);
 
 #endif
