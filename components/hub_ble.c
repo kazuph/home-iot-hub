@@ -653,6 +653,12 @@ esp_err_t hub_ble_client_destroy(const hub_ble_client_handle_t client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     vEventGroupDelete(ble_client->event_group);
@@ -675,6 +681,12 @@ esp_err_t hub_ble_client_connect(const hub_ble_client_handle_t client_handle, es
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     memcpy(ble_client->remote_bda, address, sizeof(ble_client->remote_bda));
@@ -718,6 +730,12 @@ esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_close(ble_client->gattc_if, ble_client->conn_id);
@@ -751,6 +769,12 @@ esp_err_t hub_ble_client_register_for_notify(const hub_ble_client_handle_t clien
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_register_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
@@ -784,6 +808,12 @@ esp_err_t hub_ble_client_unregister_for_notify(const hub_ble_client_handle_t cli
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_unregister_for_notify(ble_client->gattc_if, ble_client->remote_bda, handle);
@@ -833,6 +863,12 @@ esp_err_t hub_ble_client_register_notify_callback(const hub_ble_client_handle_t 
 esp_err_t hub_ble_client_register_disconnect_callback(const hub_ble_client_handle_t client_handle, disconnect_callback_t callback)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (callback == NULL)
@@ -849,6 +885,12 @@ esp_err_t hub_ble_client_get_services(const hub_ble_client_handle_t client_handl
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
 
@@ -860,6 +902,12 @@ esp_err_t hub_ble_client_get_service(const hub_ble_client_handle_t client_handle
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_search_service(ble_client->gattc_if, ble_client->conn_id, uuid);
@@ -893,6 +941,12 @@ esp_gatt_status_t hub_ble_client_get_characteristics(const hub_ble_client_handle
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_gatt_status_t result = ESP_GATT_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (characteristics != NULL)
@@ -930,6 +984,12 @@ esp_err_t hub_ble_client_write_characteristic(const hub_ble_client_handle_t clie
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_write_char(
@@ -971,6 +1031,12 @@ esp_err_t hub_ble_client_read_characteristic(const hub_ble_client_handle_t clien
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     ble_client->_buff = value;
@@ -1016,6 +1082,12 @@ esp_gatt_status_t hub_ble_client_get_descriptors(const hub_ble_client_handle_t c
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_gatt_status_t result = ESP_GATT_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     if (descr != NULL)
@@ -1052,6 +1124,12 @@ esp_err_t hub_ble_client_write_descriptor(const hub_ble_client_handle_t client_h
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     result = esp_ble_gattc_write_char_descr(
@@ -1093,6 +1171,12 @@ esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t client_ha
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
     esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
     ble_client->_buff = value;
