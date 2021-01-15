@@ -1,4 +1,5 @@
-menu "Home-IoT-Hub MQTT Configuration"
+menu "Home IoT Hub config"
+
     config MQTT_PORT
         int "MQTT broker PORT"
         default 1883
@@ -28,9 +29,7 @@ menu "Home-IoT-Hub MQTT Configuration"
         default "id"
         help
             Client ID.
-endmenu
 
-menu "Home-IoT-Hub Wi-Fi Configuration"
     config WIFI_SSID
         string "WiFi SSID"
         default "ssid"
@@ -44,16 +43,32 @@ menu "Home-IoT-Hub Wi-Fi Configuration"
             WiFi password (WPA or WPA2) for the project to use.
             Can be left blank if the network has no security set.
 
+    config WIFI_RETRY_INFINITE
+        bool "WiFi infinite retries"
+        default y
+        help
+            Set if WiFi should retry connection infinite times.
+
     config MAXIMUM_RETRY
         int "WiFi Connection Retries"
+        depends on !WIFI_RETRY_INFINITE
         default 5
         help
-            Maximum WiFi connection retries. If set to -1, the number
-            of retries is infinite.
+            Maximum WiFi connection retries.
 endmenu
 
-menu "Home-IoT-Hub Test"
-    config TEST
-        bool "ENABLE TEST"
+menu "BLE supported devices"
+
+    config SUPPORT_XIAOMI_MI_KETTLE
+        bool "Xiaomi Mi Kettle"
         default n
+        help
+            Enable suport for Xiaomi Mi Kettle.
+            
+    config SUPPORT_XIAOMI_MI_COMPOSITION_SCALE_2
+        bool "Xiaomi Mi Composition Scale 2"
+        default n
+        help
+            Enable suport for Xiaomi Mi Composition Scale 2.
+
 endmenu
