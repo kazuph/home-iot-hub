@@ -16,9 +16,7 @@
 
 #define WIFI_CONNECTED_BIT BIT0
 
-#if (CONFIG_MAXIMUM_RETRY == -1)
-#define RETRY_INFINITE
-#else
+#ifndef CONFIG_WIFI_RETRY_INFINITE
 #define WIFI_FAIL_BIT BIT1
 #endif
 
@@ -32,7 +30,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
     esp_err_t result = ESP_OK;
 
-#ifndef RETRY_INFINITE
+#ifndef CONFIG_WIFI_RETRY_INFINITE
     static int s_retry_num = 0;
 #endif
 
@@ -46,7 +44,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-#ifndef RETRY_INFINITE
+#ifndef CONFIG_WIFI_RETRY_INFINITE
         if (s_retry_num < CONFIG_MAXIMUM_RETRY)
         {
             result = esp_wifi_connect();
@@ -61,7 +59,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         }
         else
         {
-            if (s_wifi_event_group != NULL)
+            if (wifi_event_group != NULL)
             {
                 xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
                 ESP_LOGI(TAG, "Connect to the access point failed.");
@@ -83,7 +81,7 @@ static void hub_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         ip_event_got_ip_t *event = (ip_event_got_ip_t*)event_data;
         ESP_LOGI(TAG, "Connected. IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
-#ifndef RETRY_INFINITE
+#ifndef CONFIG_WIFI_RETRY_INFINITE
         s_retry_num = 0;
 #endif
 
@@ -194,7 +192,7 @@ esp_err_t hub_wifi_wait_for_connection(int timeout)
     
     esp_err_t result = ESP_OK;
 
-#ifndef RETRY_INFINITE
+#ifndef CONFIG_WIFI_RETRY_INFINITE
     EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdTRUE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
 #else
     EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdTRUE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
@@ -204,7 +202,7 @@ esp_err_t hub_wifi_wait_for_connection(int timeout)
     {
         ESP_LOGI(TAG, "WiFi connected.");
     }
-#ifndef RETRY_INFINITE
+#ifndef CONFIG_WIFI_RETRY_INFINITE
     else if (bits & WIFI_FAIL_BIT)
     {
         result = ESP_FAIL;
