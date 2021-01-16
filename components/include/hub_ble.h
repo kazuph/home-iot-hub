@@ -1,24 +1,9 @@
 #ifndef HUB_BLE_H
 #define HUB_BLE_H
 
+#include "hub_ble_defines.h"
+
 #include "stdint.h"
-
-#include "esp_err.h"
-#include "esp_bt_defs.h"
-#include "esp_gatt_defs.h"
-#include "esp_gattc_api.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-
-#define HUB_BLE_MAX_CLIENTS CONFIG_BTDM_CTRL_BLE_MAX_CONN
-
-typedef uint8_t hub_ble_client_handle_t;
-
-typedef void (*scan_callback_t)(const char* device_name, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
-typedef void (*notify_callback_t)(const hub_ble_client_handle_t ble_client, uint16_t handle, uint8_t *value, uint16_t value_length);
-typedef void (*disconnect_callback_t)(const hub_ble_client_handle_t ble_client);
 
 esp_err_t hub_ble_init();
 
@@ -35,6 +20,8 @@ esp_err_t hub_ble_client_init(hub_ble_client_handle_t* client_handle);
 esp_err_t hub_ble_client_destroy(const hub_ble_client_handle_t ble_client);
 
 esp_err_t hub_ble_client_connect(const hub_ble_client_handle_t ble_client, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
+
+esp_err_t hub_ble_client_reconnect(const hub_ble_client_handle_t ble_client);
 
 esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t ble_client);
 

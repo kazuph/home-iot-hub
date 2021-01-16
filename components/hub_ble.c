@@ -12,6 +12,10 @@
 #include "esp_gap_ble_api.h"
 #include "esp_log.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+
 #define BLE_TIMEOUT (TickType_t)10000 / portTICK_PERIOD_MS
 
 #define FAIL_BIT BIT15
@@ -43,8 +47,8 @@ typedef struct hub_ble_client
     EventGroupHandle_t event_group;
     notify_callback_t notify_cb;
     disconnect_callback_t disconnect_cb;
-    uint16_t* _buff_length;
-    void* _buff;
+    uint16_t* buff_length;
+    void* buff;
 } hub_ble_client;
 
 static const char* TAG = "HUB_BLE";
@@ -297,7 +301,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             break;
         }
 
-        if (client->_buff_length == NULL)
+        if (client->buff_length == NULL)
         {
             ESP_LOGW(TAG, "Buffer length pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
@@ -305,14 +309,14 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         // If the length of the buffer is not set by the previous call, we only provide a required buffer length
-        if (*(client->_buff_length) != param->read.value_len)
+        if (*(client->buff_length) != param->read.value_len)
         {
-            *(client->_buff_length) = param->read.value_len;
+            *(client->buff_length) = param->read.value_len;
             xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
             break;
         }
 
-        if (client->_buff == NULL)
+        if (client->buff == NULL)
         {
             ESP_LOGW(TAG, "Buffer not pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
@@ -320,7 +324,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         // If the buffer is prepared correctly and the length matches, we copy the content of the characteristic
-        memcpy(client->_buff, param->read.value, client->_buff_length);
+        memcpy(client->buff, param->read.value, client->buff_length);
 
         xEventGroupSetBits(client->event_group, READ_CHAR_BIT);
         break;
@@ -346,7 +350,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
             break;
         }
 
-        if (client->_buff_length == NULL)
+        if (client->buff_length == NULL)
         {
             ESP_LOGW(TAG, "Buffer length pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
@@ -354,14 +358,14 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         // If the length of the buffer is not set by the previous call, we only provide a required buffer length
-        if (*(client->_buff_length) != param->read.value_len)
+        if (*(client->buff_length) != param->read.value_len)
         {
-            *(client->_buff_length) = param->read.value_len;
+            *(client->buff_length) = param->read.value_len;
             xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
             break;
         }
 
-        if (client->_buff == NULL)
+        if (client->buff == NULL)
         {
             ESP_LOGW(TAG, "Buffer pointer is NULL.");
             xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
@@ -369,7 +373,7 @@ static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_i
         }
 
         // If the buffer is prepared correctly and the length matches, we copy the content of the descriptor
-        memcpy(client->_buff, param->read.value, client->_buff_length);
+        memcpy(client->buff, param->read.value, client->buff_length);
 
         xEventGroupSetBits(client->event_group, READ_DESCR_BIT);
         break;
@@ -726,6 +730,43 @@ esp_err_t hub_ble_client_connect(const hub_ble_client_handle_t client_handle, es
     return result;
 }
 
+esp_err_t hub_ble_client_reconnect(const hub_ble_client_handle_t client_handle)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
+    result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GATT connect failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+    if (bits & CONNECT_BIT)
+    {
+        ESP_LOGI(TAG, "Connection success.");
+    }
+    else if (bits & FAIL_BIT)
+    {
+        result = ESP_FAIL;
+        ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+    else
+    {
+        result = ESP_ERR_TIMEOUT;
+        ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
+    }
+
+    return result;
+}
+
 esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t client_handle)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -1039,8 +1080,8 @@ esp_err_t hub_ble_client_read_characteristic(const hub_ble_client_handle_t clien
 
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
-    ble_client->_buff = value;
-    ble_client->_buff_length = value_length;
+    ble_client->buff = value;
+    ble_client->buff_length = value_length;
 
     result = esp_ble_gattc_read_char(
         ble_client->gattc_if, 
@@ -1072,8 +1113,8 @@ esp_err_t hub_ble_client_read_characteristic(const hub_ble_client_handle_t clien
         ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ble_client->_buff = NULL;
-    ble_client->_buff_length = NULL;
+    ble_client->buff = NULL;
+    ble_client->buff_length = NULL;
 
     return result;
 }
@@ -1179,8 +1220,8 @@ esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t client_ha
 
     hub_ble_client* ble_client = gl_profile_tab[client_handle];
 
-    ble_client->_buff = value;
-    ble_client->_buff_length = value_length;
+    ble_client->buff = value;
+    ble_client->buff_length = value_length;
 
     result = esp_ble_gattc_read_char_descr(
         ble_client->gattc_if, 
@@ -1212,8 +1253,8 @@ esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t client_ha
         ESP_LOGE(TAG, "Read descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
     }
 
-    ble_client->_buff = NULL;
-    ble_client->_buff_length = NULL;
+    ble_client->buff = NULL;
+    ble_client->buff_length = NULL;
 
     return result;
 }
