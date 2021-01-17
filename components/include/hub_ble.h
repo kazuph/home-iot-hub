@@ -1,9 +1,24 @@
 #ifndef HUB_BLE_H
 #define HUB_BLE_H
 
-#include "hub_ble_defines.h"
-
 #include "stdint.h"
+
+#include "esp_err.h"
+
+#include "esp_bt_defs.h"
+#include "esp_gatt_defs.h"
+
+#define HUB_BLE_MAX_CLIENTS CONFIG_BTDM_CTRL_BLE_MAX_CONN
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef uint8_t hub_ble_client_handle_t;
+
+typedef void (*scan_callback_t)(const char* device_name, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
+typedef void (*notify_callback_t)(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length);
+typedef void (*disconnect_callback_t)(const hub_ble_client_handle_t client_handle);
 
 esp_err_t hub_ble_init();
 
@@ -48,5 +63,9 @@ esp_gatt_status_t hub_ble_client_get_descriptors(const hub_ble_client_handle_t b
 esp_err_t hub_ble_client_write_descriptor(const hub_ble_client_handle_t ble_client, uint16_t handle, uint8_t* value, uint16_t value_length);
 
 esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t ble_client, uint16_t handle, uint8_t* value, uint16_t* value_length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

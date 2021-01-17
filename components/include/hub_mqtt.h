@@ -5,6 +5,10 @@
 #include "stdbool.h"
 #include "mqtt_client.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct hub_mqtt_client;
 typedef struct hub_mqtt_client hub_mqtt_client;
 
@@ -36,5 +40,9 @@ esp_err_t hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* client, h
 esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config);
 
 esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

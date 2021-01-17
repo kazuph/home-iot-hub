@@ -4,6 +4,10 @@
 #include "esp_err.h"
 #include "esp_wifi.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
 *   Initialize and connect to WiFi. 
 *   SSID and password need to be set in sdkconfig.
@@ -21,5 +25,9 @@ esp_err_t hub_wifi_disconnect();
 *   If set to -1, number of retries is infinite.
 */
 esp_err_t hub_wifi_wait_for_connection(int timeout);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

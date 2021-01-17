@@ -7,6 +7,10 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef DISPATCH_QUEUE_SIZE
 #define DISPATCH_QUEUE_SIZE                 (UBaseType_t)16
 #endif
@@ -38,5 +42,9 @@ esp_err_t hub_dispatch_queue_destroy(hub_dispatch_queue* queue);
 esp_err_t hub_dispatch_queue_push(hub_dispatch_queue* queue, dispatch_queue_fun_t fun);
 
 esp_err_t hub_dispatch_queue_push_n(hub_dispatch_queue* queue, dispatch_queue_fun_t* fun, uint16_t length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
