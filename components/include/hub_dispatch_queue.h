@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 #ifndef DISPATCH_QUEUE_POP_TIMEOUT
-#define DISPATCH_QUEUE_POP_TIMEOUT          portMAX_DELAY
+#define DISPATCH_QUEUE_POP_TIMEOUT          DISPATCH_QUEUE_TIMEOUT_DEFAULT
 #endif
 
 typedef void (*dispatch_queue_fun_t)();
