@@ -14,13 +14,44 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#define MIKETTLE_MQTT_TOPIC                 "mikettle"
+#define MIKETTLE_JSON_FORMAT                "{\"temperature\":{\"current\":%i,\"set\":%i},\"action\":%i,\"mode\":%i,\"keep_warm\":{\"type\":%i,\"time\":%i,\"time_limit\":%i},\"boil_mode\":%i}"
+#define MIKETTLE_PRODUCT_ID                 275
+
+/* MiKettle services */
+#define MIKETTLE_GATT_UUID_KETTLE_SRV       0xfe95
+#define MIKETTLE_GATT_UUID_KETTLE_DATA_SRV  { 0x56, 0x61, 0x23, 0x37, 0x28, 0x26, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x36, 0x47, 0x34, 0x01 }
+
+/* MiKettle characteristics */
+#define MIKETTLE_GATT_UUID_AUTH_INIT        0x0010
+#define MIKETTLE_GATT_UUID_AUTH             0x0001
+#define MIKETTLE_GATT_UUID_VERSION          0x0004
+#define MIKETTLE_GATT_UUID_SETUP            0xaa01
+#define MIKETTLE_GATT_UUID_STATUS           0xaa02
+#define MIKETTLE_GATT_UUID_TIME             0xaa04
+#define MIKETTLE_GATT_UUID_BOIL_MODE        0xaa05
+#define MIKETTLE_GATT_UUID_MCU_VERSION      0x2a28
+
+/* MiKettle handles */
+#define MIKETTLE_HANDLE_READ_FIRMWARE_VERSION   26
+#define MIKETTLE_HANDLE_READ_NAME               20
+#define MIKETTLE_HANDLE_AUTH_INIT               44
+#define MIKETTLE_HANDLE_AUTH                    37
+#define MIKETTLE_HANDLE_VERSION                 42
+#define MIKETTLE_HANDLE_KEEP_WARM               58
+#define MIKETTLE_HANDLE_STATUS                  61
+#define MIKETTLE_HANDLE_TIME_LIMIT              65
+#define MIKETTLE_HANDLE_BOIL_MODE               68
+
 #define KEY_LENGTH      4
 #define TOKEN_LENGTH    12
 #define PERM_LENGTH     256
 
-const char* TAG = "MIKETTLE";
+const char* TAG = XIAOMI_MI_KETTLE_DEVICE_NAME;
 
-static void auth_notify_cb(const hub_ble_client_handle_t client_handle, struct gattc_notify_evt_param* param);
+static esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address);
+static void ble_notify_callback(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length);
+static void auth_notify_cb(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length);
 static void cipher_init(uint8_t* key_first, const uint8_t* key_last, uint8_t* out_first, const uint8_t* out_last);
 static void cipher_crypt(uint8_t* in_first, const uint8_t* in_last, uint8_t* perm_first, uint8_t* out_first);
 static void cipher(uint8_t* key_first, const uint8_t* key_last, uint8_t* in_first, const uint8_t* in_last, uint8_t* out_first);
@@ -41,9 +72,75 @@ static const esp_bt_uuid_t uuid_service_kettle = {
     },
 };
 
-static bool auth_notify;
+static volatile bool auth_notify = false;
+static data_ready_callback_t s_data_ready_callback = NULL;
 
-esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address)
+esp_err_t mikettle_connect(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address, esp_ble_addr_type_t address_type)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    result = hub_ble_client_connect(client_handle, address, address_type);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Connect failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    result = mikettle_authorize(client_handle, address);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Authorize failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    return result;
+}
+
+esp_err_t mikettle_reconnect(const hub_ble_client_handle_t client_handle)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+    esp_bd_addr_t address;
+
+    result = hub_ble_client_get_address(client_handle, &address);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Get address failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    result = hub_ble_client_reconnect(client_handle);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Reconnect failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    result = mikettle_authorize(client_handle, address);
+    if (result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Authorize failed with error code %x [%s].", result, esp_err_to_name(result));
+        return result;
+    }
+
+    return result;
+}
+
+esp_err_t mikettle_register_data_ready_callback(const hub_ble_client_handle_t client_handle, data_ready_callback_t data_ready_callback)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    s_data_ready_callback = data_ready_callback;
+    return ESP_OK;
+}
+
+esp_err_t mikettle_update_data(const hub_ble_client_handle_t client_handle, const char* data, uint16_t data_length)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    return ESP_OK;
+}
+
+static esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -53,8 +150,6 @@ esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd
     esp_bd_addr_t* reversed_mac = NULL;
     uint8_t* mac_id_mix = NULL;
     uint8_t* ciphered = NULL;
-
-    auth_notify = false;
 
     result = hub_ble_client_get_service(client_handle, &uuid_service_kettle);
     if (result != ESP_OK)
@@ -155,8 +250,6 @@ esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd
     {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-
-    auth_notify = false;
     
     cipher(token, token + TOKEN_LENGTH, key2, key2 + KEY_LENGTH, ciphered);
 
@@ -195,7 +288,15 @@ esp_err_t mikettle_authorize(const hub_ble_client_handle_t client_handle, esp_bd
         goto cleanup;
     }
 
+    if (hub_ble_client_register_notify_callback(client_handle, &ble_notify_callback) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Register notify callback failed.");
+        goto cleanup;
+    }
+
 cleanup:
+
+    auth_notify = false;
 
     if (descr != NULL)
     {
@@ -224,10 +325,21 @@ cleanup:
     return result;
 }
 
-static void auth_notify_cb(const hub_ble_client_handle_t client_handle, struct gattc_notify_evt_param* param)
+static void ble_notify_callback(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length)
 {
     ESP_LOGD(TAG, "Function: %s.", __func__);
 
+    if (s_data_ready_callback == NULL)
+    {
+        return;
+    }
+
+    s_data_ready_callback(client_handle, NULL, 0);
+}
+
+static void auth_notify_cb(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
     auth_notify = true;
 }
 
