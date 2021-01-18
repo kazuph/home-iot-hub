@@ -104,10 +104,9 @@ static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_
 
             if (adv_name != NULL && strlen((const char*)adv_name) != 0)
             {
-                ESP_LOGI(TAG, "Found device %s.", adv_name); 
                 if (scan_callback != NULL)
                 {
-                    scan_callback((const char*)adv_name, param->scan_rst.bda, param->scan_rst.ble_addr_type);
+                    scan_callback((const char*)adv_name, param->scan_rst.bda, param->scan_rst.ble_addr_type, param->scan_rst.rssi, param->scan_rst.num_resps);
                 }
             }
 
@@ -740,6 +739,8 @@ esp_err_t hub_ble_client_reconnect(const hub_ble_client_handle_t client_handle)
         gl_profile_tab[client_handle] != NULL &&
         "Invalid handle.");
 
+    hub_ble_client* ble_client = gl_profile_tab[client_handle];
+
     result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
     if (result != ESP_OK)
     {
@@ -804,6 +805,21 @@ esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t client_handle)
     }
 
     return result;
+}
+
+esp_err_t hub_ble_client_get_address(const hub_ble_client_handle_t client_handle, esp_bd_addr_t* address)
+{
+    ESP_LOGD(TAG, "Function: %s.", __func__);
+    esp_err_t result = ESP_OK;
+
+    assert(client_handle >= 0 && 
+        client_handle < HUB_BLE_MAX_CLIENTS && 
+        gl_profile_tab[client_handle] != NULL &&
+        "Invalid handle.");
+
+    memcpy(*address, gl_profile_tab[client_handle]->remote_bda, sizeof(*address));
+
+    return ESP_OK;
 }
 
 esp_err_t hub_ble_client_register_for_notify(const hub_ble_client_handle_t client_handle, uint16_t handle)
