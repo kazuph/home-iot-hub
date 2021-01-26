@@ -1,73 +1,71 @@
 #ifndef HUB_BLE_H
 #define HUB_BLE_H
 
-#include "stdint.h"
+#include <cstdint>
+#include <functional>
+#include <string_view>
 
 #include "esp_err.h"
 
 #include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
 
-#define HUB_BLE_MAX_CLIENTS CONFIG_BTDM_CTRL_BLE_MAX_CONN
+namespace hub::ble
+{
+    using scan_callback_t = std::function<void(std::string_view, esp_bd_addr_t, esp_ble_addr_type_t, int)>;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+    inline constexpr uint16_t HUB_BLE_MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
 
-typedef uint8_t hub_ble_client_handle_t;
+    esp_err_t init();
 
-typedef void (*scan_callback_t)(const char* device_name, esp_bd_addr_t address, esp_ble_addr_type_t address_type, int rssi, int result_index);
-typedef void (*notify_callback_t)(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t *value, uint16_t value_length);
-typedef void (*disconnect_callback_t)(const hub_ble_client_handle_t client_handle);
+    esp_err_t deinit();
 
-esp_err_t hub_ble_init();
+    esp_err_t start_scanning(uint32_t scan_time);
 
-esp_err_t hub_ble_deinit();
+    esp_err_t stop_scanning();
 
-esp_err_t hub_ble_start_scanning(uint32_t scan_time);
+    esp_err_t register_scan_callback(scan_callback_t callback);
 
-esp_err_t hub_ble_stop_scanning();
+    namespace client
+    {
+        using handle_t = uint8_t;
+        using notify_callback_t = std::function<void(uint16_t, uint8_t*, uint16_t)>;
+        using disconnect_callback_t = std::function<void(void)>;
 
-esp_err_t hub_ble_register_scan_callback(scan_callback_t callback);
+        esp_err_t init(handle_t* client_handle);
 
-esp_err_t hub_ble_client_init(hub_ble_client_handle_t* client_handle);
+        esp_err_t destroy(const handle_t client_handle);
 
-esp_err_t hub_ble_client_destroy(const hub_ble_client_handle_t client_handle);
+        esp_err_t connect(const handle_t client_handle, const esp_bd_addr_t address, esp_ble_addr_type_t address_type = BLE_ADDR_TYPE_PUBLIC);
 
-esp_err_t hub_ble_client_connect(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
+        esp_err_t reconnect(const handle_t client_handle);
 
-esp_err_t hub_ble_client_reconnect(const hub_ble_client_handle_t client_handle);
+        esp_err_t disconnect(const handle_t client_handle);
 
-esp_err_t hub_ble_client_disconnect(const hub_ble_client_handle_t client_handle);
+        esp_err_t register_for_notify(const handle_t client_handle, uint16_t handle);
 
-esp_err_t hub_ble_client_get_address(const hub_ble_client_handle_t client_handle, esp_bd_addr_t* address);
+        esp_err_t unregister_for_notify(const handle_t client_handle, uint16_t handle);
 
-esp_err_t hub_ble_client_register_for_notify(const hub_ble_client_handle_t client_handle, uint16_t handle);
+        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t callback);
 
-esp_err_t hub_ble_client_unregister_for_notify(const hub_ble_client_handle_t client_handle, uint16_t handle);
+        esp_err_t register_disconnect_callback(const handle_t client_handle, disconnect_callback_t callback);
 
-esp_err_t hub_ble_client_register_notify_callback(const hub_ble_client_handle_t client_handle, notify_callback_t callback);
+        esp_err_t get_services(const handle_t client_handle, esp_gattc_service_elem_t* services, uint16_t* count);
 
-esp_err_t hub_ble_client_register_disconnect_callback(const hub_ble_client_handle_t client_handle, disconnect_callback_t callback);
+        esp_err_t get_service(const handle_t client_handle, const esp_bt_uuid_t* uuid);
 
-esp_err_t hub_ble_client_get_services(const hub_ble_client_handle_t client_handle, esp_gattc_service_elem_t* services, uint16_t* count);
+        esp_err_t get_characteristics(const handle_t client_handle, esp_gattc_char_elem_t* characteristics, uint16_t* count);
 
-esp_err_t hub_ble_client_get_service(const hub_ble_client_handle_t client_handle, esp_bt_uuid_t* uuid);
+        esp_err_t write_characteristic(const handle_t client_handle, const uint16_t handle, const uint8_t* value, const uint16_t value_length);
 
-esp_gatt_status_t hub_ble_client_get_characteristics(const hub_ble_client_handle_t client_handle, esp_gattc_char_elem_t* characteristics, uint16_t* count);
+        esp_err_t read_characteristic(const handle_t client_handle, const uint16_t handle, uint8_t* value, uint16_t* value_length);
 
-esp_err_t hub_ble_client_write_characteristic(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t value_length);
+        esp_err_t get_descriptors(const handle_t client_handle, const uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count);
 
-esp_err_t hub_ble_client_read_characteristic(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t* value_length);
+        esp_err_t write_descriptor(const handle_t client_handle, const uint16_t handle, const uint8_t* value, const uint16_t value_length);
 
-esp_gatt_status_t hub_ble_client_get_descriptors(const hub_ble_client_handle_t client_handle, uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count);
-
-esp_err_t hub_ble_client_write_descriptor(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t value_length);
-
-esp_err_t hub_ble_client_read_descriptor(const hub_ble_client_handle_t client_handle, uint16_t handle, uint8_t* value, uint16_t* value_length);
-
-#ifdef __cplusplus
+        esp_err_t read_descriptor(const handle_t client_handle, const uint16_t handle, uint8_t* value, uint16_t* value_length);
+    }
 }
-#endif
 
 #endif
