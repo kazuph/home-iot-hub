@@ -1,50 +1,46 @@
 #ifndef HUB_DEVICE_LIST_H
 #define HUB_DEVICE_LIST_H
 
+#include <type_traits>
+#include <memory>
+#include <map>
+#include <string>
+#include <utility>
+#include <string_view>
+#include <algorithm>
+
 #include "hub_ble.h"
 #include "stdbool.h"
+#include "hub_device.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef esp_err_t (*connect_fun_t)(const hub_ble_client_handle_t client_handle, esp_bd_addr_t address, esp_ble_addr_type_t address_type);
-typedef esp_err_t (*reconnect_fun_t)(const hub_ble_client_handle_t client_handle);
-typedef void (*data_ready_callback_t)(const hub_ble_client_handle_t client_handle, const char* data, uint16_t data_length);
-typedef esp_err_t (*register_data_ready_callback_fun_t)(const hub_ble_client_handle_t client_handle, data_ready_callback_t data_ready_callback);
-typedef esp_err_t (*update_data_fun_t)(const hub_ble_client_handle_t client_handle, const char* data, uint16_t data_length);
-
-/*
-    Struct specifying BLE connect process and data
-    exchange function pointers for the given device type.
-
-    name - name of the device
-    connect - function allowing custom connection scheme for the given device
-    reconnect - reconnect function, handle is initialized by now, address and address type are memorized
-    register_data_ready_callback - register function that gets called whenever data is updated via BLE AND formatted as JSON string.
-    update_data - update_data device status request, the implementation is supposed to read JSON formated string and pass the data to BLE device.
-*/
-typedef struct ble_device_type
+namespace hub
 {
-    const char* name;
-    connect_fun_t connect;
-    reconnect_fun_t reconnect;
-    register_data_ready_callback_fun_t register_data_ready_callback;
-    update_data_fun_t update_data;
-} ble_device_type;
+    extern const std::map<std::string_view, std::function<std::unique_ptr<device_base>()>> supported_devices;
+    
+    template<typename _Ty>
+    inline constexpr bool Is_device = std::is_base_of_v<device_base, _Ty>;
 
-/*
-    Get pointer to the ble_device_type instance for the given device name.
-*/
-const ble_device_type* get_type_for_device_name(const char* name);
+    template<typename _DeviceTy>
+    inline std::enable_if_t<Is_device<_DeviceTy>, std::unique_ptr<device_base>> make_device()
+    {
+        return std::make_unique<_DeviceTy>();
+    }
 
-/*
-    Check if device is suported.
-*/
-bool is_device_supported(const char* name);
+    template<typename _DeviceTy>
+    inline constexpr std::pair<std::string_view, std::function<std::unique_ptr<device_base>()>> register_device_type()
+    {
+        return { _DeviceTy::device_name, make_device<_DeviceTy> };
+    }
 
-#ifdef __cplusplus
+    inline bool is_device_supported(std::string_view device_name)
+    {
+        return (supported_devices.find(device_name) != supported_devices.end());
+    }
+
+    inline std::unique_ptr<device_base> device_init(std::string_view device_name)
+    {
+        return (supported_devices.at(device_name))();
+    }
 }
-#endif
 
 #endif
