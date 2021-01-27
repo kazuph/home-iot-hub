@@ -21,4 +21,11 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
         ble::client::destroy(client_handle);
     }
+
+    esp_err_t device_base::register_data_ready_callback(data_ready_callback_t data_ready_callback)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        this->data_ready_callback = data_ready_callback;
+        return ESP_OK;
+    }
 }
