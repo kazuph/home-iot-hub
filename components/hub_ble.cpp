@@ -1,9 +1,9 @@
 #include "hub_ble.h"
+#include "hub_dispatch_queue.h"
 
 #include <cstring>
 #include <memory>
 #include <algorithm>
-#include <vector>
 #include <optional>
 
 #include "esp_bt.h"
@@ -21,7 +21,7 @@
 
 namespace hub::ble
 {
-    static const char* TAG = "HUB_BLE";
+    constexpr const char* TAG = "HUB_BLE";
     constexpr TickType_t BLE_TIMEOUT{ (TickType_t)10000 / portTICK_PERIOD_MS };
     constexpr uint16_t FAIL_BIT{ BIT15 };
 
@@ -55,15 +55,15 @@ namespace hub::ble
             esp_bd_addr_t remote_bda;
             esp_ble_addr_type_t addr_type;
             EventGroupHandle_t event_group;
-            notify_callback_t notify_cb;
-            disconnect_callback_t disconnect_cb;
+            notify_callback_t notify_callback;
+            disconnect_callback_t disconnect_callback;
             uint16_t* buff_length;
             void* buff;
         };
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
         static void esp_gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
-        static client* get_client(esp_gatt_if_t gattc_if);
+        static client* const get_client(const esp_gatt_if_t gattc_if);
 
         static scan_callback_t scan_callback = nullptr;
         static EventGroupHandle_t scan_event_group = NULL;
@@ -78,6 +78,7 @@ namespace hub::ble
         };
 
         static std::array<client*, HUB_BLE_MAX_CLIENTS> gl_profile_tab;
+        static dispatch_queue<2048, tskIDLE_PRIORITY> callback_queue{};
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -110,15 +111,19 @@ namespace hub::ble
                         uint8_t adv_name_len = 0;
                         uint8_t* adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
 
-                        if (adv_name != NULL && strlen((const char*)adv_name) != 0)
+                        if (adv_name != NULL && adv_name_len != 0)
                         {
                             if (scan_callback != nullptr)
                             {
-                                scan_callback(
-                                    reinterpret_cast<const char*>(adv_name), 
-                                    param->scan_rst.bda, 
-                                    param->scan_rst.ble_addr_type, 
-                                    param->scan_rst.rssi);
+                                callback_queue.push(
+                                    [
+                                        device_name{ std::string(reinterpret_cast<const char*>(adv_name)) },
+                                        address{ param->scan_rst.bda },
+                                        address_type{ param->scan_rst.ble_addr_type },
+                                        rssi{ param->scan_rst.rssi }
+                                    ]() {
+                                        scan_callback(std::string_view(device_name), address, address_type, rssi);
+                                    });
                             }
                         }
                     }
@@ -154,10 +159,13 @@ namespace hub::ble
 
             esp_err_t result = ESP_OK;
 
+            [[unlikely]]
             if (event == ESP_GATTC_REG_EVT)
             {
                 if (param->reg.status == ESP_GATT_OK)
                 {
+                    ESP_LOGI(TAG, "Register app_id: %04x.", param->reg.app_id);
+
                     client* ble_client = gl_profile_tab[param->reg.app_id];
                     ble_client->gattc_if = gattc_if;
 
@@ -165,17 +173,19 @@ namespace hub::ble
                     if (result != ESP_OK)
                     {
                         ESP_LOGE(TAG, "Set scan parameters failed with error code %x [%s].", result, esp_err_to_name(result));
+                        return;
                     }
                 }
                 else
                 {
                     ESP_LOGE(TAG, "Register app failed, app_id %04x, status %d", param->reg.app_id, param->reg.status);
+                    return;
                 }
 
                 return;
             }
 
-            client* ble_client = get_client(gattc_if);
+            client* const ble_client = get_client(gattc_if);
             if (!ble_client)
             {
                 ESP_LOGE(TAG, "Client not found.");
@@ -187,12 +197,20 @@ namespace hub::ble
             case ESP_GATTC_NOTIFY_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_NOTIFY_EVT");
 
-                if (ble_client->notify_cb == nullptr)
+                if (ble_client->notify_callback == nullptr)
                 {
                     break;
                 }
 
-                ble_client->notify_cb(param->notify.handle, param->notify.value, param->notify.value_len);
+                callback_queue.push(
+                    [
+                        ble_client, 
+                        handle{ param->notify.handle }, 
+                        value{ std::string(reinterpret_cast<const char*>(param->notify.value), static_cast<size_t>(param->notify.value_len)) }
+                    ]() {
+                        ble_client->notify_callback(handle, std::string_view(value));
+                    });
+
                 break;
             case ESP_GATTC_CONNECT_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_CONNECT_EVT");
@@ -309,14 +327,21 @@ namespace hub::ble
                 break;
             case ESP_GATTC_DISCONNECT_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
+                ESP_LOGI(TAG, "Disconnect reason: 0x%04d", param->disconnect.reason);
                 xEventGroupSetBits(ble_client->event_group, DISCONNECT_BIT);
 
-                if (ble_client->disconnect_cb == nullptr)
+                if (ble_client->disconnect_callback == nullptr)
                 {
                     break;
                 }
 
-                ble_client->disconnect_cb();
+                ble_client->disconnect_callback();
+
+                callback_queue.push(
+                    [ble_client]() {
+                        ble_client->disconnect_callback();
+                    });
+
                 break;
             case ESP_GATTC_CLOSE_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_CLOSE_EVT");
@@ -327,11 +352,11 @@ namespace hub::ble
             }
         }
 
-        static client* get_client(esp_gatt_if_t gattc_if)
+        static client* const get_client(const esp_gatt_if_t gattc_if)
         {
             ESP_LOGD(TAG, "Function: %s", __func__);
             auto iter = std::find_if(gl_profile_tab.begin(), gl_profile_tab.end(), [gattc_if](const auto& elem) { 
-                return (elem->gattc_if == gattc_if); 
+                return (elem != nullptr && elem->gattc_if == gattc_if); 
             });
 
             return (iter != gl_profile_tab.end()) ? *iter : nullptr;
@@ -428,7 +453,8 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        std::for_each(__impl::gl_profile_tab.begin(), __impl::gl_profile_tab.end(), [](auto& elem){
+        std::for_each(__impl::gl_profile_tab.begin(), __impl::gl_profile_tab.end(), [](auto& elem) {
+            delete elem;
             elem = nullptr;
         });
 
@@ -508,9 +534,10 @@ namespace hub::ble
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
             esp_err_t result = ESP_OK;
+            *client_handle = INVALID_HANDLE;
 
             auto iter = std::find_if(__impl::gl_profile_tab.begin(), __impl::gl_profile_tab.end(), [](const auto& elem) {
-                return (!elem);
+                return (elem == nullptr);
             });
 
             if (iter == __impl::gl_profile_tab.end())
@@ -522,11 +549,24 @@ namespace hub::ble
 
             {
                 uint16_t app_id = std::distance(__impl::gl_profile_tab.begin(), iter);
-                auto ble_client = std::make_unique<__impl::client>();
+
+                /*
+                    Provide custom deleter to make sure that *iter is set to nullptr in case
+                    something goes wrong.
+                */
+                std::unique_ptr<__impl::client, std::function<void(__impl::client*)>> ble_client(
+                    new __impl::client, 
+                    [iter](__impl::client* ptr) {
+                        delete ptr;
+                        *iter = nullptr;
+                    });
+
                 ble_client->app_id = app_id;
                 ble_client->gattc_if = ESP_GATT_IF_NONE;
-                ble_client->notify_cb = nullptr;
-                ble_client->disconnect_cb = nullptr;
+                ble_client->notify_callback = nullptr;
+                ble_client->disconnect_callback = nullptr;
+
+                *iter = ble_client.get();
 
                 result = esp_ble_gattc_app_register(ble_client->app_id);
                 if (result != ESP_OK)
@@ -544,7 +584,7 @@ namespace hub::ble
                 }
 
                 *client_handle = app_id;
-                *iter = ble_client.release();
+                ble_client.release(); // Pass full responsibility for memory to client
             }
 
             ESP_LOGI(TAG, "BLE client initialized.");
@@ -586,48 +626,11 @@ namespace hub::ble
             std::copy(address, address + sizeof(ble_client->remote_bda), ble_client->remote_bda);
             ble_client->addr_type = address_type;
 
-            /*
             result = esp_ble_gap_stop_scanning();
             if (result != ESP_OK)
             {
                 ESP_LOGW(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
-                return result;
             }
-            */
-
-            result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
-            if (result != ESP_OK)
-            {
-                ESP_LOGE(TAG, "GATT connect failed with error code %x [%s].", result, esp_err_to_name(result));
-                return result;
-            }
-
-            EventBits_t bits = xEventGroupWaitBits(ble_client->event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
-
-            if (bits & CONNECT_BIT)
-            {
-                ESP_LOGI(TAG, "Connection success.");
-            }
-            else if (bits & FAIL_BIT)
-            {
-                result = ESP_FAIL;
-                ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-            else
-            {
-                result = ESP_ERR_TIMEOUT;
-                ESP_LOGE(TAG, "Connection failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-
-            return result;
-        }
-
-        esp_err_t reconnect(const handle_t client_handle)
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            esp_err_t result = ESP_OK;
-
-            __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
 
             result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
             if (result != ESP_OK)
@@ -760,18 +763,11 @@ namespace hub::ble
             return result;
         }
 
-        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t callback)
+        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t&& callback)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
-
-            if (callback == NULL)
-            {
-                ESP_LOGE(TAG, "Callback is NULL.");
-                return ESP_FAIL;
-            }
-
-            ble_client->notify_cb = callback;
+            ble_client->notify_callback = std::move(callback);
             return ESP_OK;
         }
 
@@ -786,7 +782,7 @@ namespace hub::ble
                 ESP_LOGW(TAG, "Callback is NULL.");
             }
 
-            ble_client->disconnect_cb = callback;
+            ble_client->disconnect_callback = callback;
             return ESP_OK;
         }
 

@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <functional>
 #include <string_view>
+#include <limits>
+#include <string>
 
 #include "esp_err.h"
 
@@ -29,8 +31,10 @@ namespace hub::ble
     namespace client
     {
         using handle_t = uint8_t;
-        using notify_callback_t = std::function<void(uint16_t, uint8_t*, uint16_t)>;
+        using notify_callback_t = std::function<void(const uint16_t, std::string_view)>;
         using disconnect_callback_t = std::function<void(void)>;
+
+        inline constexpr auto INVALID_HANDLE{ std::numeric_limits<handle_t>::max() };
 
         esp_err_t init(handle_t* client_handle);
 
@@ -38,15 +42,13 @@ namespace hub::ble
 
         esp_err_t connect(const handle_t client_handle, const esp_bd_addr_t address, esp_ble_addr_type_t address_type = BLE_ADDR_TYPE_PUBLIC);
 
-        esp_err_t reconnect(const handle_t client_handle);
-
         esp_err_t disconnect(const handle_t client_handle);
 
         esp_err_t register_for_notify(const handle_t client_handle, uint16_t handle);
 
         esp_err_t unregister_for_notify(const handle_t client_handle, uint16_t handle);
 
-        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t callback);
+        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t&& callback);
 
         esp_err_t register_disconnect_callback(const handle_t client_handle, disconnect_callback_t callback);
 
