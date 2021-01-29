@@ -1,5 +1,5 @@
 #include "hub_ble.h"
-#include "hub_dispatch_queue.h"
+//#include "hub_dispatch_queue.h"
 
 #include <cstring>
 #include <memory>
@@ -12,7 +12,6 @@
 #include "esp_gattc_api.h"
 #include "esp_gap_ble_api.h"
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -78,7 +77,7 @@ namespace hub::ble
         };
 
         static std::array<client*, HUB_BLE_MAX_CLIENTS> gl_profile_tab;
-        static dispatch_queue<4096, tskIDLE_PRIORITY> callback_queue{};
+        //static dispatch_queue<4096, tskIDLE_PRIORITY> callback_queue{};
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -115,15 +114,11 @@ namespace hub::ble
                         {
                             if (scan_callback != nullptr)
                             {
-                                callback_queue.push(
-                                    [
-                                        device_name{ std::string(reinterpret_cast<const char*>(adv_name), adv_name_len) },
-                                        address{ std::vector<uint8_t>(param->scan_rst.bda, param->scan_rst.bda + sizeof(esp_bd_addr_t)) },
-                                        address_type{ param->scan_rst.ble_addr_type },
-                                        rssi{ param->scan_rst.rssi }
-                                    ]() {
-                                        scan_callback(std::string_view(device_name), address.data(), address_type, rssi);
-                                    });
+                                scan_callback(
+                                    std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
+                                    param->scan_rst.bda,
+                                    param->scan_rst.ble_addr_type,
+                                    param->scan_rst.rssi);
                             }
                         }
                     }
@@ -201,14 +196,9 @@ namespace hub::ble
                     break;
                 }
 
-                callback_queue.push(
-                    [
-                        ble_client, 
-                        handle{ param->notify.handle }, 
-                        value{ std::string(reinterpret_cast<const char*>(param->notify.value), static_cast<size_t>(param->notify.value_len)) }
-                    ]() {
-                        ble_client->notify_callback(handle, std::string_view(value));
-                    });
+                ble_client->notify_callback(
+                    param->notify.handle, 
+                    std::string_view(reinterpret_cast<const char*>(param->notify.value), static_cast<size_t>(param->notify.value_len)));
 
                 break;
             case ESP_GATTC_CONNECT_EVT:
@@ -340,10 +330,7 @@ namespace hub::ble
                     break;
                 }
 
-                callback_queue.push(
-                    [ble_client]() {
-                        ble_client->disconnect_callback();
-                    });
+                ble_client->disconnect_callback();
 
                 break;
             case ESP_GATTC_CLOSE_EVT:
@@ -779,12 +766,6 @@ namespace hub::ble
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
-
-            if (callback == nullptr)
-            {
-                ESP_LOGW(TAG, "Callback is nullptr.");
-            }
-
             ble_client->disconnect_callback = callback;
             return ESP_OK;
         }
