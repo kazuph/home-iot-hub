@@ -4,7 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <algorithm>
-#include <optional>
+#include <vector>
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -66,7 +66,7 @@ namespace hub::ble
         static client* const get_client(const esp_gatt_if_t gattc_if);
 
         static scan_callback_t scan_callback = nullptr;
-        static EventGroupHandle_t scan_event_group = NULL;
+        static EventGroupHandle_t scan_event_group = nullptr;
 
         static esp_ble_scan_params_t ble_scan_params{
             BLE_SCAN_TYPE_ACTIVE,           // Scan type
@@ -78,7 +78,7 @@ namespace hub::ble
         };
 
         static std::array<client*, HUB_BLE_MAX_CLIENTS> gl_profile_tab;
-        static dispatch_queue<2048, tskIDLE_PRIORITY> callback_queue{};
+        static dispatch_queue<4096, tskIDLE_PRIORITY> callback_queue{};
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -111,18 +111,18 @@ namespace hub::ble
                         uint8_t adv_name_len = 0;
                         uint8_t* adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
 
-                        if (adv_name != NULL && adv_name_len != 0)
+                        if (adv_name != nullptr && adv_name_len != 0)
                         {
                             if (scan_callback != nullptr)
                             {
                                 callback_queue.push(
                                     [
-                                        device_name{ std::string(reinterpret_cast<const char*>(adv_name)) },
-                                        address{ param->scan_rst.bda },
+                                        device_name{ std::string(reinterpret_cast<const char*>(adv_name), adv_name_len) },
+                                        address{ std::vector<uint8_t>(param->scan_rst.bda, param->scan_rst.bda + sizeof(esp_bd_addr_t)) },
                                         address_type{ param->scan_rst.ble_addr_type },
                                         rssi{ param->scan_rst.rssi }
                                     ]() {
-                                        scan_callback(std::string_view(device_name), address, address_type, rssi);
+                                        scan_callback(std::string_view(device_name), address.data(), address_type, rssi);
                                     });
                             }
                         }
@@ -159,14 +159,13 @@ namespace hub::ble
 
             esp_err_t result = ESP_OK;
 
-            [[unlikely]]
             if (event == ESP_GATTC_REG_EVT)
             {
                 if (param->reg.status == ESP_GATT_OK)
                 {
                     ESP_LOGI(TAG, "Register app_id: %04x.", param->reg.app_id);
 
-                    client* ble_client = gl_profile_tab[param->reg.app_id];
+                    client* const ble_client = gl_profile_tab[param->reg.app_id];
                     ble_client->gattc_if = gattc_if;
 
                     result = esp_ble_gap_set_scan_params(&ble_scan_params);
@@ -261,9 +260,9 @@ namespace hub::ble
             case ESP_GATTC_READ_CHAR_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_READ_CHAR_EVT");
 
-                if (ble_client->buff_length == NULL)
+                if (ble_client->buff_length == nullptr)
                 {
-                    ESP_LOGW(TAG, "Buffer length pointer is NULL.");
+                    ESP_LOGW(TAG, "Buffer length pointer is nullptr.");
                     xEventGroupSetBits(ble_client->event_group, READ_CHAR_BIT);
                     break;
                 }
@@ -276,9 +275,9 @@ namespace hub::ble
                     break;
                 }
 
-                if (ble_client->buff == NULL)
+                if (ble_client->buff == nullptr)
                 {
-                    ESP_LOGW(TAG, "Buffer not pointer is NULL.");
+                    ESP_LOGW(TAG, "Buffer not pointer is nullptr.");
                     xEventGroupSetBits(ble_client->event_group, READ_CHAR_BIT);
                     break;
                 }
@@ -295,9 +294,9 @@ namespace hub::ble
             case ESP_GATTC_READ_DESCR_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_READ_DESCR_EVT");
 
-                if (ble_client->buff_length == NULL)
+                if (ble_client->buff_length == nullptr)
                 {
-                    ESP_LOGW(TAG, "Buffer length pointer is NULL.");
+                    ESP_LOGW(TAG, "Buffer length pointer is nullptr.");
                     xEventGroupSetBits(ble_client->event_group, READ_DESCR_BIT);
                     break;
                 }
@@ -310,9 +309,9 @@ namespace hub::ble
                     break;
                 }
 
-                if (ble_client->buff == NULL)
+                if (ble_client->buff == nullptr)
                 {
-                    ESP_LOGW(TAG, "Buffer pointer is NULL.");
+                    ESP_LOGW(TAG, "Buffer pointer is nullptr.");
                     xEventGroupSetBits(ble_client->event_group, READ_DESCR_BIT);
                     break;
                 }
@@ -327,15 +326,19 @@ namespace hub::ble
                 break;
             case ESP_GATTC_DISCONNECT_EVT:
                 ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
-                ESP_LOGI(TAG, "Disconnect reason: 0x%04d", param->disconnect.reason);
+                ESP_LOGI(TAG, "Disconnect reason: %#04x", param->disconnect.reason);
                 xEventGroupSetBits(ble_client->event_group, DISCONNECT_BIT);
+
+                // Do not call the callback function if disconnect was requested by user
+                if (param->disconnect.reason == ESP_GATT_CONN_TERMINATE_LOCAL_HOST)
+                {
+                    break;
+                }
 
                 if (ble_client->disconnect_callback == nullptr)
                 {
                     break;
                 }
-
-                ble_client->disconnect_callback();
 
                 callback_queue.push(
                     [ble_client]() {
@@ -423,7 +426,7 @@ namespace hub::ble
         __impl::scan_callback = nullptr;
 
         __impl::scan_event_group = xEventGroupCreate();
-        if (__impl::scan_event_group == NULL)
+        if (__impl::scan_event_group == nullptr)
         {
             ESP_LOGE(TAG, "Event group create failed.");
             goto cleanup_bluedroid_enable;
@@ -576,7 +579,7 @@ namespace hub::ble
                 }
 
                 ble_client->event_group = xEventGroupCreate();
-                if (ble_client->event_group == NULL)
+                if (ble_client->event_group == nullptr)
                 {
                     ESP_LOGE(TAG, "Event group create failed.");
                     result = ESP_FAIL;
@@ -605,7 +608,7 @@ namespace hub::ble
                 return result;
             }
 
-            esp_ble_gattc_app_unregister((*ble_client)->app_id);
+            esp_ble_gattc_app_unregister((*ble_client)->gattc_if);
 
             vEventGroupDelete((*ble_client)->event_group);
 
@@ -626,7 +629,7 @@ namespace hub::ble
             std::copy(address, address + sizeof(ble_client->remote_bda), ble_client->remote_bda);
             ble_client->addr_type = address_type;
 
-            result = esp_ble_gap_stop_scanning();
+            result = stop_scanning();
             if (result != ESP_OK)
             {
                 ESP_LOGW(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -777,9 +780,9 @@ namespace hub::ble
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
 
-            if (callback == NULL)
+            if (callback == nullptr)
             {
-                ESP_LOGW(TAG, "Callback is NULL.");
+                ESP_LOGW(TAG, "Callback is nullptr.");
             }
 
             ble_client->disconnect_callback = callback;
@@ -839,7 +842,7 @@ namespace hub::ble
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
 
-            if (characteristics != NULL)
+            if (characteristics != nullptr)
             {
                 result = esp_ble_gattc_get_all_char(
                     ble_client->gattc_if, 
@@ -953,8 +956,8 @@ namespace hub::ble
                 ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
             }
 
-            ble_client->buff = NULL;
-            ble_client->buff_length = NULL;
+            ble_client->buff = nullptr;
+            ble_client->buff_length = nullptr;
 
             return result;
         }
@@ -966,7 +969,7 @@ namespace hub::ble
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
 
-            if (descr != NULL)
+            if (descr != nullptr)
             {
                 result = esp_ble_gattc_get_all_descr(
                     ble_client->gattc_if, 
@@ -1079,8 +1082,8 @@ namespace hub::ble
                 ESP_LOGE(TAG, "Read descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
             }
 
-            ble_client->buff = NULL;
-            ble_client->buff_length = NULL;
+            ble_client->buff = nullptr;
+            ble_client->buff_length = nullptr;
 
             return result;
         }

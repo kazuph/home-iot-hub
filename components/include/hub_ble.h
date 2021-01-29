@@ -14,7 +14,7 @@
 
 namespace hub::ble
 {
-    using scan_callback_t = std::function<void(std::string_view, esp_bd_addr_t, esp_ble_addr_type_t, int)>;
+    using scan_callback_t = std::function<void(std::string_view, const esp_bd_addr_t, esp_ble_addr_type_t, int)>;
 
     inline constexpr uint16_t HUB_BLE_MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
 
