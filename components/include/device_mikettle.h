@@ -65,6 +65,21 @@ namespace hub
 
         static void mix_b(const uint8_t* in_first, const uint16_t product_id, uint8_t* out_first);
 
+        union data_model
+        {
+            struct 
+            {
+                uint8_t action;
+                uint8_t mode;
+                uint16_t unknown;
+                uint8_t temperature_set;
+                uint8_t temperature_current;
+                uint8_t keep_warm_type;
+                uint16_t keep_warm_time;
+            } data_struct;
+            uint8_t data_array[sizeof(data_struct)];
+        };
+
         esp_bd_addr_t address;
 
         esp_err_t authorize();
@@ -79,7 +94,7 @@ namespace hub
         MiKettle() = default;
         ~MiKettle() = default;
 
-        esp_err_t connect(esp_bd_addr_t address) override;
+        esp_err_t connect(const esp_bd_addr_t address) override;
 
         esp_err_t update_data(std::string_view data) override;
     };

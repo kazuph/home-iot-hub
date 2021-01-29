@@ -2,6 +2,7 @@
 
 #include <string>
 #include <algorithm>
+#include <memory>
 
 #include "esp_bt.h"
 #include "esp_bt_defs.h"
@@ -16,14 +17,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+extern "C"
+{
+    #include "cJSON.h"
+}
+
 namespace hub
 {
-    esp_err_t MiKettle::connect(esp_bd_addr_t address)
+    esp_err_t MiKettle::connect(const esp_bd_addr_t address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
 
-        [[unlikely]] // Reconnecting to the same address is more likely than first-time setup
         if (!std::equal(address, address + sizeof(esp_bd_addr_t), this->address))
         {
             std::copy(address, address + sizeof(esp_bd_addr_t), this->address);
@@ -160,7 +165,7 @@ namespace hub
             return result;
         }
 
-        result = get_descriptors(client_handle, HANDLE_AUTH, NULL, &descr_count);
+        result = get_descriptors(client_handle, HANDLE_AUTH, nullptr, &descr_count);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Get descriptor count failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -178,6 +183,14 @@ namespace hub
             }
 
             ESP_LOGI(TAG, "Found %i descriptors.", descr_count);
+
+            if (descr_count == 0)
+            {
+                result = ESP_FAIL;
+                
+                ESP_LOGE(TAG, "No descriptors found.");
+                return result;
+            }
 
             result = write_descriptor(client_handle, descr[0].handle, subscribe, sizeof(subscribe));
             if (result != ESP_OK)
@@ -213,6 +226,44 @@ namespace hub
     void MiKettle::notify_callback(const uint16_t char_handle, std::string_view data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        data_model received_data;
+        std::string_view result;
+
+        {
+            uint8_t* data_model_ptr = &(received_data.data_array[0]);
+
+            for (const auto& iter : data)
+            {
+                *data_model_ptr = static_cast<uint8_t>(iter);
+                data_model_ptr++;
+            }
+        }
+
+        {
+            std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
+                cJSON_CreateObject(),
+                [](cJSON* ptr) {
+                    cJSON_Delete(ptr);
+                }
+            };
+
+            cJSON_AddNumberToObject(json_data.get(), "action", received_data.data_struct.action);
+            cJSON_AddNumberToObject(json_data.get(), "mode", received_data.data_struct.mode);
+            cJSON_AddNumberToObject(json_data.get(), "temperature_set", received_data.data_struct.temperature_set);
+            cJSON_AddNumberToObject(json_data.get(), "temperature_current", received_data.data_struct.temperature_current);
+            cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", received_data.data_struct.keep_warm_type);
+            cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", received_data.data_struct.keep_warm_time);
+
+            result = cJSON_PrintUnformatted(json_data.get());
+        }
+
+        if (data_ready_callback == nullptr)
+        {
+            return;
+        }
+
+        data_ready_callback(result);
     }
 
     void MiKettle::cipher_init(const uint8_t* const in_first1, const uint8_t* const in_last1, uint8_t* const out_first)
