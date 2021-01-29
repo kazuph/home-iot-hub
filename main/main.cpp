@@ -237,8 +237,6 @@ namespace hub
             }
         }
 
-        ESP_LOGD(TAG, "Received data: \n%s", cJSON_Print(json_data.get()));
-
         if (topic == MQTT_BLE_SCAN_ENABLE_TOPIC)
         {
             auto enable = cJSON_GetObjectItemCaseSensitive(json_data.get(), "enable");
@@ -265,11 +263,19 @@ namespace hub
 
             if (!cJSON_IsString(device_name) && (device_name->valuestring != nullptr))
             {
+                ESP_LOGE(TAG, "Bad JSON data.");
                 return;
             }
 
             if (!cJSON_IsString(device_id) && (device_id->valuestring != nullptr))
             {
+                ESP_LOGE(TAG, "Bad JSON data.");
+                return;
+            }
+
+            if (connected_devices.find(device_id->valuestring) != connected_devices.end())
+            {
+                ESP_LOGW(TAG, "Device %s already connected.", device_name->valuestring);
                 return;
             }
 
@@ -288,7 +294,7 @@ namespace hub
                         auto device_mqtt_topic = MQTT_BLE_DEVICE_TOPIC + device_id;
                         mqtt_client->subscribe(device_mqtt_topic);
 
-                        device->register_data_ready_callback([topic{ MQTT_BLE_DEVICE_TOPIC + device_id }](std::string_view data) {
+                        device->register_data_ready_callback([topic{ std::move(device_mqtt_topic) }](std::string_view data) {
                             if (mqtt_client->publish(topic, data, true) != ESP_OK)
                             {
                                 ESP_LOGE(TAG, "Client publish failed.");
