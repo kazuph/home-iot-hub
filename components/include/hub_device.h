@@ -28,11 +28,11 @@ namespace hub
 
         virtual ~device_base();
 
-        virtual esp_err_t connect(esp_bd_addr_t address) = 0;
+        virtual esp_err_t connect(const esp_bd_addr_t address) = 0;
 
         virtual esp_err_t update_data(std::string_view data) = 0;
 
-        esp_err_t register_data_ready_callback(data_ready_callback_t data_ready_callback);
+        esp_err_t register_data_ready_callback(data_ready_callback_t&& data_ready_callback);
     };
 }
 
