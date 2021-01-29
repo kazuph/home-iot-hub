@@ -2,47 +2,38 @@
 #define HUB_MQTT_H
 
 #include "esp_err.h"
-#include "stdbool.h"
 #include "mqtt_client.h"
+#include <functional>
+#include <string_view>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-struct hub_mqtt_client;
-typedef struct hub_mqtt_client hub_mqtt_client;
-
-typedef esp_mqtt_client_config_t hub_mqtt_client_config;
-typedef void (*hub_mqtt_client_data_callback_t)(hub_mqtt_client* client, const char* topic, const void* data, int length);
-
-struct hub_mqtt_client
+namespace hub::mqtt
 {
-    esp_mqtt_client_handle_t client_handle;
-    hub_mqtt_client_data_callback_t data_callback;
-};
 
-esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config);
+    class client;
 
-esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client);
+    using client_config = esp_mqtt_client_config_t;
+    using data_callback_t = std::function<void(std::string_view, std::string_view)>;
 
-esp_err_t hub_mqtt_client_start(hub_mqtt_client* client);
+    class client
+    {
+        static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
-esp_err_t hub_mqtt_client_stop(hub_mqtt_client* client);
+        esp_mqtt_client_handle_t client_handle;
+        data_callback_t data_callback;
 
-esp_err_t hub_mqtt_client_publish(hub_mqtt_client* client, const char* topic, const char* data, bool retain);
+    public:
 
-esp_err_t hub_mqtt_client_subscribe(hub_mqtt_client* client, const char* topic);
+        explicit client(const client_config* const config);
+        ~client();
 
-esp_err_t hub_mqtt_client_unsubscribe(hub_mqtt_client* client, const char* topic);
+        esp_err_t start();
+        esp_err_t stop();
+        esp_err_t publish(std::string_view topic, std::string_view data, bool retain);
+        esp_err_t subscribe(std::string_view topic);
+        esp_err_t unsubscribe(std::string_view topic);
+        esp_err_t register_data_callback(data_callback_t callback);
+    };
 
-esp_err_t hub_mqtt_client_register_subscribe_callback(hub_mqtt_client* client, hub_mqtt_client_data_callback_t callback);
-
-esp_err_t hub_mqtt_client_init(hub_mqtt_client* client, const hub_mqtt_client_config* config);
-
-esp_err_t hub_mqtt_client_destroy(hub_mqtt_client* client);
-
-#ifdef __cplusplus
 }
-#endif
 
 #endif
