@@ -32,8 +32,8 @@ namespace hub::mqtt
                 ESP_LOGE(TAG, "Client data callback not valid.");
                 break;
             }
-            
-            mqtt_client->data_callback(std::string_view(event->topic, event->topic_len), std::string_view(event->data, event->data_len));           
+
+            mqtt_client->data_callback(std::string_view(event->topic, event->topic_len), std::string_view(event->data, event->data_len));              
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGW(TAG, "MQTT_EVENT_ERROR");
@@ -140,8 +140,7 @@ namespace hub::mqtt
             return ESP_FAIL;
         }
 
-        ESP_LOGD(TAG, "Published data:\n%s", data.data());
-        ESP_LOGI(TAG, "Client publish success.");
+        ESP_LOGI(TAG, "Publish successful.");
         return ESP_OK;
     }
 
@@ -157,7 +156,7 @@ namespace hub::mqtt
             return ESP_FAIL;
         }
 
-        ESP_LOGI(TAG, "Client subscribe success");
+        ESP_LOGI(TAG, "Client subscribe to topic: %s.", topic.data());
         return ESP_OK;
     }
 
@@ -173,7 +172,7 @@ namespace hub::mqtt
             return ESP_FAIL;
         }
 
-        ESP_LOGI(TAG, "Client unsubscribe success.");
+        ESP_LOGI(TAG, "Client unsubscribed from topic: %s.", topic.data());
         return ESP_OK;
     }
 
