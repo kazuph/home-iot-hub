@@ -1,4 +1,5 @@
 #include "device_mikettle.h"
+#include "hub_utils.h"
 
 #include <string>
 #include <algorithm>
@@ -11,7 +12,6 @@
 #include "esp_gatt_defs.h"
 #include "esp_gatt_common_api.h"
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -64,7 +64,7 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         esp_err_t result = ESP_OK;
-        uint16_t descr_count = 0;
+        volatile bool auth_notify = false;
 
         result = get_service(client_handle, &uuid_service_kettle);
         if (result != ESP_OK)
@@ -80,77 +80,18 @@ namespace hub
             return result;
         }
 
-        {
-            result = register_notify_callback(
-                client_handle, 
-                [this](const uint16_t char_handle, std::string_view data) {
+        result = register_notify_callback(
+            client_handle, 
+            [&auth_notify](const uint16_t char_handle, std::string_view data) {
+                ESP_LOGD(TAG, "Function: %s.", __func__);
 
-                    esp_err_t result = ESP_OK;
+                if (char_handle != HANDLE_AUTH)
+                {
+                    return;
+                }
 
-                    {
-                        std::array<uint8_t, token.size()> ciphered;
-
-                        cipher(token.data(), token.data() + token.size(), key2.data(), ciphered.data());
-
-                        result = write_characteristic(client_handle, HANDLE_AUTH, ciphered.data(), KEY_LENGTH);
-                        if (result != ESP_OK)
-                        {
-                            ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                            return;
-                        }
-                    }
-
-                    result = read_characteristic(client_handle, HANDLE_VERSION, NULL, NULL);
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                        return;
-                    }
-
-                    result = unregister_for_notify(client_handle, HANDLE_AUTH);
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
-                        return;
-                    }
-
-                    result = register_for_notify(client_handle, HANDLE_STATUS);
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
-                        return;
-                    }
-
-                    result = write_descriptor(client_handle, HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
-                        return;
-                    }
-
-                    result = register_notify_callback(
-                        client_handle, 
-                        [this](const uint16_t char_handle, std::string_view data) {
-                            notify_callback(char_handle, data);
-                        });
-
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Register notify callback failed.");
-                        return;
-                    }
-
-                    result = register_disconnect_callback(
-                        client_handle, 
-                        [this]() { connect(address); });
-
-                    if (result != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Register notify callback failed.");
-                        return;
-                    }
-                });
-        }
+                auth_notify = true;
+            });
 
         if (result != ESP_OK)
         {
@@ -165,15 +106,18 @@ namespace hub
             return result;
         }
 
-        result = get_descriptors(client_handle, HANDLE_AUTH, nullptr, &descr_count);
-        if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Get descriptor count failed with error code %x [%s].", result, esp_err_to_name(result));
-            return result;
-        }
+            uint16_t descr_count = 0;
+            std::vector<esp_gattc_descr_elem_t> descr{};
 
-        {
-            std::vector<esp_gattc_descr_elem_t> descr(descr_count * sizeof(esp_gattc_descr_elem_t));
+            result = get_descriptors(client_handle, HANDLE_AUTH, nullptr, &descr_count);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Get descriptor count failed with error code %x [%s].", result, esp_err_to_name(result));
+                return result;
+            }
+
+            descr.resize(descr_count * sizeof(esp_gattc_descr_elem_t));
 
             result = get_descriptors(client_handle, HANDLE_AUTH, descr.data(), &descr_count);
             if (result != ESP_GATT_OK)
@@ -184,15 +128,7 @@ namespace hub
 
             ESP_LOGI(TAG, "Found %i descriptors.", descr_count);
 
-            if (descr_count == 0)
-            {
-                result = ESP_FAIL;
-                
-                ESP_LOGE(TAG, "No descriptors found.");
-                return result;
-            }
-
-            result = write_descriptor(client_handle, descr[0].handle, subscribe, sizeof(subscribe));
+            result = write_descriptor(client_handle, descr.at(0).handle, subscribe, sizeof(subscribe));
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -218,6 +154,80 @@ namespace hub
                 ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
                 return result;
             }
+
+            for (uint8_t i = 0; !auth_notify; i++)
+            {
+                vTaskDelay(50 / portTICK_PERIOD_MS);
+
+                if (i == 60) // Timeout after 3s
+                {
+                    result = ESP_ERR_TIMEOUT;
+                    return result;
+                }
+            }
+
+            cipher(token.data(), token.data() + token.size(), key2.data(), ciphered.data());
+
+            result = write_characteristic(client_handle, HANDLE_AUTH, ciphered.data(), KEY_LENGTH);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
+                return result;
+            }
+        }
+
+        result = read_characteristic(client_handle, HANDLE_VERSION, NULL, NULL);
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
+            return result;
+        }
+
+        result = unregister_for_notify(client_handle, HANDLE_AUTH);
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
+            return result;
+        }
+
+        result = register_for_notify(client_handle, HANDLE_STATUS);
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
+            return result;
+        }
+
+        result = write_descriptor(client_handle, HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
+            return result;
+        }
+
+        result = register_notify_callback(
+            client_handle, 
+            [this](const uint16_t char_handle, std::string_view data) {
+                notify_callback(char_handle, data);
+            });
+
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Register notify callback failed.");
+            return result;
+        }
+
+        result = register_disconnect_callback(
+            client_handle, 
+            [this]() { 
+                task_queue.push([this]() { 
+                    connect(address); 
+                });
+            });
+
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Register notify callback failed.");
+            return result;
         }
 
         return result;

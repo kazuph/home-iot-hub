@@ -1,7 +1,6 @@
 #ifndef HUB_DISPATCH_QUEUE_H
 #define HUB_DISPATCH_QUEUE_H
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "esp_err.h"
 

@@ -2,7 +2,7 @@
 #include "hub_mqtt.h"
 #include "hub_ble.h"
 #include "hub_device_list.h"
-#include "hub_dispatch_queue.h"
+#include "hub_utils.h"
 
 #include <cstdio>
 #include <cstring>
@@ -15,7 +15,6 @@
 #include "esp_system.h"
 #include "esp_event.h"
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 #include "lwip/err.h"
@@ -53,10 +52,11 @@ namespace hub
     static void ble_scan_callback(std::string_view name, const esp_bd_addr_t address, esp_ble_addr_type_t address_type, int rssi);
     static void mqtt_data_callback(std::string_view topic, std::string_view data);
 
-    static dispatch_queue<4096, tskIDLE_PRIORITY> task_queue{};
     static std::unique_ptr<mqtt::client> mqtt_client;
     static std::map<const std::string_view /* Device name */, esp_bd_addr_t /* Device address */> scan_results{};
     static std::map<const std::string /* Device ID */, std::unique_ptr<hub::device_base> /* Device object */> connected_devices{};
+
+    dispatch_queue<4096, tskIDLE_PRIORITY> task_queue{};
 
     extern "C" void app_main()
     {
@@ -294,8 +294,6 @@ namespace hub
                             ESP_LOGE(TAG, "Client publish failed.");
                             return;
                         }
-
-                        ESP_LOGI(TAG, "Client publish successful."); 
                     });
 
                     scan_results.erase(device_iter);
