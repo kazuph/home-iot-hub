@@ -15,6 +15,7 @@
 #include <queue>
 #include <type_traits>
 #include <exception>
+#include <string>
 
 namespace hub
 {
@@ -61,6 +62,8 @@ namespace hub
         static constexpr const char* TAG = "dispatch_queue";
         static constexpr int QUEUE_EMPTY = BIT0;
 
+        static uint16_t queue_count;
+
         using base = _QueueTy;
 
         mutable volatile bool exit;
@@ -82,15 +85,22 @@ namespace hub
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
+            using namespace std::literals;
+
             auto dispatch_fun = [](void* arg) -> void {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
+
                 dispatch_queue* obj = reinterpret_cast<dispatch_queue*>(arg);
+                
                 while (!(obj->exit))
                 {
                     if (!(obj->empty()))
                     {
-                        auto fun = std::move(obj->front());
-                        fun();
+                        if (obj->front())
+                        {
+                            (obj->front())();
+                        }
+
                         obj->pop();
                     }
                     else
@@ -99,7 +109,7 @@ namespace hub
                     }
                 }
 
-                vTaskDelete(NULL);
+                vTaskDelete(nullptr);
             };
 
             mutex = xSemaphoreCreateRecursiveMutex();
@@ -116,11 +126,13 @@ namespace hub
                 abort();
             }
 
-            if (xTaskCreate(dispatch_fun, "dispatch_task", _Stack_size, reinterpret_cast<void*>(this), _Priority, &task) != pdPASS)
+            if (xTaskCreate(dispatch_fun, std::string("dispatch_queue_"s + std::to_string(queue_count)).c_str(), _Stack_size, reinterpret_cast<void*>(this), _Priority, &task) != pdPASS)
             {
                 ESP_LOGE(TAG, "Task create failed.");
                 abort();
             }
+
+            queue_count++;
         }
 
         ~dispatch_queue()
@@ -221,6 +233,13 @@ namespace hub
             base::swap(other);
         }
     };
+
+    template<
+        configSTACK_DEPTH_TYPE _Stack_size, 
+        UBaseType_t _Priority, 
+        typename _Ty, 
+        typename _QueueTy>
+    uint16_t dispatch_queue<_Stack_size, _Priority, _Ty, _QueueTy>::queue_count{ 0 };
 }
 
 #endif
