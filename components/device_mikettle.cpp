@@ -237,18 +237,14 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        data_model received_data;
         std::string_view result;
 
+        if (std::equal(last_notify.data_array, last_notify.data_array + sizeof(data_model), data.begin()))
         {
-            uint8_t* data_model_ptr = &(received_data.data_array[0]);
-
-            for (const auto& iter : data)
-            {
-                *data_model_ptr = static_cast<uint8_t>(iter);
-                data_model_ptr++;
-            }
+            return;
         }
+
+        std::copy(data.begin(), data.end(), last_notify.data_array);
 
         {
             std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
@@ -258,17 +254,17 @@ namespace hub
                 }
             };
 
-            cJSON_AddNumberToObject(json_data.get(), "action", received_data.data_struct.action);
-            cJSON_AddNumberToObject(json_data.get(), "mode", received_data.data_struct.mode);
-            cJSON_AddNumberToObject(json_data.get(), "temperature_set", received_data.data_struct.temperature_set);
-            cJSON_AddNumberToObject(json_data.get(), "temperature_current", received_data.data_struct.temperature_current);
-            cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", received_data.data_struct.keep_warm_type);
-            cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", received_data.data_struct.keep_warm_time);
+            cJSON_AddNumberToObject(json_data.get(), "action", last_notify.data_struct.action);
+            cJSON_AddNumberToObject(json_data.get(), "mode", last_notify.data_struct.mode);
+            cJSON_AddNumberToObject(json_data.get(), "temperature_set", last_notify.data_struct.temperature_set);
+            cJSON_AddNumberToObject(json_data.get(), "temperature_current", last_notify.data_struct.temperature_current);
+            cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", last_notify.data_struct.keep_warm_type);
+            cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", last_notify.data_struct.keep_warm_time);
 
             result = cJSON_PrintUnformatted(json_data.get());
         }
 
-        if (data_ready_callback == nullptr)
+        if (!data_ready_callback)
         {
             return;
         }

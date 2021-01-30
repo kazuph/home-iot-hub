@@ -80,6 +80,8 @@ namespace hub
             uint8_t data_array[sizeof(data_struct)];
         };
 
+        data_model last_notify;
+
         esp_bd_addr_t address;
 
         esp_err_t authorize();
