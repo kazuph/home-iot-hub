@@ -80,7 +80,7 @@ namespace hub
             return result;
         }
 
-        result = register_notify_callback(
+        result = ble::client::register_notify_callback(
             client_handle, 
             [&auth_notify](const uint16_t char_handle, std::string_view data) {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -204,24 +204,10 @@ namespace hub
             return result;
         }
 
-        result = register_notify_callback(
+        result = ble::client::register_notify_callback(
             client_handle, 
             [this](const uint16_t char_handle, std::string_view data) {
-                notify_callback(char_handle, data);
-            });
-
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Register notify callback failed.");
-            return result;
-        }
-
-        result = register_disconnect_callback(
-            client_handle, 
-            [this]() { 
-                task_queue.push([this]() { 
-                    connect(address); 
-                });
+                ble_notify_callback(char_handle, data);
             });
 
         if (result != ESP_OK)
@@ -233,7 +219,7 @@ namespace hub
         return result;
     }
 
-    void MiKettle::notify_callback(const uint16_t char_handle, std::string_view data)
+    void MiKettle::ble_notify_callback(const uint16_t char_handle, std::string_view data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -264,12 +250,13 @@ namespace hub
             result = cJSON_PrintUnformatted(json_data.get());
         }
 
-        if (!data_ready_callback)
+        if (!notify_callback)
         {
             return;
         }
 
-        data_ready_callback(result);
+        // Pass data to app
+        notify_callback(result);
     }
 
     void MiKettle::cipher_init(const uint8_t* const in_first1, const uint8_t* const in_last1, uint8_t* const out_first)

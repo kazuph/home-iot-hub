@@ -86,7 +86,7 @@ namespace hub
 
         esp_err_t authorize();
 
-        void notify_callback(const uint16_t char_handle, std::string_view data);
+        void ble_notify_callback(const uint16_t char_handle, std::string_view data);
 
     public:
 
@@ -95,6 +95,11 @@ namespace hub
 
         MiKettle() = default;
         ~MiKettle() = default;
+
+        std::string_view get_device_name() override
+        {
+            return device_name;
+        }
 
         esp_err_t connect(const esp_bd_addr_t address) override;
 

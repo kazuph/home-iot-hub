@@ -15,12 +15,14 @@ namespace hub
 
         static constexpr const char* TAG = "device_base";
 
-        using data_ready_callback_t = std::function<void(std::string_view)>;
+        using notify_callback_t = std::function<void(std::string_view)>;
+        using disconnect_callback_t = std::function<void(void)>;
 
     protected:
 
         ble::client::handle_t client_handle;
-        data_ready_callback_t data_ready_callback;
+
+        notify_callback_t notify_callback;
 
     public:
 
@@ -28,11 +30,15 @@ namespace hub
 
         virtual ~device_base();
 
+        virtual std::string_view get_device_name() = 0;
+
         virtual esp_err_t connect(const esp_bd_addr_t address) = 0;
 
         virtual esp_err_t update_data(std::string_view data) = 0;
 
-        esp_err_t register_data_ready_callback(data_ready_callback_t&& data_ready_callback);
+        esp_err_t register_notify_callback(notify_callback_t&& notify_callback);
+
+        esp_err_t register_disconnect_callback(disconnect_callback_t&& disconnect_callback);
     };
 }
 

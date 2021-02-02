@@ -28,7 +28,7 @@ namespace hub::mqtt
 
         esp_err_t start();
         esp_err_t stop();
-        esp_err_t publish(std::string_view topic, std::string_view data, bool retain);
+        esp_err_t publish(std::string_view topic, std::string_view data, bool retain = false);
         esp_err_t subscribe(std::string_view topic);
         esp_err_t unsubscribe(std::string_view topic);
         esp_err_t register_data_callback(data_callback_t callback);
