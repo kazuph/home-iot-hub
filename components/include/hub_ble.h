@@ -6,6 +6,7 @@
 #include <string_view>
 #include <limits>
 #include <string>
+#include <system_error>
 
 #include "esp_err.h"
 
@@ -14,9 +15,10 @@
 
 namespace hub::ble
 {
-    using scan_callback_t = std::function<void(std::string_view, const esp_bd_addr_t, esp_ble_addr_type_t, int)>;
+    using scan_callback_t = std::function<void(std::string_view, std::string_view, esp_ble_addr_type_t, int)>;
 
-    inline constexpr uint16_t HUB_BLE_MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
+    inline constexpr uint16_t MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
+    inline constexpr std::string_view MAC_INIT{ "00:00:00:00:00:00" };
 
     esp_err_t init();
 
@@ -27,6 +29,14 @@ namespace hub::ble
     esp_err_t stop_scanning();
 
     esp_err_t register_scan_callback(scan_callback_t callback);
+
+    std::errc address_to_string(const uint8_t* addr, std::string& str);
+
+    std::errc address_to_string(const uint8_t* addr, char* str);
+
+    std::errc address_to_string(const uint8_t* addr, std::string::iterator str);
+
+    std::errc string_to_address(std::string_view str, uint8_t* addr);
 
     namespace client
     {

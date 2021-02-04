@@ -1,10 +1,10 @@
 #include "hub_ble.h"
-//#include "hub_dispatch_queue.h"
 
 #include <cstring>
 #include <memory>
 #include <algorithm>
 #include <vector>
+#include <charconv>
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -76,7 +76,7 @@ namespace hub::ble
             BLE_SCAN_DUPLICATE_DISABLE      // Advertise duplicates filter policy
         };
 
-        static std::array<client*, HUB_BLE_MAX_CLIENTS> gl_profile_tab;
+        static std::array<client*, MAX_CLIENTS> gl_profile_tab;
         //static dispatch_queue<4096, tskIDLE_PRIORITY> callback_queue{};
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
@@ -110,16 +110,30 @@ namespace hub::ble
                         uint8_t adv_name_len = 0;
                         uint8_t* adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
 
-                        if (adv_name != nullptr && adv_name_len != 0)
+                        if (adv_name == nullptr || adv_name_len == 0)
                         {
-                            if (scan_callback != nullptr)
+                            return;
+                        }
+
+                        if (scan_callback != nullptr)
+                        {
+                            return;
+                        }
+
+                        {
+                            char* addr[MAC_INIT.size()];
+
+                            if (std::errc err = address_to_string(param->scan_rst.bda, addr); err != std::errc())
                             {
-                                scan_callback(
-                                    std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
-                                    param->scan_rst.bda,
-                                    param->scan_rst.ble_addr_type,
-                                    param->scan_rst.rssi);
+                                ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
+                                return;
                             }
+
+                            scan_callback(
+                                std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
+                                std::string_view(addr, sizeof(addr)),
+                                param->scan_rst.ble_addr_type,
+                                param->scan_rst.rssi);
                         }
                     }
                     break;
@@ -516,6 +530,129 @@ namespace hub::ble
         ESP_LOGI(TAG, "Scan callback set.");
 
         return ESP_OK;
+    }
+
+    std::errc address_to_string(const uint8_t* addr, std::string& str)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using namespace std::literals;
+
+        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
+
+        str = MAC_INIT;
+
+        for (char* ptr = str.data(); addr != addr_end;)
+        {
+            ptrdiff_t offs = static_cast<ptrdiff_t>(!((*addr) >> 4));
+
+            auto [num, err] = std::to_chars(
+                ptr + offs, // offset is 1 when leading zero is needed, 0 otherwise
+                ptr + 2,    // end pointer set to ':'
+                *addr++,
+                16);        // base
+
+            if (err != std::errc())
+            {
+                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
+                return err;
+            }
+
+            ptr = num + 1; // Leave ':' character untouched
+        }
+
+        return std::errc();
+    }
+
+    std::errc address_to_string(const uint8_t* addr, char* str)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using namespace std::literals;
+
+        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
+
+        std::copy(MAC_INIT.begin(), MAC_INIT.end(), str);
+
+        while (addr != addr_end)
+        {
+            ptrdiff_t offs = static_cast<ptrdiff_t>(!((*addr) >> 4));
+
+            auto [num, err] = std::to_chars(
+                str + offs, // offset is 1 when leading zero is needed, 0 otherwise
+                str + 2,    // end pointer set to ':'
+                *addr++,
+                16);        // base
+
+            if (err != std::errc())
+            {
+                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
+                return err;
+            }
+
+            str = num + 1; // Leave ':' character untouched
+        }
+
+        return std::errc();
+    }
+
+    std::errc address_to_string(const uint8_t* addr, std::string::iterator str)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using namespace std::literals;
+
+        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
+
+        std::copy(MAC_INIT.begin(), MAC_INIT.end(), str);
+
+        for (char* ptr = &(*str); addr != addr_end;)
+        {
+            ptrdiff_t offs = static_cast<ptrdiff_t>(!((*addr) >> 4));
+
+            auto [num, err] = std::to_chars(
+                str + offs, // offset is 1 when leading zero is needed, 0 otherwise
+                str + 2,    // end pointer set to ':'
+                *addr++,
+                16);        // base
+
+            if (err != std::errc())
+            {
+                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
+                return err;
+            }
+
+            str = num + 1; // Leave ':' character untouched
+        }
+
+        return std::errc();
+    }
+
+    std::errc string_to_address(std::string_view str, uint8_t* addr)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
+        const char* const str_end = str.data() + str.size();
+
+        for (const char* ptr = str.data(); addr != addr_end;)
+        {
+            auto [num, err] = std::from_chars(
+                ptr, 
+                str_end,
+                *addr++, 
+                16);
+
+            if (err != std::errc())
+            {
+                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
+                return err;
+            }
+
+            ptr = num + 1; // Omit ':' character
+        }
+
+        return std::errc();
     }
 
     namespace client
