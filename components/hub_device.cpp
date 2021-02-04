@@ -40,7 +40,14 @@ namespace hub
         esp_err_t result = ble::client::register_disconnect_callback(
             client_handle, 
             [fun{ std::move(disconnect_callback) }]() { 
-                task_queue.push([fun{ std::move(fun) }]() { fun(); });
+                task_queue.push([fun{ std::move(fun) }]() { 
+                    if (!fun) 
+                    {
+                        return;
+                    } 
+
+                    fun();
+                });
             });
 
         if (result != ESP_OK)

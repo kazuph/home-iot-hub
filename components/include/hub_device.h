@@ -32,7 +32,7 @@ namespace hub
 
         virtual std::string_view get_device_name() = 0;
 
-        virtual esp_err_t connect(const esp_bd_addr_t address) = 0;
+        virtual esp_err_t connect(std::string_view address) = 0;
 
         virtual esp_err_t update_data(std::string_view data) = 0;
 

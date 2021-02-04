@@ -24,15 +24,10 @@ extern "C"
 
 namespace hub
 {
-    esp_err_t MiKettle::connect(const esp_bd_addr_t address)
+    esp_err_t MiKettle::connect(std::string_view address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
-
-        if (!std::equal(address, address + sizeof(esp_bd_addr_t), this->address))
-        {
-            std::copy(address, address + sizeof(esp_bd_addr_t), this->address);
-        }
 
         result = ble::client::connect(client_handle, address);
         if (result != ESP_OK)
@@ -41,7 +36,7 @@ namespace hub
             return result;
         }
 
-        result = authorize();
+        result = authorize(address);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Authorize failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -57,7 +52,7 @@ namespace hub
         return ESP_OK;
     }
 
-    esp_err_t MiKettle::authorize()
+    esp_err_t MiKettle::authorize(std::string_view address)
     {
         using namespace ble::client;
 
@@ -140,11 +135,18 @@ namespace hub
             std::array<uint8_t, token.size()> ciphered;
 
             {
-                esp_bd_addr_t reversed_mac;
+                std::array<uint8_t, 6> reversed_mac;
                 std::array<uint8_t, sizeof(uint16_t) + sizeof(esp_bd_addr_t)> mac_id_mix;
 
-                std::reverse_copy((uint8_t*)address, (uint8_t*)address + sizeof(esp_bd_addr_t), (uint8_t*)reversed_mac);
-                mix_a((uint8_t*)reversed_mac, PRODUCT_ID, mac_id_mix.data());
+                if (std::errc err = ble::string_to_address(address, reversed_mac.data()); err != std::errc())
+                {
+                    ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
+                    result = ESP_FAIL;
+                    return result;
+                }
+
+                std::reverse(reversed_mac.begin(), reversed_mac.end());
+                mix_a(reversed_mac.data(), PRODUCT_ID, mac_id_mix.data());
                 cipher(mac_id_mix.data(), mac_id_mix.data() + mac_id_mix.size(), token.data(), ciphered.data());
             }
 

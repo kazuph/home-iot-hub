@@ -115,13 +115,13 @@ namespace hub::ble
                             return;
                         }
 
-                        if (scan_callback != nullptr)
+                        if (scan_callback == nullptr)
                         {
                             return;
                         }
 
                         {
-                            char* addr[MAC_INIT.size()];
+                            char addr[MAC_INIT.size()];
 
                             if (std::errc err = address_to_string(param->scan_rst.bda, addr); err != std::errc())
                             {
@@ -132,8 +132,7 @@ namespace hub::ble
                             scan_callback(
                                 std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
                                 std::string_view(addr, sizeof(addr)),
-                                param->scan_rst.ble_addr_type,
-                                param->scan_rst.rssi);
+                                param->scan_rst.ble_addr_type);
                         }
                     }
                     break;
@@ -611,8 +610,8 @@ namespace hub::ble
             ptrdiff_t offs = static_cast<ptrdiff_t>(!((*addr) >> 4));
 
             auto [num, err] = std::to_chars(
-                str + offs, // offset is 1 when leading zero is needed, 0 otherwise
-                str + 2,    // end pointer set to ':'
+                ptr + offs, // offset is 1 when leading zero is needed, 0 otherwise
+                ptr + 2,    // end pointer set to ':'
                 *addr++,
                 16);        // base
 
@@ -622,7 +621,7 @@ namespace hub::ble
                 return err;
             }
 
-            str = num + 1; // Leave ':' character untouched
+            ptr = num + 1; // Leave ':' character untouched
         }
 
         return std::errc();
@@ -743,14 +742,20 @@ namespace hub::ble
             return result;
         }
 
-        esp_err_t connect(const handle_t client_handle, const esp_bd_addr_t address, esp_ble_addr_type_t address_type)
+        esp_err_t connect(const handle_t client_handle, std::string_view address, esp_ble_addr_type_t address_type)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
             esp_err_t result = ESP_OK;
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
 
-            std::copy(address, address + sizeof(ble_client->remote_bda), ble_client->remote_bda);
+            if (std::errc err = string_to_address(address, ble_client->remote_bda); err != std::errc())
+            {
+                ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
+                result = ESP_FAIL;
+                return result;
+            }
+
             ble_client->addr_type = address_type;
 
             result = stop_scanning();
