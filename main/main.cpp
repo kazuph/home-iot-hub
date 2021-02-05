@@ -120,14 +120,14 @@ namespace hub
             goto cleanup_nvs;
         }
 
-        result = hub_wifi_connect(&wifi_config);
+        result = wifi::connect(&wifi_config);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Wifi initialization failed.");
             goto cleanup_event_loop;
         }
 
-        result = hub_wifi_wait_for_connection(WIFI_CONNECTION_TIMEOUT);
+        result = wifi::wait_for_connection(WIFI_CONNECTION_TIMEOUT);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Wifi connection failed.");
@@ -161,7 +161,7 @@ namespace hub
     cleanup_ble:
         ble::deinit();
     cleanup_wifi_connect:
-        hub_wifi_disconnect();
+        wifi::disconnect();
     cleanup_event_loop:
         esp_event_loop_delete_default();
     cleanup_nvs:
@@ -175,7 +175,7 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         ble::deinit();
-        hub_wifi_disconnect();
+        wifi::disconnect();
         esp_event_loop_delete_default();
         nvs_flash_deinit();
     }
