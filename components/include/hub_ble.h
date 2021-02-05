@@ -32,10 +32,6 @@ namespace hub::ble
 
     std::errc address_to_string(const uint8_t* addr, std::string& str);
 
-    std::errc address_to_string(const uint8_t* addr, char* str);
-
-    std::errc address_to_string(const uint8_t* addr, std::string::iterator str);
-
     std::errc string_to_address(std::string_view str, uint8_t* addr);
 
     namespace client
