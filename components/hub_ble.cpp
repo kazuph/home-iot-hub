@@ -22,22 +22,22 @@ namespace hub::ble
 {
     constexpr const char* TAG = "HUB_BLE";
     constexpr TickType_t BLE_TIMEOUT{ (TickType_t)10000 / portTICK_PERIOD_MS };
-    constexpr uint16_t FAIL_BIT{ BIT15 };
+    constexpr EventBits_t FAIL_BIT{ BIT15 };
 
     /* Bits used by client */
-    constexpr uint16_t CONNECT_BIT{ BIT0 };
-    constexpr uint16_t SEARCH_SERVICE_BIT{ BIT1 };
-    constexpr uint16_t WRITE_CHAR_BIT{ BIT2 };
-    constexpr uint16_t READ_CHAR_BIT{ BIT3 };
-    constexpr uint16_t WRITE_DESCR_BIT{ BIT4 };
-    constexpr uint16_t READ_DESCR_BIT{ BIT5 };
-    constexpr uint16_t REG_FOR_NOTIFY_BIT{ BIT6 };
-    constexpr uint16_t UNREG_FOR_NOTIFY_BIT{ BIT7 };
-    constexpr uint16_t DISCONNECT_BIT{ BIT8 };
+    constexpr EventBits_t CONNECT_BIT{ BIT0 };
+    constexpr EventBits_t SEARCH_SERVICE_BIT{ BIT1 };
+    constexpr EventBits_t WRITE_CHAR_BIT{ BIT2 };
+    constexpr EventBits_t READ_CHAR_BIT{ BIT3 };
+    constexpr EventBits_t WRITE_DESCR_BIT{ BIT4 };
+    constexpr EventBits_t READ_DESCR_BIT{ BIT5 };
+    constexpr EventBits_t REG_FOR_NOTIFY_BIT{ BIT6 };
+    constexpr EventBits_t UNREG_FOR_NOTIFY_BIT{ BIT7 };
+    constexpr EventBits_t DISCONNECT_BIT{ BIT8 };
 
     /* Bits used by GAP */
-    constexpr uint16_t SCAN_START_BIT{ BIT0 };
-    constexpr uint16_t SCAN_STOP_BIT{ BIT1 };
+    constexpr EventBits_t SCAN_START_BIT{ BIT0 };
+    constexpr EventBits_t SCAN_STOP_BIT{ BIT1 };
 
     namespace __impl
     {
