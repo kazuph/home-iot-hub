@@ -18,7 +18,6 @@ namespace hub::ble
     using scan_callback_t = std::function<void(std::string_view, std::string_view, esp_ble_addr_type_t)>;
 
     inline constexpr uint16_t MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
-    inline constexpr std::string_view MAC_INIT{ "00:00:00:00:00:00" };
 
     esp_err_t init();
 
