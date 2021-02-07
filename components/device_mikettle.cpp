@@ -24,7 +24,7 @@ extern "C"
 
 namespace hub
 {
-    esp_err_t MiKettle::connect(std::string_view address)
+    esp_err_t MiKettle::connect(const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
@@ -52,7 +52,7 @@ namespace hub
         return ESP_OK;
     }
 
-    esp_err_t MiKettle::authorize(std::string_view address)
+    esp_err_t MiKettle::authorize(const ble::mac& address)
     {
         using namespace ble::client;
 
@@ -136,16 +136,9 @@ namespace hub
 
             {
                 std::array<uint8_t, 6> reversed_mac;
-                std::array<uint8_t, sizeof(uint16_t) + sizeof(esp_bd_addr_t)> mac_id_mix;
+                std::array<uint8_t, 8> mac_id_mix;
 
-                if (std::errc err = ble::string_to_address(address, reversed_mac.data()); err != std::errc())
-                {
-                    ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
-                    result = ESP_FAIL;
-                    return result;
-                }
-
-                std::reverse(reversed_mac.begin(), reversed_mac.end());
+                std::reverse_copy(address.begin(), address.end(), reversed_mac.begin());
                 mix_a(reversed_mac.data(), PRODUCT_ID, mac_id_mix.data());
                 cipher(mac_id_mix.data(), mac_id_mix.data() + mac_id_mix.size(), token.data(), ciphered.data());
             }

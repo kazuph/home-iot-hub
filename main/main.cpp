@@ -52,13 +52,13 @@ namespace hub
 
     static esp_err_t app_init();
     static void app_cleanup();
-    static void ble_scan_callback(std::string_view name, std::string_view address, esp_ble_addr_type_t address_type);
-    static esp_err_t ble_connect(std::string_view id, std::string_view name, std::string_view address);
+    static void ble_scan_callback(std::string_view name, const ble::mac& address);
+    static esp_err_t ble_connect(std::string_view id, std::string_view name, const ble::mac& address);
     static void mqtt_data_callback(std::string_view topic, std::string_view data);
 
     static std::unique_ptr<mqtt::client> mqtt_client;
 
-    static std::map<std::string, std::string_view> scan_results{};
+    static std::map<ble::mac, std::string_view> scan_results{};
     static std::map<std::string, std::unique_ptr<hub::device_base>> connected_devices{};
     static std::map<std::string_view, std::string> disconnected_devices{};
 
@@ -76,10 +76,6 @@ namespace hub
             goto restart;
         }
         ESP_LOGI(TAG, "Application initialization success.");
-
-        mqtt_client->register_data_callback([](std::string_view topic, std::string_view data) { 
-            mqtt_data_callback(topic, data);
-        });
 
         mqtt_client->subscribe(MQTT_BLE_SCAN_ENABLE_TOPIC);
         mqtt_client->subscribe(MQTT_BLE_CONNECT_TOPIC);
@@ -142,6 +138,15 @@ namespace hub
             goto cleanup_wifi_connect;
         }
 
+        result = mqtt_client->register_data_callback([](std::string_view topic, std::string_view data) { 
+            mqtt_data_callback(topic, data);
+        });
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "MQTT data callback set failed.");
+            goto cleanup_wifi_connect;
+        }
+
         result = ble::init();
         if (result != ESP_OK)
         {
@@ -149,7 +154,9 @@ namespace hub
             goto cleanup_wifi_connect;
         }
 
-        result = ble::register_scan_callback(&ble_scan_callback);
+        result = ble::register_scan_callback([](std::string_view name, const ble::mac& address) {
+            ble_scan_callback(name, address);
+        });
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "BLE scan callback register failed.");
@@ -180,12 +187,12 @@ namespace hub
         nvs_flash_deinit();
     }
 
-    static void ble_scan_callback(std::string_view name, std::string_view address, esp_ble_addr_type_t address_type)
+    static void ble_scan_callback(std::string_view name, const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         // Return if already in scan_results.
-        if (scan_results.find(std::string(address)) != scan_results.end())
+        if (scan_results.find(address) != scan_results.end())
         {
             return;
         }
@@ -193,7 +200,7 @@ namespace hub
         // Reconnect to disconnected devices.
         if (auto iter = disconnected_devices.find(name); iter != disconnected_devices.end())
         {
-            task_queue.push([id{ (*iter).second }, name{ (*iter).first }, address{ std::string(address) }]() {
+            task_queue.push([id{ (*iter).second }, name{ (*iter).first }, address]() {
                 if (ble_connect(id, name, address) != ESP_OK)
                 {
                     ESP_LOGE(TAG, "Failed to connect to %s.", name.data());
@@ -211,7 +218,7 @@ namespace hub
                 Device name here is a temporary string_view, so we need to get the 
                 name from supported_devices as these are constexpr.
             */
-            scan_results[std::string(address)] = (*device_iter).first;
+            scan_results[address] = (*device_iter).first;
 
             std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
                 cJSON_CreateArray(),
@@ -237,7 +244,7 @@ namespace hub
         }
     }
 
-    static esp_err_t ble_connect(std::string_view id, std::string_view name, std::string_view address)
+    static esp_err_t ble_connect(std::string_view id, std::string_view name, const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -388,7 +395,7 @@ namespace hub
                 }
 
                 {   // Find device in scan_results and get device name
-                    std::string addr{ device_addr->valuestring };
+                    ble::mac addr{ device_addr->valuestring };
                     auto scan_result_iter{ scan_results.find(addr) };
 
                     if (scan_result_iter == scan_results.end())
@@ -399,7 +406,7 @@ namespace hub
                     task_queue.push(
                         [
                             id{ std::move(id) },
-                            addr{ std::move(addr) },
+                            addr,
                             name{ (*scan_result_iter).second }
                         ]() {
                             ESP_LOGD(TAG, "Function: %s.", __func__);

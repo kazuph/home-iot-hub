@@ -13,9 +13,11 @@
 #include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
 
+#include "hub_ble_mac.h"
+
 namespace hub::ble
 {
-    using scan_callback_t = std::function<void(std::string_view, std::string_view, esp_ble_addr_type_t)>;
+    using scan_callback_t = std::function<void(std::string_view, const mac&)>;
 
     inline constexpr uint16_t MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
 
@@ -27,11 +29,7 @@ namespace hub::ble
 
     esp_err_t stop_scanning();
 
-    esp_err_t register_scan_callback(scan_callback_t callback);
-
-    std::errc address_to_string(const uint8_t* addr, std::string& str);
-
-    std::errc string_to_address(std::string_view str, uint8_t* addr);
+    esp_err_t register_scan_callback(scan_callback_t&& callback);
 
     namespace client
     {
@@ -45,7 +43,7 @@ namespace hub::ble
 
         esp_err_t destroy(const handle_t client_handle);
 
-        esp_err_t connect(const handle_t client_handle, std::string_view, esp_ble_addr_type_t address_type = BLE_ADDR_TYPE_PUBLIC);
+        esp_err_t connect(const handle_t client_handle, const mac& address);
 
         esp_err_t disconnect(const handle_t client_handle);
 

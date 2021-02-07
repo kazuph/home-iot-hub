@@ -21,6 +21,7 @@
 namespace hub::ble
 {
     constexpr const char* TAG = "HUB_BLE";
+    
     constexpr TickType_t BLE_TIMEOUT{ (TickType_t)10000 / portTICK_PERIOD_MS };
     constexpr EventBits_t FAIL_BIT{ BIT15 };
 
@@ -43,9 +44,6 @@ namespace hub::ble
     {
         struct client
         {
-            using notify_callback_t = hub::ble::client::notify_callback_t;
-            using disconnect_callback_t = hub::ble::client::disconnect_callback_t;
-
             uint16_t app_id;
             uint16_t gattc_if;
             uint16_t conn_id;
@@ -54,8 +52,8 @@ namespace hub::ble
             esp_bd_addr_t remote_bda;
             esp_ble_addr_type_t addr_type;
             EventGroupHandle_t event_group;
-            notify_callback_t notify_callback;
-            disconnect_callback_t disconnect_callback;
+            ble::client::notify_callback_t notify_callback;
+            ble::client::disconnect_callback_t disconnect_callback;
             uint16_t* buff_length;
             void* buff;
         };
@@ -77,7 +75,6 @@ namespace hub::ble
         };
 
         static std::array<client*, MAX_CLIENTS> gl_profile_tab;
-        //static dispatch_queue<4096, tskIDLE_PRIORITY> callback_queue{};
 
         static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -120,19 +117,9 @@ namespace hub::ble
                             return;
                         }
 
-                        {
-                            std::string addr{};
-                            if (std::errc err = address_to_string(param->scan_rst.bda, addr); err != std::errc())
-                            {
-                                ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
-                                return;
-                            }
-
-                            scan_callback(
-                                std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
-                                std::string_view(addr),
-                                param->scan_rst.ble_addr_type);
-                        }
+                        scan_callback(
+                            std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
+                            mac(param->scan_rst.bda, param->scan_rst.ble_addr_type));
                     }
                     break;
                 case ESP_GAP_SEARCH_INQ_CMPL_EVT:
@@ -520,75 +507,14 @@ namespace hub::ble
         return result;
     }
 
-    esp_err_t register_scan_callback(scan_callback_t callback)
+    esp_err_t register_scan_callback(scan_callback_t&& callback)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        __impl::scan_callback = callback;
+        __impl::scan_callback = std::move(callback);
         ESP_LOGI(TAG, "Scan callback set.");
 
         return ESP_OK;
-    }
-
-    std::errc address_to_string(const uint8_t* addr, std::string& str)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using namespace std::literals;
-
-        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
-
-        str = "00:00:00:00:00:00";
-        char* ptr = str.data();
-
-        while (addr != addr_end)
-        {
-            ptrdiff_t offs = static_cast<ptrdiff_t>(!((*addr) >> 4));
-
-            auto [num, err] = std::to_chars(
-                ptr + offs, // offset is 1 when leading zero is needed, 0 otherwise
-                ptr + 2,    // end pointer set to ':'
-                *addr++,
-                16);        // base
-
-            if (err != std::errc())
-            {
-                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
-                return err;
-            }
-
-            ptr = num + 1; // Leave ':' character untouched
-        }
-
-        return std::errc();
-    }
-
-    std::errc string_to_address(std::string_view str, uint8_t* addr)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        const uint8_t* const addr_end = addr + sizeof(esp_bd_addr_t);
-        const char* const str_end = str.data() + str.size();
-        const char* ptr = str.data();
-
-        while (addr != addr_end)
-        {
-            auto [num, err] = std::from_chars(
-                ptr, 
-                str_end,
-                *addr++, 
-                16);
-
-            if (err != std::errc())
-            {
-                ESP_LOGE(TAG, "MAC parse failed with error code: %x.", static_cast<int>(err));
-                return err;
-            }
-
-            ptr = num + 1; // Omit ':' character
-        }
-
-        return std::errc();
     }
 
     namespace client
@@ -679,21 +605,12 @@ namespace hub::ble
             return result;
         }
 
-        esp_err_t connect(const handle_t client_handle, std::string_view address, esp_ble_addr_type_t address_type)
+        esp_err_t connect(const handle_t client_handle, const mac& address)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
             esp_err_t result = ESP_OK;
 
             __impl::client* ble_client = __impl::gl_profile_tab[static_cast<size_t>(client_handle)];
-
-            if (std::errc err = string_to_address(address, ble_client->remote_bda); err != std::errc())
-            {
-                ESP_LOGE(TAG, "MAC parse failed with error code %i.", static_cast<int>(err));
-                result = ESP_FAIL;
-                return result;
-            }
-
-            ble_client->addr_type = address_type;
 
             result = stop_scanning();
             if (result != ESP_OK)
@@ -701,7 +618,12 @@ namespace hub::ble
                 ESP_LOGW(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
             }
 
-            result = esp_ble_gattc_open(ble_client->gattc_if, ble_client->remote_bda, ble_client->addr_type, true);
+            result = esp_ble_gattc_open(
+                ble_client->gattc_if, 
+                const_cast<uint8_t*>(static_cast<const uint8_t*>(address)), 
+                address.get_type(), 
+                true);
+
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "GATT connect failed with error code %x [%s].", result, esp_err_to_name(result));

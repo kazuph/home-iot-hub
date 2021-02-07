@@ -82,7 +82,7 @@ namespace hub
 
         data_model last_notify;
 
-        esp_err_t authorize(std::string_view address);
+        esp_err_t authorize(const ble::mac& address);
 
         void ble_notify_callback(const uint16_t char_handle, std::string_view data);
 
@@ -99,7 +99,7 @@ namespace hub
             return device_name;
         }
 
-        esp_err_t connect(std::string_view address) override;
+        esp_err_t connect(const ble::mac& address) override;
 
         esp_err_t update_data(std::string_view data) override;
     };
