@@ -14,7 +14,7 @@ namespace hub::ble
     class mac
     {
         std::array<uint8_t, ESP_BD_ADDR_LEN> address;
-        const esp_ble_addr_type_t type;
+        esp_ble_addr_type_t type;
 
     public:
 
@@ -26,13 +26,13 @@ namespace hub::ble
 
         mac(const mac& other) = default;
 
-        mac(mac&&) = delete;
+        mac(mac&&) = default;
 
         ~mac() = default;
 
         mac& operator=(const mac& other) = default;
 
-        mac& operator=(mac&&) = delete;
+        mac& operator=(mac&&) = default;
 
         bool operator<(const mac& other) const noexcept
         {

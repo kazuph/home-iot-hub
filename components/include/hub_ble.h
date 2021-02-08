@@ -12,6 +12,11 @@
 
 #include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
+#include "esp_gattc_api.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
 
 #include "hub_ble_mac.h"
 
@@ -31,46 +36,89 @@ namespace hub::ble
 
     esp_err_t register_scan_callback(scan_callback_t&& callback);
 
-    namespace client
+    class client
     {
-        using handle_t = uint8_t;
-        using notify_callback_t = std::function<void(const uint16_t, std::string_view)>;
+    public:
+
+        friend esp_err_t init();
+
+        using notify_callback_t     = std::function<void(const uint16_t, std::string_view)>;
         using disconnect_callback_t = std::function<void(void)>;
 
-        inline constexpr auto INVALID_HANDLE{ std::numeric_limits<handle_t>::max() };
+        static constexpr EventBits_t CONNECT_BIT            { BIT0 };
+        static constexpr EventBits_t SEARCH_SERVICE_BIT     { BIT1 };
+        static constexpr EventBits_t WRITE_CHAR_BIT         { BIT2 };
+        static constexpr EventBits_t READ_CHAR_BIT          { BIT3 };
+        static constexpr EventBits_t WRITE_DESCR_BIT        { BIT4 };
+        static constexpr EventBits_t READ_DESCR_BIT         { BIT5 };
+        static constexpr EventBits_t REG_FOR_NOTIFY_BIT     { BIT6 };
+        static constexpr EventBits_t UNREG_FOR_NOTIFY_BIT   { BIT7 };
+        static constexpr EventBits_t DISCONNECT_BIT         { BIT8 };
 
-        esp_err_t init(handle_t* client_handle);
+    private:
 
-        esp_err_t destroy(const handle_t client_handle);
+        static std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> clients;
 
-        esp_err_t connect(const handle_t client_handle, const mac& address);
+        static client* const get_client(const esp_gatt_if_t gattc_if);
 
-        esp_err_t disconnect(const handle_t client_handle);
+        static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
-        esp_err_t register_for_notify(const handle_t client_handle, uint16_t handle);
+        // Connection parameters
+        uint16_t    app_id;
+        uint16_t    gattc_if;
+        uint16_t    conn_id;
+        uint16_t    service_start_handle;
+        uint16_t    service_end_handle;
+        mac         address;
 
-        esp_err_t unregister_for_notify(const handle_t client_handle, uint16_t handle);
+        EventGroupHandle_t  event_group;
 
-        esp_err_t register_notify_callback(const handle_t client_handle, notify_callback_t&& callback);
+        // Pass data between global GATTC callback and read_* functions
+        uint16_t*   buff_length;
+        uint8_t*    buff;
 
-        esp_err_t register_disconnect_callback(const handle_t client_handle, disconnect_callback_t callback);
+    public:
 
-        esp_err_t get_services(const handle_t client_handle, esp_gattc_service_elem_t* services, uint16_t* count);
+        // Callback functions
+        notify_callback_t       notify_callback;
+        disconnect_callback_t   disconnect_callback;
 
-        esp_err_t get_service(const handle_t client_handle, const esp_bt_uuid_t* uuid);
+        client();
 
-        esp_err_t get_characteristics(const handle_t client_handle, esp_gattc_char_elem_t* characteristics, uint16_t* count);
+        client(const client&) = delete;
 
-        esp_err_t write_characteristic(const handle_t client_handle, const uint16_t handle, const uint8_t* value, const uint16_t value_length);
+        client(client&&) = default;
 
-        esp_err_t read_characteristic(const handle_t client_handle, const uint16_t handle, uint8_t* value, uint16_t* value_length);
+        client& operator=(const client&) = delete;
 
-        esp_err_t get_descriptors(const handle_t client_handle, const uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count);
+        client& operator=(client&&) = default;
 
-        esp_err_t write_descriptor(const handle_t client_handle, const uint16_t handle, const uint8_t* value, const uint16_t value_length);
+        virtual ~client();
 
-        esp_err_t read_descriptor(const handle_t client_handle, const uint16_t handle, uint8_t* value, uint16_t* value_length);
-    }
+        esp_err_t connect(const mac& address);
+
+        esp_err_t disconnect();
+
+        esp_err_t register_for_notify(uint16_t handle);
+
+        esp_err_t unregister_for_notify(uint16_t handle);
+
+        esp_err_t get_services(esp_gattc_service_elem_t* services, uint16_t* count);
+
+        esp_err_t get_service(const esp_bt_uuid_t* uuid);
+
+        esp_err_t get_characteristics(esp_gattc_char_elem_t* characteristics, uint16_t* count);
+
+        esp_err_t write_characteristic(const uint16_t handle, const uint8_t* value, const uint16_t value_length);
+
+        esp_err_t read_characteristic(const uint16_t handle, uint8_t* value, uint16_t* value_length);
+
+        esp_err_t get_descriptors(const uint16_t char_handle, esp_gattc_descr_elem_t* descr, uint16_t* count);
+
+        esp_err_t write_descriptor(const uint16_t handle, const uint8_t* value, const uint16_t value_length);
+
+        esp_err_t read_descriptor(const uint16_t handle, uint8_t* value, uint16_t* value_length);
+    };
 }
 
 #endif

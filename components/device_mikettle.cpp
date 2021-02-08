@@ -29,7 +29,7 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
 
-        result = ble::client::connect(client_handle, address);
+        result = ble::client::connect(address);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Connect failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -54,29 +54,26 @@ namespace hub
 
     esp_err_t MiKettle::authorize(const ble::mac& address)
     {
-        using namespace ble::client;
-
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         esp_err_t result = ESP_OK;
         volatile bool auth_notify = false;
 
-        result = get_service(client_handle, &uuid_service_kettle);
+        result = ble::client::get_service(&uuid_service_kettle);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Find services failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = write_characteristic(client_handle, HANDLE_AUTH_INIT, key1.data(), key1.size());
+        result = ble::client::write_characteristic(HANDLE_AUTH_INIT, key1.data(), key1.size());
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = ble::client::register_notify_callback(
-            client_handle, 
+        ble::client::notify_callback = 
             [&auth_notify](const uint16_t char_handle, std::string_view data) {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -86,15 +83,9 @@ namespace hub
                 }
 
                 auth_notify = true;
-            });
+            };
 
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Register notify callback failed.");
-            return result;
-        }
-
-        result = register_for_notify(client_handle, HANDLE_AUTH);
+        result = ble::client::register_for_notify(HANDLE_AUTH);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -105,7 +96,7 @@ namespace hub
             uint16_t descr_count = 0;
             std::vector<esp_gattc_descr_elem_t> descr{};
 
-            result = get_descriptors(client_handle, HANDLE_AUTH, nullptr, &descr_count);
+            result = ble::client::get_descriptors(HANDLE_AUTH, nullptr, &descr_count);
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Get descriptor count failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -114,7 +105,7 @@ namespace hub
 
             descr.resize(descr_count * sizeof(esp_gattc_descr_elem_t));
 
-            result = get_descriptors(client_handle, HANDLE_AUTH, descr.data(), &descr_count);
+            result = ble::client::get_descriptors(HANDLE_AUTH, descr.data(), &descr_count);
             if (result != ESP_GATT_OK)
             {
                 ESP_LOGE(TAG, "Get descriptors failed.");
@@ -123,7 +114,7 @@ namespace hub
 
             ESP_LOGI(TAG, "Found %i descriptors.", descr_count);
 
-            result = write_descriptor(client_handle, descr.at(0).handle, subscribe, sizeof(subscribe));
+            result = ble::client::write_descriptor(descr.at(0).handle, subscribe, sizeof(subscribe));
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -143,7 +134,7 @@ namespace hub
                 cipher(mac_id_mix.data(), mac_id_mix.data() + mac_id_mix.size(), token.data(), ciphered.data());
             }
 
-            result = write_characteristic(client_handle, HANDLE_AUTH, ciphered.data(), ciphered.size());
+            result = ble::client::write_characteristic(HANDLE_AUTH, ciphered.data(), ciphered.size());
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -163,7 +154,7 @@ namespace hub
 
             cipher(token.data(), token.data() + token.size(), key2.data(), ciphered.data());
 
-            result = write_characteristic(client_handle, HANDLE_AUTH, ciphered.data(), KEY_LENGTH);
+            result = ble::client::write_characteristic(HANDLE_AUTH, ciphered.data(), KEY_LENGTH);
             if (result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Write characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -171,45 +162,37 @@ namespace hub
             }
         }
 
-        result = read_characteristic(client_handle, HANDLE_VERSION, NULL, NULL);
+        result = ble::client::read_characteristic(HANDLE_VERSION, NULL, NULL);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Read characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = unregister_for_notify(client_handle, HANDLE_AUTH);
+        result = ble::client::unregister_for_notify(HANDLE_AUTH);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Unregister for notify failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = register_for_notify(client_handle, HANDLE_STATUS);
+        result = ble::client::register_for_notify(HANDLE_STATUS);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Register for notify failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = write_descriptor(client_handle, HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
+        result = ble::client::write_descriptor(HANDLE_STATUS + 1, subscribe, sizeof(subscribe));
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Write descriptor failed with error code %x [%s].", result, esp_err_to_name(result));
             return result;
         }
 
-        result = ble::client::register_notify_callback(
-            client_handle, 
-            [this](const uint16_t char_handle, std::string_view data) {
-                ble_notify_callback(char_handle, data);
-            });
-
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Register notify callback failed.");
-            return result;
-        }
+        ble::client::notify_callback = [this](const uint16_t char_handle, std::string_view data) {
+            ble_notify_callback(char_handle, data);
+        };
 
         return result;
     }

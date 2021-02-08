@@ -29,7 +29,7 @@ namespace hub
     template<typename _DeviceTy>
     inline constexpr std::pair<std::string_view, std::function<std::unique_ptr<device_base>()>> register_device_type()
     {
-        return { _DeviceTy::device_name, make_device<_DeviceTy> };
+        return std::make_pair(_DeviceTy::device_name, make_device<_DeviceTy>);
     }
 
     inline bool is_device_supported(std::string_view device_name)

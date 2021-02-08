@@ -9,7 +9,7 @@ namespace hub
     const std::map<std::string_view, std::function<std::unique_ptr<device_base>()>> supported_devices
     {
 #ifdef CONFIG_SUPPORT_XIAOMI_MI_KETTLE
-        register_device_type<MiKettle>()
+        register_device_type<MiKettle>(),
 #endif
     };
 }
