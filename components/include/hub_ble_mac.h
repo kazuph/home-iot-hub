@@ -75,12 +75,7 @@ namespace hub::ble
         {
             return static_cast<std::string>(*this);
         }
-
-        const char* c_str() const noexcept
-        {
-            return (this->to_string()).c_str();
-        }
-
+        
         constexpr auto begin() noexcept
         {
             return address.begin();

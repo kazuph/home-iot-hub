@@ -236,7 +236,7 @@ namespace hub
                 cJSON* obj{ cJSON_CreateObject() };
 
                 cJSON_AddStringToObject(obj, "name", device_name.data());
-                cJSON_AddStringToObject(obj, "address", device_address.c_str());
+                cJSON_AddStringToObject(obj, "address", (device_address.to_string()).c_str());
                 cJSON_AddItemToArray(json_data.get(), obj);
             }
 
@@ -255,6 +255,12 @@ namespace hub
         esp_err_t result{ ESP_OK };
         std::string device_id{ id };
         std::string device_mqtt_topic{ MQTT_BLE_DEVICE_TOPIC + device_id };
+
+        if (!is_device_supported(name))
+        {
+            ESP_LOGW(TAG, "Device %s not supported.", name.data());
+            return ESP_ERR_NOT_SUPPORTED;
+        }
 
         auto device{ device_init(name) };
 
@@ -404,7 +410,8 @@ namespace hub
 
                     if (scan_result_iter == scan_results.end())
                     {
-                        ESP_LOGE(TAG, "Device not found.");
+                        ESP_LOGE(TAG, "Device with address %s not found.", addr.to_string().c_str());
+                        return;
                     }
 
                     task_queue.push(
