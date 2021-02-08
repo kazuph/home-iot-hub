@@ -46,9 +46,17 @@ namespace hub
         return result;
     }
 
-    esp_err_t MiKettle::update_data(std::string_view)
+    esp_err_t MiKettle::update_data(std::string_view data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
+            cJSON_ParseWithLength(data.data(), data.length()),
+            [](cJSON* ptr) {
+                cJSON_Delete(ptr);
+            }
+        };
+
         return ESP_OK;
     }
 
@@ -56,8 +64,8 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        esp_err_t result = ESP_OK;
-        volatile bool auth_notify = false;
+        esp_err_t result            = ESP_OK;
+        volatile bool auth_notify   = false;
 
         result = ble::client::get_service(&uuid_service_kettle);
         if (result != ESP_OK)

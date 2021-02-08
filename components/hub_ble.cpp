@@ -195,7 +195,12 @@ namespace hub::ble
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         scan_callback = nullptr;
-        vEventGroupDelete(scan_event_group);
+
+        if (scan_event_group != nullptr)
+        {
+            vEventGroupDelete(scan_event_group);
+        }
+        
         esp_bluedroid_disable();
         esp_bluedroid_deinit();
         esp_bt_controller_disable();

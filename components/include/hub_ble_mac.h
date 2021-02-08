@@ -13,8 +13,8 @@ namespace hub::ble
 {
     class mac
     {
-        std::array<uint8_t, ESP_BD_ADDR_LEN> address;
-        esp_ble_addr_type_t type;
+        std::array<uint8_t, ESP_BD_ADDR_LEN>    address;
+        esp_ble_addr_type_t                     type;
 
     public:
 
@@ -24,15 +24,15 @@ namespace hub::ble
 
         explicit mac(std::string_view address, esp_ble_addr_type_t type = BLE_ADDR_TYPE_PUBLIC);
 
-        mac(const mac& other) = default;
+        mac(const mac& other)           = default;
 
-        mac(mac&&) = default;
+        mac(mac&&)                      = default;
 
-        ~mac() = default;
+        ~mac()                          = default;
 
-        mac& operator=(const mac& other) = default;
+        mac& operator=(const mac&)      = default;
 
-        mac& operator=(mac&&) = default;
+        mac& operator=(mac&&)           = default;
 
         bool operator<(const mac& other) const noexcept
         {

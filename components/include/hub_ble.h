@@ -45,6 +45,8 @@ namespace hub::ble
         using notify_callback_t     = std::function<void(const uint16_t, std::string_view)>;
         using disconnect_callback_t = std::function<void(void)>;
 
+    private:
+
         static constexpr EventBits_t CONNECT_BIT            { BIT0 };
         static constexpr EventBits_t SEARCH_SERVICE_BIT     { BIT1 };
         static constexpr EventBits_t WRITE_CHAR_BIT         { BIT2 };
@@ -55,8 +57,6 @@ namespace hub::ble
         static constexpr EventBits_t UNREG_FOR_NOTIFY_BIT   { BIT7 };
         static constexpr EventBits_t DISCONNECT_BIT         { BIT8 };
 
-    private:
-
         static std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> clients;
 
         static client* const get_client(const esp_gatt_if_t gattc_if);
@@ -64,18 +64,18 @@ namespace hub::ble
         static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
         // Connection parameters
-        uint16_t    app_id;
-        uint16_t    gattc_if;
-        uint16_t    conn_id;
-        uint16_t    service_start_handle;
-        uint16_t    service_end_handle;
-        mac         address;
+        uint16_t            app_id;
+        uint16_t            gattc_if;
+        uint16_t            conn_id;
+        uint16_t            service_start_handle;
+        uint16_t            service_end_handle;
+        mac                 address;
 
         EventGroupHandle_t  event_group;
 
         // Pass data between global GATTC callback and read_* functions
-        uint16_t*   buff_length;
-        uint8_t*    buff;
+        uint16_t*           buff_length;
+        uint8_t*            buff;
 
     public:
 
@@ -85,13 +85,13 @@ namespace hub::ble
 
         client();
 
-        client(const client&) = delete;
+        client(const client&)               = delete;
 
-        client(client&&) = default;
+        client(client&&)                    = default;
 
-        client& operator=(const client&) = delete;
+        client& operator=(const client&)    = delete;
 
-        client& operator=(client&&) = default;
+        client& operator=(client&&)         = default;
 
         virtual ~client();
 

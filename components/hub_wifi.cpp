@@ -16,11 +16,11 @@
 
 namespace hub::wifi
 {
-    constexpr const char *TAG = "HUB WIFI";
+    constexpr const char* TAG                   { "HUB WIFI" };
 
-    constexpr EventBits_t WIFI_CONNECTED_BIT{ BIT0 };
+    constexpr EventBits_t WIFI_CONNECTED_BIT    { BIT0 };
 #ifndef CONFIG_WIFI_RETRY_INFINITE
-    constexpr EventBits_t WIFI_FAIL_BIT{ BIT1 };
+    constexpr EventBits_t WIFI_FAIL_BIT         { BIT1 };
 #endif
 
     static EventGroupHandle_t wifi_event_group;
@@ -60,7 +60,7 @@ namespace hub::wifi
             }
             else
             {
-                if (wifi_event_group != NULL)
+                if (wifi_event_group != nullptr)
                 {
                     xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
                     ESP_LOGI(TAG, "Connect to the access point failed.");
@@ -79,14 +79,14 @@ namespace hub::wifi
         }
         else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
         {
-            ip_event_got_ip_t *event = (ip_event_got_ip_t*)event_data;
+            ip_event_got_ip_t* event = reinterpret_cast<ip_event_got_ip_t*>(event_data);
             ESP_LOGI(TAG, "Connected. IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
     #ifndef CONFIG_WIFI_RETRY_INFINITE
             s_retry_num = 0;
     #endif
 
-            if (wifi_event_group != NULL)
+            if (wifi_event_group != nullptr)
             {
                 xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
             }
@@ -100,7 +100,7 @@ namespace hub::wifi
         esp_err_t result = ESP_OK;
 
         wifi_event_group = xEventGroupCreate();
-        if (wifi_event_group == NULL)
+        if (wifi_event_group == nullptr)
         {
             ESP_LOGE(TAG, "Could not create event group.");
             return ESP_FAIL;
@@ -118,21 +118,21 @@ namespace hub::wifi
             return result;
         }
 
-        result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_START, &event_handler, NULL);
+        result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_START, &event_handler, nullptr);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Event initialization failed with error code %x [%s].", result, esp_err_to_name(result));
             goto cleanup_wifi_init;
         }
 
-        result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &event_handler, NULL);
+        result = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &event_handler, nullptr);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Event initialization failed with error code %x [%s].", result, esp_err_to_name(result));
             goto cleanup_event_handler_register;
         }
 
-        result = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL);
+        result = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, nullptr);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Event initialization failed with error code %x [%s].", result, esp_err_to_name(result));

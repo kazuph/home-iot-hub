@@ -39,7 +39,7 @@ namespace hub
 {
     using namespace std::literals;
 
-    constexpr uint16_t  WIFI_CONNECTION_TIMEOUT { 5000U }; // ms
+    constexpr uint16_t  WIFI_CONNECTION_TIMEOUT { 10000U }; // ms
     constexpr uint16_t  BLE_SCAN_TIME           { 20U }; // s
 
     constexpr auto      MQTT_BLE_SCAN_ENABLE_TOPIC  { "/scan/enable"sv };
@@ -50,19 +50,23 @@ namespace hub
 
     constexpr const char* TAG{ "HUB_MAIN" };
 
-    static esp_err_t app_init();
-    static void app_cleanup();
-    static void ble_scan_callback(std::string_view name, const ble::mac& address);
-    static esp_err_t ble_connect(std::string_view id, std::string_view name, const ble::mac& address);
-    static void mqtt_data_callback(std::string_view topic, std::string_view data);
+    static esp_err_t    app_init();
 
-    static std::unique_ptr<mqtt::client> mqtt_client;
+    static void         app_cleanup();
 
-    static std::map<ble::mac, std::string_view> scan_results{};
+    static void         ble_scan_callback(std::string_view name, const ble::mac& address);
+
+    static esp_err_t    ble_connect(std::string_view id, std::string_view name, const ble::mac& address);
+
+    static void         mqtt_data_callback(std::string_view topic, std::string_view data);
+
+    static std::unique_ptr<mqtt::client>                            mqtt_client;
+
+    static std::map<ble::mac, std::string_view>                     scan_results{};
     static std::map<std::string, std::unique_ptr<hub::device_base>> connected_devices{};
-    static std::map<std::string_view, std::string> disconnected_devices{};
+    static std::map<std::string_view, std::string>                  disconnected_devices{};
 
-    dispatch_queue<4096, tskIDLE_PRIORITY> task_queue{};
+    dispatch_queue<4096, tskIDLE_PRIORITY>                          task_queue{};
 
     extern "C" void app_main()
     {
@@ -99,7 +103,7 @@ namespace hub
         wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
         
         mqtt::client_config mqtt_client_config{};
-        mqtt_client_config.uri = CONFIG_MQTT_URI;
+        mqtt_client_config.uri  = CONFIG_MQTT_URI;
         mqtt_client_config.port = CONFIG_MQTT_PORT;
 
         result = nvs_flash_init();
@@ -370,8 +374,8 @@ namespace hub
         }
         else if (topic == MQTT_BLE_CONNECT_TOPIC)
         {
-            auto device_id{ cJSON_GetObjectItemCaseSensitive(json_data.get(), "id") };
-            auto device_addr{ cJSON_GetObjectItemCaseSensitive(json_data.get(), "address") };
+            auto device_id      { cJSON_GetObjectItemCaseSensitive(json_data.get(), "id") };
+            auto device_addr    { cJSON_GetObjectItemCaseSensitive(json_data.get(), "address") };
 
             if (!device_id || (!cJSON_IsString(device_id) && (device_id->valuestring != nullptr)))
             {
@@ -395,8 +399,8 @@ namespace hub
                 }
 
                 {   // Find device in scan_results and get device name
-                    ble::mac addr{ device_addr->valuestring };
-                    auto scan_result_iter{ scan_results.find(addr) };
+                    ble::mac addr           { device_addr->valuestring };
+                    auto scan_result_iter   { scan_results.find(addr) };
 
                     if (scan_result_iter == scan_results.end())
                     {
