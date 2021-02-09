@@ -15,8 +15,8 @@ namespace hub
 
         static constexpr const char* TAG = "device_base";
 
-        using notify_callback_t = std::function<void(std::string_view)>;
-        using disconnect_callback_t = std::function<void(void)>;
+        using notify_callback_t         = std::function<void(std::string_view)>;
+        using disconnect_callback_t     = std::function<void(void)>;
 
     protected:
 
@@ -29,17 +29,17 @@ namespace hub
 
     public:
 
-        device_base() = default;
+        device_base()                               = default;
 
-        device_base(const device_base&) = delete;
+        device_base(const device_base&)             = delete;
 
-        device_base(device_base&&) = default;
+        device_base(device_base&&)                  = default;
 
-        device_base& operator=(const device_base&) = delete;
+        device_base& operator=(const device_base&)  = delete;
 
-        device_base& operator=(device_base&&) = default;
+        device_base& operator=(device_base&&)       = default;
 
-        virtual ~device_base() = default;
+        virtual ~device_base()                      = default;
 
         /* These three virtual methods are to be implemented by the device implementation. */
 

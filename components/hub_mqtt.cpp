@@ -63,6 +63,14 @@ namespace hub::mqtt
         ESP_LOGI(TAG, "Client initialize success.");
     }
 
+    client::client(client&& other) : client_handle{ other.client_handle }, data_callback{ std::move(other.data_callback) }
+    {
+        ESP_LOGD(TAG, "Function: %s. (move constructor)", __func__);
+
+        other.client_handle = nullptr;
+        other.data_callback = nullptr;
+    }
+
     client::~client()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -86,6 +94,16 @@ namespace hub::mqtt
 
         client_handle = nullptr;
         ESP_LOGI(TAG, "Client destroy success.");
+    }
+
+    client& client::operator=(client&& other)
+    {
+        ESP_LOGD(TAG, "Function: %s. (move assignment)", __func__);
+
+        client_handle = other.client_handle;
+        other.client_handle = nullptr;
+        data_callback = std::move(other.data_callback);
+        return *this;
     }
 
     esp_err_t client::start()

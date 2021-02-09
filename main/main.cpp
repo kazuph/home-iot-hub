@@ -81,9 +81,9 @@ namespace hub
         }
         ESP_LOGI(TAG, "Application initialization success.");
 
-        mqtt_client->subscribe(MQTT_BLE_SCAN_ENABLE_TOPIC);
-        mqtt_client->subscribe(MQTT_BLE_CONNECT_TOPIC);
-        mqtt_client->subscribe(MQTT_BLE_DISCONNECT_TOPIC);
+        mqtt_client.subscribe(MQTT_BLE_SCAN_ENABLE_TOPIC);
+        mqtt_client.subscribe(MQTT_BLE_CONNECT_TOPIC);
+        mqtt_client.subscribe(MQTT_BLE_DISCONNECT_TOPIC);
 
         return;
 
@@ -140,14 +140,14 @@ namespace hub
             mqtt_client = mqtt::client(&mqtt_client_config);
         }
 
-        result = mqtt_client->start();
+        result = mqtt_client.start();
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "MQTT client initialization failed.");
             goto cleanup_wifi_connect;
         }
 
-        result = mqtt_client->register_data_callback([](std::string_view topic, std::string_view data) { 
+        result = mqtt_client.register_data_callback([](std::string_view topic, std::string_view data) { 
             mqtt_data_callback(topic, data);
         });
         if (result != ESP_OK)
@@ -245,7 +245,7 @@ namespace hub
                 cJSON_AddItemToArray(json_data.get(), obj);
             }
 
-            if (mqtt_client->publish(MQTT_BLE_SCAN_RESULTS_TOPIC, cJSON_PrintUnformatted(json_data.get()), true) != ESP_OK)
+            if (mqtt_client.publish(MQTT_BLE_SCAN_RESULTS_TOPIC, cJSON_PrintUnformatted(json_data.get()), true) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Client publish failed.");
                 return;
@@ -276,7 +276,7 @@ namespace hub
             return result;
         }
 
-        result = mqtt_client->subscribe(device_mqtt_topic);
+        result = mqtt_client.subscribe(device_mqtt_topic);
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Client subscribe failed.");
@@ -289,7 +289,7 @@ namespace hub
         result = device->register_notify_callback([device_mqtt_topic](std::string_view data) {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            if (mqtt_client->publish(device_mqtt_topic, data) != ESP_OK)
+            if (mqtt_client.publish(device_mqtt_topic, data) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Client publish failed.");
                 return;
@@ -321,7 +321,7 @@ namespace hub
             {
                 std::string_view device_name{ ((*device_iter).second)->get_device_name() };
 
-                mqtt_client->unsubscribe(device_mqtt_topic);
+                mqtt_client.unsubscribe(device_mqtt_topic);
                 disconnected_devices[device_name] = std::move(device_id);
                 connected_devices.erase(device_iter);
 
@@ -453,7 +453,7 @@ namespace hub
                 return;
             }
 
-            mqtt_client->unsubscribe(MQTT_BLE_DEVICE_TOPIC + device_id->valuestring);
+            mqtt_client.unsubscribe(MQTT_BLE_DEVICE_TOPIC + device_id->valuestring);
             connected_devices.erase(device_id->valuestring);
 
             ESP_LOGI(TAG, "Disonnected with %s.", device_id->valuestring);

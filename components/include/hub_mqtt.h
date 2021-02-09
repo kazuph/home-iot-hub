@@ -25,12 +25,12 @@ namespace hub::mqtt
 
     public:
 
-        client() : client_handle{ nullptr }, data_callback{nullptr}
+        client() : client_handle{ nullptr }, data_callback{ nullptr }
         {};
 
         explicit client(const client_config* const config);
 
-        client(client&&) = default;
+        client(client&& other);
 
         client(const client&) = delete;
 
@@ -38,7 +38,7 @@ namespace hub::mqtt
 
         client& operator=(const client&) = delete;
 
-        client& operator=(client&&) = default;
+        client& operator=(client&& other);
 
         esp_err_t start();
 
