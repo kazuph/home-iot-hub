@@ -57,7 +57,7 @@ namespace hub::mqtt
         if (client_handle == nullptr)
         {
             ESP_LOGE(TAG, "MQTT client handle initialization failed.");
-            return;
+            abort();
         }
 
         ESP_LOGI(TAG, "Client initialize success.");
@@ -73,6 +73,7 @@ namespace hub::mqtt
 
         if (client_handle == nullptr)
         {
+            ESP_LOGW(TAG, "Client handle was nullptr.");
             return;
         }
 

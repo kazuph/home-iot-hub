@@ -60,7 +60,7 @@ namespace hub
 
     static void         mqtt_data_callback(std::string_view topic, std::string_view data);
 
-    static std::unique_ptr<mqtt::client>                            mqtt_client;
+    static mqtt::client                                             mqtt_client{};
 
     static std::map<ble::mac, std::string_view>                     scan_results{};
     static std::map<std::string, std::unique_ptr<hub::device_base>> connected_devices{};
@@ -97,15 +97,6 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
 
-        wifi_config_t wifi_config{};
-        std::strcpy(reinterpret_cast<char*>(wifi_config.sta.ssid), CONFIG_WIFI_SSID);
-        std::strcpy(reinterpret_cast<char*>(wifi_config.sta.password), CONFIG_WIFI_PASSWORD);
-        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-        
-        mqtt::client_config mqtt_client_config{};
-        mqtt_client_config.uri  = CONFIG_MQTT_URI;
-        mqtt_client_config.port = CONFIG_MQTT_PORT;
-
         result = nvs_flash_init();
         if (result != ESP_OK)
         {
@@ -120,11 +111,18 @@ namespace hub
             goto cleanup_nvs;
         }
 
-        result = wifi::connect(&wifi_config);
-        if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Wifi initialization failed.");
-            goto cleanup_event_loop;
+            wifi_config_t wifi_config{};
+            std::strcpy(reinterpret_cast<char*>(wifi_config.sta.ssid), CONFIG_WIFI_SSID);
+            std::strcpy(reinterpret_cast<char*>(wifi_config.sta.password), CONFIG_WIFI_PASSWORD);
+            wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+
+            result = wifi::connect(&wifi_config);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Wifi initialization failed.");
+                goto cleanup_event_loop;
+            }
         }
 
         result = wifi::wait_for_connection(WIFI_CONNECTION_TIMEOUT);
@@ -134,7 +132,14 @@ namespace hub
             goto cleanup_wifi_connect;
         }
 
-        mqtt_client = std::make_unique<mqtt::client>(&mqtt_client_config);
+        {
+            mqtt::client_config mqtt_client_config{};
+            mqtt_client_config.uri  = CONFIG_MQTT_URI;
+            mqtt_client_config.port = CONFIG_MQTT_PORT;
+
+            mqtt_client = mqtt::client(&mqtt_client_config);
+        }
+
         result = mqtt_client->start();
         if (result != ESP_OK)
         {

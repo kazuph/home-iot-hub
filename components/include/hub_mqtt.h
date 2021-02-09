@@ -8,14 +8,16 @@
 
 namespace hub::mqtt
 {
-
-    class client;
-
     using client_config     = esp_mqtt_client_config_t;
-    using data_callback_t   = std::function<void(std::string_view, std::string_view)>;
 
     class client
     {
+    public:
+
+        using data_callback_t   = std::function<void(std::string_view, std::string_view)>;
+
+    private:
+
         static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
         esp_mqtt_client_handle_t    client_handle;
@@ -23,8 +25,20 @@ namespace hub::mqtt
 
     public:
 
+        client() : client_handle{ nullptr }, data_callback{nullptr}
+        {};
+
         explicit client(const client_config* const config);
+
+        client(client&&) = default;
+
+        client(const client&) = delete;
+
         ~client();
+
+        client& operator=(const client&) = delete;
+
+        client& operator=(client&&) = default;
 
         esp_err_t start();
 
@@ -38,7 +52,6 @@ namespace hub::mqtt
         
         esp_err_t register_data_callback(data_callback_t callback);
     };
-
 }
 
 #endif
