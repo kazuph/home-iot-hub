@@ -79,7 +79,6 @@ namespace hub::ble
 
     public:
 
-        // Callback functions
         notify_callback_t       notify_callback;
         disconnect_callback_t   disconnect_callback;
 

@@ -15,21 +15,24 @@ namespace hub
 
         static constexpr const char* TAG = "device_base";
 
+        using base = ble::client;
         using notify_callback_t         = std::function<void(std::string_view)>;
         using disconnect_callback_t     = std::function<void(void)>;
 
-    protected:
-
         /*
-            This function is to be called every time the fresh data is received from the device
+            This function object is to be called every time the fresh data is received from the device
             and formatted to the JSON string. This is done by setting ble::client::notify_callback
             to the device specific function that handles data.
         */
-        notify_callback_t notify_callback;
+        notify_callback_t       notify_callback;
 
-    public:
+        /*
+            This function object should be called whenever device disconnects and after device-specific (if any)
+            cleanup/retry actions are finished.
+        */
+        disconnect_callback_t   disconnect_callback;
 
-        device_base()                               = default;
+        device_base();
 
         device_base(const device_base&)             = delete;
 
@@ -47,27 +50,36 @@ namespace hub
             Return device name in a form of std::string_view. Every device implementation has to have field
             of type static constexpr std::string_view containing its name.
         */
-        virtual std::string_view get_device_name() = 0;
+        virtual std::string_view get_device_name() const                                = 0;
 
         /*
             Perform device-specific connection.
         */
-        virtual esp_err_t connect(const ble::mac& address) = 0;
+        virtual esp_err_t connect(const ble::mac& address)                              = 0;
 
         /*
-            Send data to the device in a form of JSON formatted string.
+            Disconnect from the device.
         */
-        virtual esp_err_t update_data(std::string_view data) = 0;
+        virtual esp_err_t disconnect()                                                  = 0;
 
         /*
-            Set notify callback. This is set by the app.
+            Send data to the device in a form of JSON formatted string. Implementation
+            should convert the data into device-specific array of bytes and use ble::client
+            methods to send data to the device.
         */
-        esp_err_t register_notify_callback(notify_callback_t&& notify_callback);
+        virtual esp_err_t send_data(std::string_view data)                              = 0;
+
+    protected:
 
         /*
-            Set disconnect callback. This is set by the app.
+            Data received event handler.
         */
-        esp_err_t register_disconnect_callback(disconnect_callback_t&& disconnect_callback);
+        virtual void data_received(const uint16_t char_handle, std::string_view data)   = 0;
+
+        /*
+            Device disconnected event handler.
+        */
+        virtual void device_disconnected()                                              = 0;
     };
 }
 

@@ -268,6 +268,12 @@ namespace hub
         }
 
         auto device{ device_init(name) };
+        if (device == nullptr)
+        {
+            result = ESP_FAIL;
+            ESP_LOGE(TAG, "Could not connect to %s.", name.data());
+            return result;
+        }
 
         result = device->connect(address);    
         if (result != ESP_OK)
@@ -286,7 +292,7 @@ namespace hub
         /* 
             Publish on device topic when new data arrives
         */
-        result = device->register_notify_callback([device_mqtt_topic](std::string_view data) {
+        device->notify_callback = [device_mqtt_topic](std::string_view data) {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
             if (mqtt_client.publish(device_mqtt_topic, data) != ESP_OK)
@@ -294,20 +300,14 @@ namespace hub
                 ESP_LOGE(TAG, "Client publish failed.");
                 return;
             }
-        });
-
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Notify callback register failed.");
-            return result;
-        }
+        };
 
         /*
             When device disconnects, add its ID and name to disconnected_devices, unsubscribe from its MQTT topic,
             erase it from connected_devices and start BLE scan. When device comes back into range, ble_connect function
             will be called by ble_scan_callback.
         */
-        result = device->register_disconnect_callback([device_id, device_mqtt_topic{ std::move(device_mqtt_topic) }]() {      
+        device->disconnect_callback = [device_id, device_mqtt_topic{ std::move(device_mqtt_topic) }]() {      
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
             auto device_iter{ connected_devices.find(device_id) };
@@ -328,13 +328,7 @@ namespace hub
                 scan_results.clear();
                 ble::start_scanning(BLE_SCAN_TIME);
             }
-        });
-
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Disconnect callback register failed.");
-            return result;
-        }
+        };
 
         device.swap(connected_devices[std::move(device_id)]);
         return result;

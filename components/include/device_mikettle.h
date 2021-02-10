@@ -82,9 +82,11 @@ namespace hub
 
         data_model last_notify;
 
+        volatile bool auth_notify;
+
         esp_err_t authorize(const ble::mac& address);
 
-        void ble_notify_callback(const uint16_t char_handle, std::string_view data);
+        esp_err_t wait_for_authorization();
 
     public:
 
@@ -94,14 +96,20 @@ namespace hub
         MiKettle()  = default;
         ~MiKettle() = default;
 
-        std::string_view get_device_name()              override
+        std::string_view get_device_name() const override
         {
             return device_name;
         }
 
-        esp_err_t connect(const ble::mac& address)      override;
+        esp_err_t connect(const ble::mac& address) override;
 
-        esp_err_t update_data(std::string_view data)    override;
+        esp_err_t disconnect() override;
+
+        esp_err_t send_data(std::string_view data) override;
+
+        void data_received(const uint16_t char_handle, std::string_view data) override;
+
+        void device_disconnected() override;
     };
 }
 

@@ -27,7 +27,7 @@ namespace hub
     esp_err_t MiKettle::connect(const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        esp_err_t result = ESP_OK;
+        esp_err_t result{ ESP_OK };
 
         result = ble::client::connect(address);
         if (result != ESP_OK)
@@ -46,7 +46,13 @@ namespace hub
         return result;
     }
 
-    esp_err_t MiKettle::update_data(std::string_view data)
+    esp_err_t MiKettle::disconnect()
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return ESP_OK;
+    }
+
+    esp_err_t MiKettle::send_data(std::string_view data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -60,12 +66,72 @@ namespace hub
         return ESP_OK;
     }
 
+    void MiKettle::data_received(const uint16_t char_handle, std::string_view data)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        if (char_handle == HANDLE_STATUS)
+        {
+            std::string_view result;
+
+            if (std::equal(last_notify.data_array, last_notify.data_array + sizeof(data_model), data.begin()))
+            {
+                return;
+            }
+
+            std::copy(data.begin(), data.end(), last_notify.data_array);
+
+            {
+                std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
+                    cJSON_CreateObject(),
+                    [](cJSON* ptr) {
+                        cJSON_Delete(ptr);
+                    }
+                };
+
+                cJSON_AddNumberToObject(json_data.get(), "action", last_notify.data_struct.action);
+                cJSON_AddNumberToObject(json_data.get(), "mode", last_notify.data_struct.mode);
+                cJSON_AddNumberToObject(json_data.get(), "temperature_set", last_notify.data_struct.temperature_set);
+                cJSON_AddNumberToObject(json_data.get(), "temperature_current", last_notify.data_struct.temperature_current);
+                cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", last_notify.data_struct.keep_warm_type);
+                cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", last_notify.data_struct.keep_warm_time);
+
+                result = cJSON_PrintUnformatted(json_data.get());
+            }
+
+            if (!notify_callback)
+            {
+                return;
+            }
+
+            // Pass data to app
+            notify_callback(result);
+        }
+        else if (char_handle == HANDLE_AUTH)
+        {
+            auth_notify = true;
+        }
+    }
+
+    void MiKettle::device_disconnected()
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        if (!disconnect_callback)
+        {
+            return;
+        }
+
+        // Let the app handle reconnection
+        disconnect_callback();
+    }
+
     esp_err_t MiKettle::authorize(const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        esp_err_t result            = ESP_OK;
-        volatile bool auth_notify   = false;
+        esp_err_t result{ ESP_OK };
+        auth_notify = false;
 
         result = ble::client::get_service(&uuid_service_kettle);
         if (result != ESP_OK)
@@ -81,18 +147,6 @@ namespace hub
             return result;
         }
 
-        ble::client::notify_callback = 
-            [&auth_notify](const uint16_t char_handle, std::string_view data) {
-                ESP_LOGD(TAG, "Function: %s.", __func__);
-
-                if (char_handle != HANDLE_AUTH)
-                {
-                    return;
-                }
-
-                auth_notify = true;
-            };
-
         result = ble::client::register_for_notify(HANDLE_AUTH);
         if (result != ESP_OK)
         {
@@ -101,7 +155,7 @@ namespace hub
         }
 
         {
-            uint16_t descr_count = 0;
+            uint16_t descr_count{ 0 };
             std::vector<esp_gattc_descr_elem_t> descr{};
 
             result = ble::client::get_descriptors(HANDLE_AUTH, nullptr, &descr_count);
@@ -131,11 +185,11 @@ namespace hub
         }
 
         {
-            std::array<uint8_t, token.size()> ciphered;
+            std::array<uint8_t, token.size()> ciphered{};
 
             {
-                std::array<uint8_t, 6> reversed_mac;
-                std::array<uint8_t, 8> mac_id_mix;
+                std::array<uint8_t, 6> reversed_mac{};
+                std::array<uint8_t, 8> mac_id_mix{};
 
                 std::reverse_copy(address.begin(), address.end(), reversed_mac.begin());
                 mix_a(reversed_mac.data(), PRODUCT_ID, mac_id_mix.data());
@@ -149,15 +203,11 @@ namespace hub
                 return result;
             }
 
-            for (uint8_t i = 0; !auth_notify; i++)
+            result = wait_for_authorization();
+            if (result != ESP_OK)
             {
-                vTaskDelay(50 / portTICK_PERIOD_MS);
-
-                if (i == 60) // Timeout after 3s
-                {
-                    result = ESP_ERR_TIMEOUT;
-                    return result;
-                }
+                ESP_LOGE(TAG, "Wait for authorization failed with error code %x [%s].", result, esp_err_to_name(result));
+                return result;
             }
 
             cipher(token.data(), token.data() + token.size(), key2.data(), ciphered.data());
@@ -198,66 +248,40 @@ namespace hub
             return result;
         }
 
-        ble::client::notify_callback = [this](const uint16_t char_handle, std::string_view data) {
-            ble_notify_callback(char_handle, data);
-        };
-
         return result;
     }
 
-    void MiKettle::ble_notify_callback(const uint16_t char_handle, std::string_view data)
+    esp_err_t MiKettle::wait_for_authorization()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        static constexpr TickType_t TIMEOUT_MS    { 2000 };
+        static constexpr TickType_t SLEEP_MS      { 50 };
 
-        std::string_view result;
-
-        if (std::equal(last_notify.data_array, last_notify.data_array + sizeof(data_model), data.begin()))
+        for (TickType_t i{ 0 }; i < (TIMEOUT_MS / SLEEP_MS); i++)
         {
-            return;
+            vTaskDelay(SLEEP_MS / portTICK_PERIOD_MS);
+
+            if (auth_notify == true)
+            {
+                return ESP_OK;
+            }
         }
 
-        std::copy(data.begin(), data.end(), last_notify.data_array);
-
-        {
-            std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
-                cJSON_CreateObject(),
-                [](cJSON* ptr) {
-                    cJSON_Delete(ptr);
-                }
-            };
-
-            cJSON_AddNumberToObject(json_data.get(), "action", last_notify.data_struct.action);
-            cJSON_AddNumberToObject(json_data.get(), "mode", last_notify.data_struct.mode);
-            cJSON_AddNumberToObject(json_data.get(), "temperature_set", last_notify.data_struct.temperature_set);
-            cJSON_AddNumberToObject(json_data.get(), "temperature_current", last_notify.data_struct.temperature_current);
-            cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", last_notify.data_struct.keep_warm_type);
-            cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", last_notify.data_struct.keep_warm_time);
-
-            result = cJSON_PrintUnformatted(json_data.get());
-        }
-
-        if (!notify_callback)
-        {
-            return;
-        }
-
-        // Pass data to app
-        notify_callback(result);
+        return ESP_ERR_TIMEOUT;
     }
 
     void MiKettle::cipher_init(const uint8_t* const in_first1, const uint8_t* const in_last1, uint8_t* const out_first)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        const uint16_t key_size = std::distance(in_first1, in_last1);
-        uint16_t j = 0;
+        const uint16_t key_size{ static_cast<uint16_t>(std::distance(in_first1, in_last1)) };
+        uint16_t j{ 0 };
 
-        for (uint16_t i = 0; i < PERM_LENGTH; i++)
+        for (uint16_t i{ 0 }; i < PERM_LENGTH; i++)
         {
             out_first[i] = i;
         }
 
-        for (uint16_t i = 0; i < PERM_LENGTH; i++)
+        for (uint16_t i{ 0 }; i < PERM_LENGTH; i++)
         {
             j += out_first[i] + in_first1[i % key_size];
             j &= 0xff;
@@ -269,11 +293,11 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        uint16_t index1 = 0;
-        uint16_t index2 = 0;
-        uint16_t index3 = 0;
+        uint16_t index1{ 0 };
+        uint16_t index2{ 0 };
+        uint16_t index3{ 0 };
 
-        for (uint16_t i = 0; i < TOKEN_LENGTH; i++)
+        for (uint16_t i{ 0 }; i < TOKEN_LENGTH; i++)
         {
             index1++;
             index1 &= 0xff;

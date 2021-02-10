@@ -8,13 +8,13 @@
 
 namespace hub::mqtt
 {
-    using client_config     = esp_mqtt_client_config_t;
+    using client_config = esp_mqtt_client_config_t;
 
     class client
     {
     public:
 
-        using data_callback_t   = std::function<void(std::string_view, std::string_view)>;
+        using data_callback_t = std::function<void(std::string_view, std::string_view)>;
 
     private:
 

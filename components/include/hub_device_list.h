@@ -10,7 +10,6 @@
 #include <algorithm>
 
 #include "hub_ble.h"
-#include "stdbool.h"
 #include "hub_device.h"
 
 namespace hub

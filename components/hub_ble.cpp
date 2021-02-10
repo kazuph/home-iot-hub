@@ -11,6 +11,7 @@
 #include "esp_gatt_common_api.h"
 #include "esp_gap_ble_api.h"
 
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 namespace hub::ble
