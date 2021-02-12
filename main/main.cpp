@@ -155,6 +155,7 @@ namespace hub
         result = mqtt_client.register_data_callback([](std::string_view topic, std::string_view data) { 
             mqtt_data_callback(topic, data);
         });
+
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "MQTT data callback set failed.");
@@ -171,6 +172,7 @@ namespace hub
         result = ble::register_scan_callback([](std::string_view name, const ble::mac& address) {
             ble_scan_callback(name, address);
         });
+
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "BLE scan callback register failed.");
@@ -232,9 +234,14 @@ namespace hub
                 });
             iter != disconnected_devices.end())
         {
-            auto& ptr = (*iter).second;
-            task_queue.push([&ptr]() {
-                ptr->connect(ptr->get_address());
+            auto& [id, ptr] = *iter;
+            task_queue.push([id, &ptr]() {
+                if (ptr->connect(ptr->get_address()) != ESP_OK)
+                {
+                    return;
+                }
+
+                connected_devices[id].swap(disconnected_devices[id]);
             });
         }
 
@@ -303,8 +310,6 @@ namespace hub
             Publish on device topic when new data arrives
         */
         device->notify_callback = [device_mqtt_topic](std::string_view data) {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
             if (mqtt_client.publish(device_mqtt_topic, data) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Client publish failed.");
@@ -313,8 +318,6 @@ namespace hub
         };
 
         device->disconnect_callback = [id]() {      
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
             connected_devices[id].swap(disconnected_devices[id]);
             ble_start_scanning(60 /* seconds */);
         };
@@ -367,9 +370,9 @@ namespace hub
             auto device_id      { cJSON_GetObjectItemCaseSensitive(json_data.get(), "id") };
             auto device_addr    { cJSON_GetObjectItemCaseSensitive(json_data.get(), "address") };
 
-            if (!device_name                                        || 
-                (!cJSON_IsString(device_name)                       && 
-                (device_name->valuestring != nullptr))              || 
+            if (!device_name                            || 
+                (!cJSON_IsString(device_name)           && 
+                (device_name->valuestring != nullptr))  || 
                 !device_factory::supported(device_name->valuestring))
             {
                 ESP_LOGE(TAG, "Bad device name.");
@@ -394,8 +397,6 @@ namespace hub
                     addr{ ble::mac(device_addr->valuestring) },
                     name{ device_factory::view_on_name(device_name->valuestring) }
                 ]() {
-                    ESP_LOGD(TAG, "Function: %s.", __func__);
-
                     if (ble_connect(id, name, addr) != ESP_OK)
                     {
                         ESP_LOGE(TAG, "Failed to connect to %s.", name.data());
@@ -420,6 +421,7 @@ namespace hub
 
             mqtt_client.unsubscribe(MQTT_BLE_DEVICE_TOPIC + device_id->valuestring);
             connected_devices.erase(device_id->valuestring);
+            disconnected_devices.erase(device_id->valuestring);
 
             ESP_LOGI(TAG, "Disonnected with %s.", device_id->valuestring);
         }
