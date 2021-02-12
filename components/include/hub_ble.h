@@ -93,6 +93,8 @@ namespace hub::ble
         client& operator=(client&&)         = default;
 
         virtual ~client();
+        
+        const mac& get_address() const;
 
         esp_err_t connect(const mac& address);
 
@@ -118,6 +120,11 @@ namespace hub::ble
 
         esp_err_t read_descriptor(const uint16_t handle, uint8_t* value, uint16_t* value_length);
     };
+
+    inline const mac& client::get_address() const
+    {
+        return address;
+    }
 }
 
 #endif
