@@ -1,3 +1,5 @@
+#include "hub_const_map.h"
+#include "hub_semaphore_lock.h"
 #include "hub_dispatch_queue.h"
 
 #include "freertos/FreeRTOS.h"
@@ -9,5 +11,5 @@
 
 namespace hub
 {
-    extern dispatch_queue<4096, tskIDLE_PRIORITY> task_queue;
+    extern utils::dispatch_queue<4096, tskIDLE_PRIORITY> task_queue;
 }
