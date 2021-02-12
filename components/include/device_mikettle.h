@@ -12,6 +12,43 @@ namespace hub
 {
     class MiKettle : public device_base
     {
+        enum class action_t : uint8_t
+        {
+            idle            = 0,
+            heating         = 1,
+            cooling         = 2,
+            keeping_warm    = 3
+        };
+
+        enum class mode_t : uint8_t
+        {
+            boil        = 1,
+            keep_warm   = 2,
+            none        = 255
+        };
+
+        enum class keep_warm_type_t : uint8_t
+        {
+            boil_and_cool   = 0,
+            heat_up         = 1
+        };
+
+        union status
+        {
+            struct 
+            {
+                uint8_t     action;
+                uint8_t     mode;
+                uint16_t    unknown;
+                uint8_t     temperature_set;
+                uint8_t     temperature_current;
+                uint8_t     keep_warm_type;
+                uint16_t    keep_warm_time;
+            } data_struct;
+
+            uint8_t data_array[sizeof(data_struct)];
+        };
+
         static constexpr uint8_t KEY_LENGTH     { 4 };
         static constexpr uint8_t TOKEN_LENGTH   { 12 };
         static constexpr uint16_t PERM_LENGTH   { 256 };
@@ -65,22 +102,11 @@ namespace hub
 
         static void mix_b(const uint8_t* in_first, const uint16_t product_id, uint8_t* out_first);
 
-        union data_model
-        {
-            struct 
-            {
-                uint8_t action;
-                uint8_t mode;
-                uint16_t unknown;
-                uint8_t temperature_set;
-                uint8_t temperature_current;
-                uint8_t keep_warm_type;
-                uint16_t keep_warm_time;
-            } data_struct;
-            uint8_t data_array[sizeof(data_struct)];
-        };
-
-        data_model last_notify;
+        status last_notify;
+        uint8_t keep_warm_type;
+        uint8_t keep_warm_temperature;
+        uint8_t keep_warm_time_limit;
+        uint8_t turn_off_after_boil;
 
         volatile bool auth_notify;
 
