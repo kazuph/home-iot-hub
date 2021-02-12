@@ -1,6 +1,8 @@
 #ifndef HUB_DISPATCH_QUEUE_H
 #define HUB_DISPATCH_QUEUE_H
 
+#include "hub_semaphore_lock.h"
+
 #include "esp_log.h"
 #include "esp_err.h"
 
@@ -16,41 +18,8 @@
 #include <exception>
 #include <string>
 
-namespace hub
+namespace hub::utils
 {
-    class semaphore_lock
-    {
-        static constexpr const char* TAG = "semaphore_lock";
-        SemaphoreHandle_t& mutex;
-
-    public:
-
-        explicit semaphore_lock(SemaphoreHandle_t& mutex) : mutex{ mutex } 
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
-            if (xSemaphoreTakeRecursive(mutex, portMAX_DELAY) != pdTRUE)
-            {
-                ESP_LOGE(TAG, "Mutex lock failed.");
-                abort();
-            }
-        }
-
-        ~semaphore_lock() noexcept
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
-            if (xSemaphoreGiveRecursive(mutex) != pdTRUE)
-            {
-                ESP_LOGE(TAG, "Mutex release failed.");
-                abort();
-            }
-        }
-
-        semaphore_lock(const semaphore_lock&) = delete;
-        semaphore_lock& operator=(const semaphore_lock&) = delete;
-    };
-
     template<
         configSTACK_DEPTH_TYPE _Stack_size, 
         UBaseType_t _Priority, 
@@ -60,8 +29,6 @@ namespace hub
     {
         static constexpr const char* TAG = "dispatch_queue";
         static constexpr int QUEUE_EMPTY = BIT0;
-
-        static uint16_t queue_count;
 
         using base = _QueueTy;
 
@@ -125,13 +92,11 @@ namespace hub
                 abort();
             }
 
-            if (xTaskCreate(dispatch_fun, std::string("dispatch_queue_"s + std::to_string(queue_count)).c_str(), _Stack_size, reinterpret_cast<void*>(this), _Priority, &task) != pdPASS)
+            if (xTaskCreate(dispatch_fun, "dispatch_queue_task", _Stack_size, reinterpret_cast<void*>(this), _Priority, &task) != pdPASS)
             {
                 ESP_LOGE(TAG, "Task create failed.");
                 abort();
             }
-
-            queue_count++;
         }
 
         ~dispatch_queue()
@@ -232,13 +197,6 @@ namespace hub
             base::swap(other);
         }
     };
-
-    template<
-        configSTACK_DEPTH_TYPE _Stack_size, 
-        UBaseType_t _Priority, 
-        typename _Ty, 
-        typename _QueueTy>
-    uint16_t dispatch_queue<_Stack_size, _Priority, _Ty, _QueueTy>::queue_count{ 0 };
 }
 
 #endif
