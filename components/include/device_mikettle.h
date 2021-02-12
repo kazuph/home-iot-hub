@@ -93,13 +93,13 @@ namespace hub
         static constexpr const char* TAG                { "MiKettle" };
         static constexpr std::string_view device_name   { TAG };
 
-        MiKettle()  = default;
+        MiKettle()  = delete;
+
+        MiKettle(std::string_view id);
+
         ~MiKettle() = default;
 
-        std::string_view get_device_name() const override
-        {
-            return device_name;
-        }
+        std::string_view get_device_name() const override;
 
         esp_err_t connect(const ble::mac& address) override;
 
@@ -111,6 +111,11 @@ namespace hub
 
         void device_disconnected() override;
     };
+
+    inline std::string_view MiKettle::get_device_name() const
+    {
+        return device_name;
+    }
 }
 
 #endif

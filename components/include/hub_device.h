@@ -3,6 +3,8 @@
 
 #include <functional>
 #include <string_view>
+#include <cstdint>
+#include <array>
 
 #include "esp_err.h"
 #include "hub_ble.h"
@@ -12,8 +14,6 @@ namespace hub
     class device_base : public ble::client
     {
     public:
-
-        static constexpr const char* TAG = "device_base";
 
         using base = ble::client;
         using notify_callback_t         = std::function<void(std::string_view)>;
@@ -32,7 +32,9 @@ namespace hub
         */
         disconnect_callback_t   disconnect_callback;
 
-        device_base();
+        device_base()                               = delete;
+
+        device_base(std::string_view id);
 
         device_base(const device_base&)             = delete;
 
@@ -43,6 +45,8 @@ namespace hub
         device_base& operator=(device_base&&)       = default;
 
         virtual ~device_base()                      = default;
+
+        std::string_view get_id() const;
 
         /* These three virtual methods are to be implemented by the device implementation. */
 
@@ -80,7 +84,20 @@ namespace hub
             Device disconnected event handler.
         */
         virtual void device_disconnected()                                              = 0;
+
+    private:
+
+        static constexpr const char* TAG    { "device_base" };
+
+        static constexpr size_t UUID_LENGTH { 37 };
+
+        std::array<char, UUID_LENGTH> id;
     };
+
+    inline std::string_view device_base::get_id() const
+    {
+        return std::string_view(id.data(), id.size());
+    }
 }
 
 #endif

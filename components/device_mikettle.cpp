@@ -24,6 +24,14 @@ extern "C"
 
 namespace hub
 {
+    MiKettle::MiKettle(std::string_view id) : 
+        device_base{ id },
+        last_notify{},
+        auth_notify{ false }
+    {
+
+    }
+
     esp_err_t MiKettle::connect(const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
