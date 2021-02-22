@@ -1,5 +1,4 @@
 #include "device_mikettle.h"
-#include "hub_utils.h"
 
 #include <string>
 #include <algorithm>
@@ -25,13 +24,13 @@ extern "C"
 namespace hub
 {
     MiKettle::MiKettle(std::string_view id) : 
-        device_base{ id },
-        last_notify{},
-        keep_warm_type{ 0 },
-        keep_warm_temperature{ 0 },
-        keep_warm_time_limit{ 0 },
-        turn_off_after_boil{ 0 },
-        auth_notify{ false }
+        device_base             { id },
+        last_notify             {},
+        keep_warm_type          { 0 },
+        keep_warm_temperature   { 0 },
+        keep_warm_time_limit    { 0 },
+        turn_off_after_boil     { 0 },
+        auth_notify             { false }
     {
 
     }
@@ -86,8 +85,6 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        esp_err_t result = ESP_OK;
-
         std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
             cJSON_ParseWithLength(data.data(), data.length()),
             [](cJSON* ptr) {
@@ -95,9 +92,22 @@ namespace hub
             }
         };
 
+
+        if (json_data == nullptr)
         {
+            auto error_ptr{ cJSON_GetErrorPtr() };
+            if (error_ptr != nullptr)
+            {
+                ESP_LOGE(TAG, "JSON parse error: %s.", error_ptr);
+                return ESP_FAIL;
+            }
+        }
+
+        {
+            esp_err_t result = ESP_OK;
+
             auto obj{ cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_type") };
-            if (cJSON_IsNumber(obj))
+            if (obj && cJSON_IsNumber(obj))
             {
                 keep_warm_type = obj->valueint;
 
@@ -111,7 +121,7 @@ namespace hub
             }
 
             obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_temperature");
-            if (cJSON_IsNumber(obj))
+            if (obj && cJSON_IsNumber(obj))
             {
                 keep_warm_temperature = obj->valueint;
 
@@ -125,7 +135,7 @@ namespace hub
             }
 
             obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_time_limit");
-            if (cJSON_IsNumber(obj))
+            if (obj && cJSON_IsNumber(obj))
             {
                 keep_warm_time_limit = static_cast<uint8_t>(obj->valuedouble) * 2;
 
@@ -138,7 +148,7 @@ namespace hub
             }
 
             obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "turn_off_after_boil");
-            if (cJSON_IsNumber(obj))
+            if (obj && cJSON_IsNumber(obj))
             {
                 turn_off_after_boil = obj->valueint;
 
@@ -151,7 +161,7 @@ namespace hub
             }
         }
 
-        return result;
+        return ESP_OK;
     }
 
     void MiKettle::data_received(const uint16_t char_handle, std::string_view data)
@@ -177,6 +187,7 @@ namespace hub
                     }
                 };
 
+                cJSON_AddStringToObject(json_data.get(), "id", get_id().data());
                 cJSON_AddNumberToObject(json_data.get(), "action", last_notify.data_struct.action);
                 cJSON_AddNumberToObject(json_data.get(), "mode", last_notify.data_struct.mode);
                 cJSON_AddNumberToObject(json_data.get(), "temperature_set", last_notify.data_struct.temperature_set);
