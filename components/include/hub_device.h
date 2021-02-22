@@ -89,7 +89,7 @@ namespace hub
 
         static constexpr const char* TAG    { "device_base" };
 
-        static constexpr size_t UUID_LENGTH { 37 };
+        static constexpr size_t UUID_LENGTH { 36 };
 
         std::array<char, UUID_LENGTH> id;
     };
