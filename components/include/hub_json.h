@@ -30,12 +30,98 @@ namespace hub::json
     template<bool Is_owning>
     class json_impl;
 
-    using json_ref  = json_impl<false>;
-    using json      = json_impl<true>;
+    using json_ref      = json_impl<false>;
+    using json          = json_impl<true>;
 
     class json_array;
     class json_object;
     class json_value;
+
+    namespace traits
+    {
+        template<typename T>
+        inline constexpr bool is_null                       = std::is_same_v<T, null_type>;
+
+        template<typename T>
+        inline constexpr bool is_bool                       = std::is_same_v<T, bool_type>;
+
+        template<typename T>
+        inline constexpr bool is_number                     = !is_bool<T> && (std::is_same_v<T, integer_type> || std::is_same_v<T, float_type>);
+
+        template<typename T>
+        inline constexpr bool is_integer                    = !is_bool<T> && std::is_same_v<T, integer_type>;
+
+        template<typename T>
+        inline constexpr bool is_float                      = !is_bool<T> && std::is_same_v<T, float_type>;
+
+        template<typename T>
+        inline constexpr bool is_string                     = std::is_same_v<T, string_type>;
+
+        template<typename T>
+        inline constexpr bool is_object                     = std::is_same_v<T, json_object>;
+
+        template<typename T>
+        inline constexpr bool is_array                      = std::is_same_v<T, json_array>;
+
+        template<typename From, typename To>
+        inline constexpr bool is_explicitly_convertible     = std::is_constructible_v<To, From> && !std::is_convertible_v<From, To>;
+    }
+
+    template<typename T, typename JsonT>
+    inline std::optional<T> json_cast(JsonT value)
+    {
+        static_assert(traits::is_explicitly_convertible<JsonT, cJSON*>, "Bad JSON type.");
+
+        if constexpr (traits::is_null<T>)
+        {
+            if (!cJSON_IsNull(static_cast<cJSON*>(value)))
+            {
+                return std::nullopt;
+            }
+
+            return nullptr;
+        }
+        else if constexpr (traits::is_bool<T>)
+        {
+            if (!cJSON_IsBool(static_cast<cJSON*>(value)))
+            {
+                return std::nullopt;
+            }
+
+            return (cJSON_IsTrue(static_cast<cJSON*>(value))) ? true : false;
+        }
+        else if constexpr (traits::is_integer<T>)
+        {
+            if (!cJSON_IsNumber(static_cast<cJSON*>(value)))
+            {
+                return std::nullopt;
+            }
+
+            return static_cast<cJSON*>(value)->valueint;
+        }
+        else if constexpr (traits::is_float<T>)
+        {
+            if (!cJSON_IsNumber(static_cast<cJSON*>(value)))
+            {
+                return std::nullopt;
+            }
+
+            return static_cast<cJSON*>(value)->valuedouble;
+        }
+        else if constexpr (traits::is_string<T>)
+        {
+            if (!cJSON_IsString(static_cast<cJSON*>(value)))
+            {
+                return std::nullopt;
+            }
+
+            return static_cast<cJSON*>(value)->valuestring;
+        }
+        else
+        {
+            return std::nullopt;
+        }
+    }
 
     template<bool Is_owning>
     class json_ptr
@@ -122,7 +208,7 @@ namespace hub::json
             return (data != nullptr);
         }
 
-        explicit operator value_type* () const noexcept
+        explicit operator pointer () const noexcept
         {
             return get();
         }
@@ -412,7 +498,7 @@ namespace hub::json
 
         if (!item)
         {
-            throw std::out_of_range("Array index out of range.");
+            throw std::out_of_range("Array subscript out of range.");
         }
 
         return json_array_item(std::move(item), json_ptr<false>(base::get()), index);
