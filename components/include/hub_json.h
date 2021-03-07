@@ -394,15 +394,48 @@ namespace hub::json
         json_impl& operator=(json_impl&& other) = default;
 
         template<typename T>
-        json_impl& operator=(T value)
+        json_impl& operator=(T&& value)
         {
-            *this = std::move(json_impl(value));
+            *this = std::move(json_impl(std::move(value)));
             return *this;
         }
 
         json_object_item operator[](key_type key);
 
         json_array_item operator[](index_type index);
+
+        template<typename T>
+        void push_back(T&& item)
+        {
+            if (!cJSON_IsArray(base::get()))
+            {
+                throw std::logic_error("Not an array.");
+            }
+
+            cJSON_AddItemToArray(base::get(), json_ref(std::move(item)).get());
+        }
+
+        template<typename T>
+        void push_back(std::pair<key_type, T>&& item)
+        {
+            if (!cJSON_IsObject(base::get()))
+            {
+                throw std::logic_error("Not an object.");
+            }
+
+            auto& [key, value] = item;
+            cJSON_AddItemToObject(base::get(), key, json_ref(std::move(value)).get());
+        }
+
+        bool is_array() const noexcept
+        {
+            return (cJSON_IsArray(base::get())) ? true : false;
+        }
+
+        bool is_object() const noexcept
+        {
+            return (cJSON_IsObject(base::get())) ? true : false;
+        }
 
         std::string dump() const noexcept
         {
