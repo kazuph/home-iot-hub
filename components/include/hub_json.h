@@ -1,6 +1,9 @@
-#pragma once
+#ifndef HUB_JSON_H
+#define HUB_JSON_H
+
 #include <utility>
 #include <string>
+#include <cstring>
 #include <memory>
 #include <initializer_list>
 #include <exception>
@@ -68,58 +71,60 @@ namespace hub::json
     }
 
     template<typename T, typename JsonT>
-    inline std::optional<T> json_cast(JsonT value)
+    inline T json_cast(const JsonT& value)
     {
         static_assert(traits::is_explicitly_convertible<JsonT, cJSON*>, "Bad JSON type.");
 
+        const cJSON* value_ptr = static_cast<const cJSON*>(value);
+
         if constexpr (traits::is_null<T>)
         {
-            if (!cJSON_IsNull(static_cast<cJSON*>(value)))
+            if (!cJSON_IsNull(value_ptr))
             {
-                return std::nullopt;
+                throw std::invalid_argument("Value type is not NULL.");
             }
 
             return nullptr;
         }
         else if constexpr (traits::is_bool<T>)
         {
-            if (!cJSON_IsBool(static_cast<cJSON*>(value)))
+            if (!cJSON_IsBool(value_ptr))
             {
-                return std::nullopt;
+                throw std::invalid_argument("Value type is not bool.");
             }
 
-            return (cJSON_IsTrue(static_cast<cJSON*>(value))) ? true : false;
+            return (cJSON_IsTrue(value_ptr)) ? true : false;
         }
         else if constexpr (traits::is_integer<T>)
         {
-            if (!cJSON_IsNumber(static_cast<cJSON*>(value)))
+            if (!cJSON_IsNumber(value_ptr))
             {
-                return std::nullopt;
+                throw std::invalid_argument("Value type is not an integer.");
             }
 
-            return static_cast<cJSON*>(value)->valueint;
+            return value_ptr->valueint;
         }
         else if constexpr (traits::is_float<T>)
         {
-            if (!cJSON_IsNumber(static_cast<cJSON*>(value)))
+            if (!cJSON_IsNumber(value_ptr))
             {
-                return std::nullopt;
+                throw std::invalid_argument("Value type is not float.");
             }
 
-            return static_cast<cJSON*>(value)->valuedouble;
+            return value_ptr->valuedouble;
         }
         else if constexpr (traits::is_string<T>)
         {
-            if (!cJSON_IsString(static_cast<cJSON*>(value)))
+            if (!cJSON_IsString(value_ptr))
             {
-                return std::nullopt;
+                throw std::invalid_argument("Value type is not string.");
             }
 
-            return static_cast<cJSON*>(value)->valuestring;
+            return value_ptr->valuestring;
         }
         else
         {
-            return std::nullopt;
+            throw std::invalid_argument("Bad value type.");
         }
     }
 
@@ -191,6 +196,11 @@ namespace hub::json
             return *this;
         }
 
+        pointer get() noexcept
+        {
+            return data;
+        }
+
         pointer get() const noexcept
         {
             return data;
@@ -206,6 +216,11 @@ namespace hub::json
         explicit operator bool() const noexcept
         {
             return (data != nullptr);
+        }
+
+        explicit operator pointer () noexcept
+        {
+            return get();
         }
 
         explicit operator pointer () const noexcept
@@ -295,9 +310,9 @@ namespace hub::json
         json_object& operator=(json_object&&) = default;
 
         template<typename T>
-        json_object& operator=(T value)
+        json_object& operator=(T&& value)
         {
-            *this = std::move(json_object(value));
+            *this = std::move(json_object(std::forward<T>(value)));
             return *this;
         }
 
@@ -337,9 +352,9 @@ namespace hub::json
         json_array& operator=(json_array&&) = default;
 
         template<typename T>
-        json_array& operator=(T value)
+        json_array& operator=(T&& value)
         {
-            *this = std::move(json_array(value));
+            *this = std::move(json_array(std::forward<T>(value)));
             return *this;
         }
 
@@ -356,9 +371,9 @@ namespace hub::json
         template<bool _Is_owning>
         friend class json_impl;
 
-        static json_impl parse(const char* str) noexcept
+        static json_impl parse(std::string_view str) noexcept
         {
-            return json_impl(cJSON_Parse(str));
+            return json_impl(cJSON_Parse(str.data()));
         }
 
         json_impl() noexcept :
@@ -371,19 +386,19 @@ namespace hub::json
 
         json_impl(json_impl&&) = default;
 
-        json_impl(json_value value) noexcept :
+        json_impl(json_value&& value) noexcept :
             base{ value.get() }
         {
 
         }
 
-        json_impl(json_object object) noexcept :
+        json_impl(json_object&& object) noexcept :
             base{ object.get() }
         {
 
         }
 
-        json_impl(json_array arr) noexcept :
+        json_impl(json_array&& arr) noexcept :
             base{ arr.get() }
         {
 
@@ -396,13 +411,17 @@ namespace hub::json
         template<typename T>
         json_impl& operator=(T&& value)
         {
-            *this = std::move(json_impl(std::move(value)));
+            *this = std::move(json_impl(std::forward<T>(value)));
             return *this;
         }
 
         json_object_item operator[](key_type key);
 
+        json_object_item operator[](key_type key) const;
+
         json_array_item operator[](index_type index);
+
+        json_array_item operator[](index_type index) const;
 
         template<typename T>
         void push_back(T&& item)
@@ -412,7 +431,7 @@ namespace hub::json
                 throw std::logic_error("Not an array.");
             }
 
-            cJSON_AddItemToArray(base::get(), json_ref(std::move(item)).get());
+            cJSON_AddItemToArray(base::get(), json_ref(std::forward<T>(item)).get());
         }
 
         template<typename T>
@@ -424,7 +443,7 @@ namespace hub::json
             }
 
             auto& [key, value] = item;
-            cJSON_AddItemToObject(base::get(), key, json_ref(std::move(value)).get());
+            cJSON_AddItemToObject(base::get(), key, json_ref(std::forward<T>(value)).get());
         }
 
         bool is_array() const noexcept
@@ -437,9 +456,15 @@ namespace hub::json
             return (cJSON_IsObject(base::get())) ? true : false;
         }
 
-        std::string dump() const noexcept
+        std::string dump() const
         {
             std::unique_ptr<char, decltype(&cJSON_free)> buff{ cJSON_PrintUnformatted(base::get()), &cJSON_free };
+
+            if (!buff)
+            {
+                return std::string{};
+            }
+
             return std::string(buff.get());
         }
 
@@ -466,9 +491,9 @@ namespace hub::json
         json_object_item(json_ptr<false> item, json_ptr<false> parent) noexcept;
 
         template<typename T>
-        json_object_item& operator=(T value)
+        json_object_item& operator=(T&& value)
         {
-            cJSON_ReplaceItemInObjectCaseSensitive(parent.get(), base::get()->string_t, json_ref{ std::move(value) }.get());
+            cJSON_ReplaceItemInObjectCaseSensitive(parent.get(), base::get()->string, json_ref{ std::forward<T>(value) }.get());
             return *this;
         }
 
@@ -488,9 +513,9 @@ namespace hub::json
         json_array_item(json_ptr<false> item, json_ptr<false> parent, index_type index) noexcept;
 
         template<typename T>
-        json_array_item& operator=(T value)
+        json_array_item& operator=(T&& value)
         {
-            cJSON_ReplaceItemInArray(parent.get(), index, json_ref{ std::move(value) }.get());
+            cJSON_ReplaceItemInArray(parent.get(), index, json_ref{ std::forward<T>(value) }.get());
             return *this;
         }
 
@@ -502,6 +527,25 @@ namespace hub::json
 
     template<bool Is_owning>
     json_object_item json_impl<Is_owning>::operator[](key_type key)
+    {
+        if (!cJSON_IsObject(base::get()))
+        {
+            throw std::logic_error("Not an object.");
+        }
+
+        json_ptr<false> item{ cJSON_GetObjectItemCaseSensitive(base::get(), key) };
+
+        if (!item)
+        {
+            item = json_ptr<false>(cJSON_CreateNull());
+            cJSON_AddItemToObject(base::get(), key, item.get());
+        }
+
+        return json_object_item(std::move(item), json_ptr<false>(base::get()));
+    }
+
+    template<bool Is_owning>
+    json_object_item json_impl<Is_owning>::operator[](key_type key) const
     {
         if (!cJSON_IsObject(base::get()))
         {
@@ -536,4 +580,24 @@ namespace hub::json
 
         return json_array_item(std::move(item), json_ptr<false>(base::get()), index);
     }
+
+    template<bool Is_owning>
+    json_array_item json_impl<Is_owning>::operator[](index_type index) const
+    {
+        if (!cJSON_IsArray(base::get()))
+        {
+            throw std::logic_error("Not an array.");
+        }
+
+        json_ptr<false> item{ cJSON_GetArrayItem(base::get(), index) };
+
+        if (!item)
+        {
+            throw std::out_of_range("Array subscript out of range.");
+        }
+
+        return json_array_item(std::move(item), json_ptr<false>(base::get()), index);
+    }
 }
+
+#endif
