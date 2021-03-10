@@ -1,5 +1,7 @@
 #include "device_mikettle.h"
 
+#include <stdexcept>
+#include <stdint.h>
 #include <string>
 #include <algorithm>
 #include <memory>
@@ -16,10 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-extern "C"
-{
-    #include "cJSON.h"
-}
+#include "hub_json.h"
 
 namespace hub
 {
@@ -82,84 +81,29 @@ namespace hub
     }
 
     esp_err_t MiKettle::send_data(std::string_view data)
-    {
+    {    
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
-            cJSON_ParseWithLength(data.data(), data.length()),
-            [](cJSON* ptr) {
-                cJSON_Delete(ptr);
-            }
-        };
+        json::json json_data{ json::json::parse(data) };
 
-
-        if (json_data == nullptr)
+        try 
         {
-            auto error_ptr{ cJSON_GetErrorPtr() };
-            if (error_ptr != nullptr)
-            {
-                ESP_LOGE(TAG, "JSON parse error: %s.", error_ptr);
-                return ESP_FAIL;
-            }
+            keep_warm_type          = json::json_cast<json::integer_type>(json_data["keep_warm_type"]);
+            keep_warm_temperature   = json::json_cast<json::integer_type>(json_data["keep_warm_temperature"]);
+            keep_warm_time_limit    = json::json_cast<json::integer_type>(json_data["keep_warm_time_limit"]) * 2;
+        } 
+        catch (const std::invalid_argument& err) 
+        {
+            ESP_LOGW(TAG, "%s", err.what());
         }
 
         {
-            esp_err_t result = ESP_OK;
-
-            auto obj{ cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_type") };
-            if (obj && cJSON_IsNumber(obj))
-            {
-                keep_warm_type = obj->valueint;
-
-                uint8_t setup_characteristic[2] = { keep_warm_type, keep_warm_temperature };
-                result = ble::client::write_characteristic(HANDLE_KEEP_WARM, setup_characteristic, sizeof(setup_characteristic));
-                if (result != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Write setup characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                    return result;
-                }
-            }
-
-            obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_temperature");
-            if (obj && cJSON_IsNumber(obj))
-            {
-                keep_warm_temperature = obj->valueint;
-
-                uint8_t setup_characteristic[2] = { keep_warm_type, keep_warm_temperature };
-                result = ble::client::write_characteristic(HANDLE_KEEP_WARM, setup_characteristic, sizeof(setup_characteristic));
-                if (result != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Write setup characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                    return result;
-                }
-            }
-
-            obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "keep_warm_time_limit");
-            if (obj && cJSON_IsNumber(obj))
-            {
-                keep_warm_time_limit = static_cast<uint8_t>(obj->valuedouble) * 2;
-
-                result = ble::client::write_characteristic(HANDLE_TIME_LIMIT, &keep_warm_temperature, sizeof(keep_warm_temperature));
-                if (result != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Write time limit characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                    return result;
-                }
-            }
-
-            obj = cJSON_GetObjectItemCaseSensitive(json_data.get(), "turn_off_after_boil");
-            if (obj && cJSON_IsNumber(obj))
-            {
-                turn_off_after_boil = obj->valueint;
-
-                result = ble::client::write_characteristic(HANDLE_BOIL_MODE, &turn_off_after_boil, sizeof(turn_off_after_boil));
-                if (result != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Write time limit characteristic failed with error code %x [%s].", result, esp_err_to_name(result));
-                    return result;
-                }
-            }
+            uint8_t setup_characteristic[2] = { keep_warm_type, keep_warm_temperature };
+            ble::client::write_characteristic(HANDLE_KEEP_WARM, setup_characteristic, sizeof(setup_characteristic));
         }
+
+        ble::client::write_characteristic(HANDLE_TIME_LIMIT, &keep_warm_temperature, sizeof(keep_warm_temperature));
+        ble::client::write_characteristic(HANDLE_BOIL_MODE, &turn_off_after_boil, sizeof(turn_off_after_boil));
 
         return ESP_OK;
     }
@@ -170,8 +114,6 @@ namespace hub
 
         if (char_handle == HANDLE_STATUS)
         {
-            std::string_view result;
-
             if (std::equal(last_notify.data_array, last_notify.data_array + sizeof(status), data.begin()))
             {
                 return;
@@ -180,33 +122,25 @@ namespace hub
             std::copy(data.begin(), data.end(), last_notify.data_array);
 
             {
-                std::unique_ptr<cJSON, std::function<void(cJSON*)>> json_data{ 
-                    cJSON_CreateObject(),
-                    [](cJSON* ptr) {
-                        cJSON_Delete(ptr);
-                    }
-                };
+                json::json json_data{ {
+                    { "id",                     get_id().data() },
+                    { "action",                 last_notify.data_struct.action },
+                    { "mode",                   last_notify.data_struct.mode },
+                    { "temperature_set",        last_notify.data_struct.temperature_set },
+                    { "temperature_current",    last_notify.data_struct.temperature_current },
+                    { "keep_warm_type",         last_notify.data_struct.keep_warm_type },
+                    { "keep_warm_time",         last_notify.data_struct.keep_warm_time },
+                    { "keep_warm_time_limit",   static_cast<float>(keep_warm_time_limit) / 2.0f },
+                    { "turn_off_after_boil",    static_cast<bool>(turn_off_after_boil) }
+                } };
 
-                cJSON_AddStringToObject(json_data.get(), "id", get_id().data());
-                cJSON_AddNumberToObject(json_data.get(), "action", last_notify.data_struct.action);
-                cJSON_AddNumberToObject(json_data.get(), "mode", last_notify.data_struct.mode);
-                cJSON_AddNumberToObject(json_data.get(), "temperature_set", last_notify.data_struct.temperature_set);
-                cJSON_AddNumberToObject(json_data.get(), "temperature_current", last_notify.data_struct.temperature_current);
-                cJSON_AddNumberToObject(json_data.get(), "keep_warm_type", last_notify.data_struct.keep_warm_type);
-                cJSON_AddNumberToObject(json_data.get(), "keep_warm_time", last_notify.data_struct.keep_warm_time);
-                cJSON_AddNumberToObject(json_data.get(), "keep_warm_time_limit", (static_cast<float>(keep_warm_time_limit) / 2.0f));
-                cJSON_AddBoolToObject(json_data.get(), "turn_off_after_boil", (static_cast<bool>(turn_off_after_boil)) ? cJSON_True : cJSON_False);
+                if (!notify_callback)
+                {
+                    return;
+                }
 
-                result = cJSON_PrintUnformatted(json_data.get());
+                notify_callback(json_data.dump());
             }
-
-            if (!notify_callback)
-            {
-                return;
-            }
-
-            // Pass data to app
-            notify_callback(result);
         }
         else if (char_handle == HANDLE_AUTH)
         {
