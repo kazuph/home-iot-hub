@@ -1,15 +1,15 @@
 #ifndef HUB_MQTT_H
 #define HUB_MQTT_H
 
-#include "esp_err.h"
 #include "mqtt_client.h"
+
+#include "esp_err.h"
+
 #include <functional>
 #include <string_view>
 
 namespace hub::mqtt
 {
-    using client_config = esp_mqtt_client_config_t;
-
     class client
     {
     public:
@@ -28,7 +28,7 @@ namespace hub::mqtt
         client() : client_handle{ nullptr }, data_callback{ nullptr }
         {};
 
-        explicit client(const client_config* const config);
+        explicit client(std::string_view uri, uint16_t port);
 
         client(client&& other);
 

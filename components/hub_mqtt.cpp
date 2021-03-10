@@ -5,6 +5,9 @@
 
 #include "esp_log.h"
 
+#include <exception>
+#include <stdexcept>
+
 namespace hub::mqtt
 {
     constexpr const char *TAG = "HUB MQTT";
@@ -47,20 +50,23 @@ namespace hub::mqtt
         }
     }
 
-    client::client(const client_config* const config)
+    client::client(std::string_view uri, uint16_t port) :
+        client_handle{ nullptr },
+        data_callback{ nullptr }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        data_callback = nullptr;
-        client_handle = esp_mqtt_client_init(config);
-
-        if (client_handle == nullptr)
         {
-            ESP_LOGE(TAG, "MQTT client handle initialization failed.");
-            abort();
+            esp_mqtt_client_config_t mqtt_client_config{};
+            mqtt_client_config.uri  = uri.data();
+            mqtt_client_config.port = port;
+
+            client_handle = esp_mqtt_client_init(&mqtt_client_config);
         }
 
-        ESP_LOGI(TAG, "Client initialize success.");
+        if (!client_handle)
+        {
+            ESP_LOGE(TAG, "MQTT client handle initialization failed.");
+            throw std::runtime_error("MQTT client handle initialization failed.");
+        }
     }
 
     client::client(client&& other) : client_handle{ other.client_handle }, data_callback{ std::move(other.data_callback) }
