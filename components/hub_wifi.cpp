@@ -1,6 +1,6 @@
 #include "hub_wifi.h"
 
-#include <string.h>
+#include <cstring>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -93,7 +93,7 @@ namespace hub::wifi
         }
     }
 
-    esp_err_t connect(const wifi_config_t* config)
+    esp_err_t connect(std::string_view ssid, std::string_view password)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -146,11 +146,18 @@ namespace hub::wifi
             goto cleanup_event_handler_register;
         }
 
-        result = esp_wifi_set_config(static_cast<wifi_interface_t>(ESP_IF_WIFI_STA), const_cast<wifi_config_t*>(config));
-        if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Setting WiFi configuration failed with error code %x [%s].", result, esp_err_to_name(result));
-            goto cleanup_event_handler_register;
+            wifi_config_t config{};
+
+            std::strcpy(reinterpret_cast<char*>(config.sta.ssid), ssid.data());
+            std::strcpy(reinterpret_cast<char*>(config.sta.password), password.data());
+
+            result = esp_wifi_set_config(static_cast<wifi_interface_t>(ESP_IF_WIFI_STA), &config);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Setting WiFi configuration failed with error code %x [%s].", result, esp_err_to_name(result));
+                goto cleanup_event_handler_register;
+            }
         }
 
         result = esp_wifi_start();
