@@ -9,4 +9,5 @@ idf_component_register(
     "hub_device_factory.cpp"
     "hub_mutex.cpp"
     "hub_json.cpp"
-    INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt" "json", "vfs")
+    "hub_device_manager.cpp"
+    INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt" "json" "vfs")
