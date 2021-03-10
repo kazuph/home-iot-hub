@@ -59,7 +59,7 @@ namespace hub::ble
 
         static std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> clients;
 
-        static client* const get_client(const esp_gatt_if_t gattc_if);
+        static client* get_client(const esp_gatt_if_t gattc_if);
 
         static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
