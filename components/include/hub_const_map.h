@@ -89,7 +89,7 @@ namespace hub::utils
         using key_type                  = Key;
         using mapped_type               = T;
         using key_compare               = Compare;
-        using value_type                = std::pair<key_type, mapped_type>;
+        using value_type                = std::pair<const key_type, mapped_type>;
         using size_type                 = std::size_t;
         using difference_type           = std::ptrdiff_t;
         using pointer                   = value_type*;
@@ -113,7 +113,7 @@ namespace hub::utils
             return _data;
         }
 
-        [[nodiscard]] constexpr const_pointer data() const noexcept
+        [[nodiscard]] constexpr pointer data() const noexcept
         {
             return _data;
         }
