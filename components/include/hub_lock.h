@@ -17,10 +17,7 @@ namespace hub::utils
     };
 
     template<typename _Mutex, lock_context _Context>
-    class lock_impl;
-
-    template<typename _Mutex>
-    class lock_impl<_Mutex, lock_context::non_isr>
+    class lock_impl
     {
     public:
 
@@ -29,13 +26,29 @@ namespace hub::utils
         explicit lock_impl(mutex_type& mutex) : mtx{ mutex } 
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
-            mtx.lock();
+
+            if constexpr (_Context == lock_context::non_isr)
+            {
+                mtx.lock();
+            }
+            else
+            {
+                mtx.lock_from_isr();
+            }
         }
 
         ~lock_impl()
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
-            mtx.unlock();
+
+            if constexpr (_Context == lock_context::non_isr)
+            {
+                mtx.unlock();
+            }
+            else
+            {
+                mtx.unlock_from_isr();
+            }
         }
 
         lock_impl(const lock_impl&)             = delete;
@@ -47,38 +60,6 @@ namespace hub::utils
 
         static constexpr const char* TAG{ "lock" };
         mutex_type& mtx;
-
-    };
-
-    template<typename _Mutex>
-    class lock_impl<_Mutex, lock_context::isr>
-    {
-    public:
-
-        using mutex_type = _Mutex;
-
-        explicit lock_impl(mutex_type& mutex) : mtx{ mutex } 
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            mtx.lock_from_isr();
-        }
-
-        ~lock_impl()
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            mtx.unlock_from_isr();
-        }
-
-        lock_impl(const lock_impl&)             = delete;
-        lock_impl(lock_impl&&)                  = default;
-        lock_impl& operator=(const lock_impl&)  = delete;
-        lock_impl& operator=(lock_impl&&)       = default;
-
-    private:
-
-        static constexpr const char* TAG{ "isr lock" };
-        mutex_type& mtx;
-
     };
 
     template<typename _Mutex>
