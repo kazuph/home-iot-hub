@@ -122,7 +122,7 @@ namespace hub
             std::copy(data.begin(), data.end(), last_notify.data_array);
 
             {
-                utils::json json_data = utils::json::json_object({ {
+                utils::json json_data = { {
                     { { "id",                     get_id()                                        } },
                     { { "action",                 last_notify.data_struct.action                  } },
                     { { "mode",                   last_notify.data_struct.mode                    } },
@@ -132,7 +132,7 @@ namespace hub
                     { { "keep_warm_time",         last_notify.data_struct.keep_warm_time          } },
                     { { "keep_warm_time_limit",   static_cast<float>(keep_warm_time_limit) / 2.0f } },
                     { { "turn_off_after_boil",    static_cast<bool>(turn_off_after_boil)          } }
-                } });
+                } };
 
                 if (!notify_callback)
                 {
