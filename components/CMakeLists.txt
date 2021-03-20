@@ -10,4 +10,6 @@ idf_component_register(
     "hub_mutex.cpp"
     "hub_json.cpp"
     "hub_device_manager.cpp"
-    INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt" "json" "vfs")
+    "hub_filesystem.cpp"
+    INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt" "json" "vfs" "spiffs")
+    spiffs_create_partition_image("storage" "../partition" FLASH_IN_PROJECT)
