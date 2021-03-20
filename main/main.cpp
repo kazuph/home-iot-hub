@@ -1,5 +1,6 @@
 #include "hub_wifi.h"
 #include "hub_ble.h"
+#include "hub_filesystem.h"
 #include "hub_device_manager.h"
 
 #include <cstring>
@@ -43,6 +44,13 @@ namespace hub
         }
 
         ESP_LOGI(TAG, "Application initialization success.");
+
+        manager.load_connected_devices();
+
+        if (manager.mqtt_start(CONFIG_MQTT_URI, CONFIG_MQTT_PORT) != ESP_OK)
+        {
+            goto restart;
+        }
 
         return;
 
@@ -92,10 +100,10 @@ namespace hub
             goto cleanup_wifi_connect;
         }
 
-        result = manager.mqtt_start(CONFIG_MQTT_URI, CONFIG_MQTT_PORT);
+        result = filesystem::init();
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "BLE initialization failed.");
+            ESP_LOGE(TAG, "Filesystem initialization failed.");
             goto cleanup_ble;
         }
 
@@ -117,7 +125,7 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        manager.mqtt_stop();
+        filesystem::deinit();
         ble::deinit();
         wifi::disconnect();
         esp_event_loop_delete_default();
