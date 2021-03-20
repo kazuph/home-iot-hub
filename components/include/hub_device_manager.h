@@ -41,9 +41,26 @@ namespace hub
 
         device_manager& operator=(const device_manager&)    = delete;
 
+        /*  Start MQTT client. */
         esp_err_t mqtt_start(std::string_view mqtt_uri, const uint16_t mqtt_port);
 
+        /*  Stop MQTT client. */
         esp_err_t mqtt_stop();
+
+        /*  Start BLE scan for the given time. If no argument is given, the scan time is BLE_DEFAULT_SCAN_TIME. */
+        void ble_scan_start(uint16_t ble_scan_time = BLE_DEFAULT_SCAN_TIME);
+
+        /*  Stop BLE scan. */
+        void ble_scan_stop();
+
+        /*  Dumps devices stored in connected_devices and disconnected_devices maps in a form of a JSON file.
+            The dumped file is used on application startup to perform device reconnection. */
+        void dump_connected_devices();
+
+        /*  Loads devices that were connected (and those disconnected) during the previous application run.
+            Devices are loaded from the JSON file dumped by the dump_connected_devices method and stored in
+            disconnected_devices map to ensure their reconnection whenever they are discovered by the BLE scan. */
+        void load_connected_devices();
 
         ~device_manager();
 
@@ -61,21 +78,6 @@ namespace hub
         std::map<std::string_view, std::unique_ptr<hub::device_base>>   disconnected_devices;   /*  Map holding devices that are currently disconnected. Reconnection trial is issued
                                                                                                     every time the device is found during BLE scan. */
 
-        /*  Dumps devices stored in connected_devices and disconnected_devices maps in a form of a JSON file.
-            The dumped file is used on application startup to perform device reconnection. */
-        void dump_connected_devices();
-
-        /*  Loads devices that were connected (and those disconnected) during the previous application run.
-            Devices are loaded from the JSON file dumped by the dump_connected_devices method and stored in
-            disconnected_devices map to ensure their reconnection whenever they are discovered by the BLE scan. */
-        void load_connected_devices();
-
-        /*  Start BLE scan for the given time. If no argument is given, the scan time is BLE_DEFAULT_SCAN_TIME. */
-        void ble_scan_start(uint16_t ble_scan_time = BLE_DEFAULT_SCAN_TIME);
-
-        /*  Stop BLE scan. */
-        void ble_scan_stop();
-
         /*  Callback method called whenever new scan results are available. */
         void ble_scan_callback(std::string_view name, const ble::mac& address);
 
@@ -92,16 +94,16 @@ namespace hub
         void mqtt_data_callback(std::string_view topic, std::string_view data);
 
         /*  Callback called by the mqtt_data_event_callback if the topic is MQTT_BLE_SCAN_ENABLE_TOPIC. */
-        void mqtt_scan_enable_topic_callback(const json::json& data);
+        void mqtt_scan_enable_topic_callback(const utils::json& data);
 
         /*  Callback called by the mqtt_data_event_callback if the topic is MQTT_BLE_CONNECT_TOPIC. */
-        void mqtt_connect_topic_callback(const json::json& data);
+        void mqtt_connect_topic_callback(const utils::json& data);
 
         /*  Callback called by the mqtt_data_event_callback if the topic is MQTT_BLE_DISCONNECT_TOPIC. */
-        void mqtt_disconnect_topic_callback(const json::json& data);
+        void mqtt_disconnect_topic_callback(const utils::json& data);
 
         /*  Callback called by the mqtt_data_event_callback if the topic is MQTT_BLE_DEVICE_WRITE_TOPIC. */
-        void mqtt_device_write_topic_callback(const json::json& data);
+        void mqtt_device_write_topic_callback(const utils::json& data);
     };
 }
 
