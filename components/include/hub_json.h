@@ -3,481 +3,219 @@
 
 #include <utility>
 #include <string>
-#include <cstring>
 #include <memory>
+#include <algorithm>
 #include <initializer_list>
+#include <string_view>
 #include <exception>
 #include <stdexcept>
 #include <type_traits>
+#include <iostream>
 
 extern "C"
 {
     #include "cJSON.h"
 }
 
-namespace hub::json
+namespace hub::utils
 {
-    // Basic types
-    using null_type     = std::nullptr_t;
-    using bool_type     = bool;
-    using integer_type  = int;
-    using float_type    = double;
-    using string_type   = const char*;
-
-    using key_type      = const char*;
-    using index_type    = std::size_t;
-
+    class json_base;
+    class json;
+    class json_ref;
     class json_object_item;
     class json_array_item;
 
-    template<bool Is_owning>
-    class json_impl;
-
-    using json_ref      = json_impl<false>;
-    using json          = json_impl<true>;
-
-    class json_array;
-    class json_object;
-    class json_value;
-
-    namespace traits
-    {
-        template<typename T>
-        inline constexpr bool is_null                       = std::is_same_v<T, null_type>;
-
-        template<typename T>
-        inline constexpr bool is_bool                       = std::is_same_v<T, bool_type>;
-
-        template<typename T>
-        inline constexpr bool is_number                     = !is_bool<T> && (std::is_same_v<T, integer_type> || std::is_same_v<T, float_type>);
-
-        template<typename T>
-        inline constexpr bool is_integer                    = !is_bool<T> && std::is_same_v<T, integer_type>;
-
-        template<typename T>
-        inline constexpr bool is_float                      = !is_bool<T> && std::is_same_v<T, float_type>;
-
-        template<typename T>
-        inline constexpr bool is_string                     = std::is_same_v<T, string_type>;
-
-        template<typename T>
-        inline constexpr bool is_object                     = std::is_same_v<T, json_object>;
-
-        template<typename T>
-        inline constexpr bool is_array                      = std::is_same_v<T, json_array>;
-
-        template<typename From, typename To>
-        inline constexpr bool is_explicitly_convertible     = std::is_constructible_v<To, From> && !std::is_convertible_v<From, To>;
-    }
-
-    template<typename T, typename JsonT>
-    inline T json_cast(const JsonT& value)
-    {
-        static_assert(traits::is_explicitly_convertible<JsonT, cJSON*>, "Bad JSON type.");
-
-        const cJSON* value_ptr = static_cast<const cJSON*>(value);
-
-        if constexpr (traits::is_null<T>)
-        {
-            if (!cJSON_IsNull(value_ptr))
-            {
-                throw std::invalid_argument("Value type is not NULL.");
-            }
-
-            return nullptr;
-        }
-        else if constexpr (traits::is_bool<T>)
-        {
-            if (!cJSON_IsBool(value_ptr))
-            {
-                throw std::invalid_argument("Value type is not bool.");
-            }
-
-            return (cJSON_IsTrue(value_ptr)) ? true : false;
-        }
-        else if constexpr (traits::is_integer<T>)
-        {
-            if (!cJSON_IsNumber(value_ptr))
-            {
-                throw std::invalid_argument("Value type is not an integer.");
-            }
-
-            return value_ptr->valueint;
-        }
-        else if constexpr (traits::is_float<T>)
-        {
-            if (!cJSON_IsNumber(value_ptr))
-            {
-                throw std::invalid_argument("Value type is not float.");
-            }
-
-            return value_ptr->valuedouble;
-        }
-        else if constexpr (traits::is_string<T>)
-        {
-            if (!cJSON_IsString(value_ptr))
-            {
-                throw std::invalid_argument("Value type is not string.");
-            }
-
-            return value_ptr->valuestring;
-        }
-        else
-        {
-            throw std::invalid_argument("Bad value type.");
-        }
-    }
-
-    template<bool Is_owning>
-    class json_ptr
+    class json_base
     {
     public:
 
-        using value_type    = cJSON;
-        using pointer       = value_type*;
+        json_base() noexcept;
 
-        json_ptr() noexcept :
-            data{ nullptr }
+        json_base(cJSON* json_ptr) noexcept;
+
+        json_base(const json_base&) = delete;
+
+        json_base(json_base&& other) noexcept;
+
+        json_base& operator=(const json_base&) = delete;
+
+        json_base& operator=(json_base&& other);
+
+        cJSON* get() const noexcept
         {
-
+            return json_ptr;
         }
 
-        json_ptr(const json_ptr&) = delete;
-
-        json_ptr(json_ptr&& other) noexcept :
-            data{ nullptr }
+        inline cJSON* release() const noexcept
         {
-            *this = std::move(other);
-        }
-
-        explicit json_ptr(std::nullptr_t) noexcept :
-            data{ nullptr }
-        {
-
-        }
-
-        explicit json_ptr(pointer data) noexcept
-            : data{ data }
-        {
-
-        }
-
-        ~json_ptr()
-        {
-            if constexpr (Is_owning)
-            {
-                cJSON_Delete(data);
-            }
-
-            data = nullptr;
-        }
-
-        json_ptr& operator=(const json_ptr&) = delete;
-
-        json_ptr& operator=(json_ptr&& other) noexcept
-        {
-            if (this == &other)
-            {
-                return *this;
-            }
-
-            if constexpr (Is_owning)
-            {
-                if (data != nullptr)
-                {
-                    cJSON_Delete(data);
-                    data = nullptr;
-                }
-            }
-
-            data = other.data;
-            other.data = nullptr;
-
-            return *this;
-        }
-
-        pointer get() noexcept
-        {
-            return data;
-        }
-
-        pointer get() const noexcept
-        {
-            return data;
-        }
-
-        pointer release() noexcept
-        {
-            pointer tmp = data;
-            data = nullptr;
+            cJSON* tmp = json_ptr;
+            json_ptr = nullptr;
             return tmp;
         }
 
-        explicit operator bool() const noexcept
-        {
-            return (data != nullptr);
-        }
-
-        explicit operator pointer () noexcept
-        {
-            return get();
-        }
-
-        explicit operator pointer () const noexcept
-        {
-            return get();
-        }
-
-        value_type operator*() noexcept
-        {
-            return *data;
-        }
-
-        value_type operator*() const noexcept
-        {
-            return *data;
-        }
-
-        pointer operator->() noexcept
-        {
-            return data;
-        }
-
-        pointer operator->() const noexcept
-        {
-            return data;
-        }
+        ~json_base();
 
     private:
 
-        pointer data;
+        mutable cJSON* json_ptr;
     };
 
-    class json_value final : public json_ptr<false>
+    class json : public json_base
     {
     public:
 
-        using base = json_ptr<false>;
+        using base = json_base;
 
-        json_value(null_type) noexcept;
+        // Basic types
+        using null_type     = std::nullptr_t;
+        using bool_type     = bool;
+        using integer_type  = int;
+        using float_type    = double;
+        using size_type     = integer_type;
+        using index_type    = size_type;
 
-        json_value(bool_type value) noexcept;
+        using json_initializer_list = std::initializer_list<json>;
 
-        json_value(integer_type value) noexcept;
+        static json json_object(json_initializer_list init = {});
 
-        json_value(float_type value) noexcept;
+        static json json_array(json_initializer_list init = {});
 
-        json_value(string_type value) noexcept;
-
-        json_value(const json_value&) = delete;
-
-        json_value(json_value&& other) = default;
-
-        json_value& operator=(const json_value&) = delete;
-
-        json_value& operator=(json_value&& other) = default;
-
-        template<typename T>
-        json_value& operator=(T value)
+        static json parse(std::string_view data)
         {
-            *this = std::move(json_value(value));
-            return *this;
+            return json(cJSON_ParseWithLength(data.data(), static_cast<size_t>(data.length())));
         }
 
-        ~json_value() = default;
-    };
+        json() = default;
 
-    class json_object final : public json_ptr<false>
-    {
-    public:
+        json(const json&) = delete;
 
-        using base = json_ptr<false>;
+        json(json&&) = default;
 
-        json_object() noexcept;
+        explicit json(cJSON* json_ptr) noexcept;
 
-        json_object(std::initializer_list<std::pair<key_type, json_value>> object) noexcept;
+        json(null_type) noexcept;
 
-        json_object(std::initializer_list<std::pair<key_type, json_array>> object) noexcept;
+        json(bool_type value) noexcept;
 
-        json_object(std::initializer_list<std::pair<key_type, json_object>> object) noexcept;
+        json(integer_type value) noexcept;
 
-        json_object(const json_object&) = delete;
+        json(float_type value) noexcept;
 
-        json_object(json_object&&) = default;
+        json(const char* value) noexcept;
 
-        json_object& operator=(const json_object&) = delete;
+        json(const std::string& value) noexcept;
 
-        json_object& operator=(json_object&&) = default;
+        json(std::string_view value) noexcept;
 
-        template<typename T>
-        json_object& operator=(T&& value)
-        {
-            *this = std::move(json_object(std::forward<T>(value)));
-            return *this;
-        }
+        json(json_initializer_list init = {});
 
-        ~json_object() = default;
-    };
+        json& operator=(const json&) = delete;
 
-    class json_array final : public json_ptr<false>
-    {
-    public:
+        json& operator=(json&&) = default;
 
-        using base = json_ptr<false>;
+        json_object_item operator[](const char* key) const;
 
-        json_array() noexcept;
+        json_object_item operator[](const std::string& key) const;
 
-        template<typename T>
-        json_array(std::initializer_list<T> init) noexcept :
-            base{ cJSON_CreateArray() }
-        {
-            static_assert(std::is_constructible_v<json_value, T>, "Bad JSON value type.");
-
-            for (const auto& elem : init)
-            {
-                cJSON_AddItemToArray(get(), json_value(elem).get());
-            }
-        }
-
-        json_array(std::initializer_list<json_object> init) noexcept;
-
-        json_array(std::initializer_list<json_array> init) noexcept;
-
-        json_array(const json_array&) = delete;
-
-        json_array(json_array&&) = default;
-
-        json_array& operator=(const json_array&) = delete;
-
-        json_array& operator=(json_array&&) = default;
-
-        template<typename T>
-        json_array& operator=(T&& value)
-        {
-            *this = std::move(json_array(std::forward<T>(value)));
-            return *this;
-        }
-
-        ~json_array() = default;
-    };
-
-    template<bool Is_owning>
-    class json_impl : public json_ptr<Is_owning>
-    {
-    public:
-
-        using base = json_ptr<Is_owning>;
-
-        template<bool _Is_owning>
-        friend class json_impl;
-
-        static json_impl parse(std::string_view str) noexcept
-        {
-            return json_impl(cJSON_Parse(str.data()));
-        }
-
-        json_impl() noexcept :
-            base{ nullptr }
-        {
-
-        }
-
-        json_impl(const json_impl&) = delete;
-
-        json_impl(json_impl&&) = default;
-
-        json_impl(json_value&& value) noexcept :
-            base{ value.get() }
-        {
-
-        }
-
-        json_impl(json_object&& object) noexcept :
-            base{ object.get() }
-        {
-
-        }
-
-        json_impl(json_array&& arr) noexcept :
-            base{ arr.get() }
-        {
-
-        }
-
-        json_impl& operator=(const json_impl&) = delete;
-
-        json_impl& operator=(json_impl&& other) = default;
-
-        template<typename T>
-        json_impl& operator=(T&& value)
-        {
-            *this = std::move(json_impl(std::forward<T>(value)));
-            return *this;
-        }
-
-        json_object_item operator[](key_type key);
-
-        json_object_item operator[](key_type key) const;
-
-        json_array_item operator[](index_type index);
+        json_object_item operator[](std::string_view key) const;
 
         json_array_item operator[](index_type index) const;
 
-        template<typename T>
-        void push_back(T&& item)
-        {
-            if (!cJSON_IsArray(base::get()))
-            {
-                throw std::logic_error("Not an array.");
-            }
+        json_object_item at(const char* key) const;
 
-            cJSON_AddItemToArray(base::get(), json_ref(std::forward<T>(item)).get());
+        json_object_item at(const std::string& key) const;
+
+        json_object_item at(std::string_view key) const;
+
+        json_array_item at(index_type index) const;
+
+        void push_back(json&& item);
+
+        void insert(std::pair<const char*, json>&& item);
+
+        void insert(std::pair<const std::string, json>&& item);
+
+        void insert(std::pair<std::string_view, json>&& item);
+
+        size_type size() const
+        {
+            return cJSON_GetArraySize(get());
         }
 
-        template<typename T>
-        void push_back(std::pair<key_type, T>&& item)
+        bool is_valid() const
         {
-            if (!cJSON_IsObject(base::get()))
-            {
-                throw std::logic_error("Not an object.");
-            }
+            return (!cJSON_IsInvalid(get()));
+        }
 
-            auto& [key, value] = item;
-            cJSON_AddItemToObject(base::get(), key, json_ref(std::forward<T>(value)).get());
+        bool is_null() const noexcept
+        {
+            return (cJSON_IsNull(get()));
+        }
+
+        bool is_number() const noexcept
+        {
+            return (cJSON_IsNumber(get()));
+        }
+
+        bool is_bool() const noexcept
+        {
+            return (cJSON_IsBool(get()));
+        }
+
+        bool is_string() const noexcept
+        {
+            return (cJSON_IsString(get()));
         }
 
         bool is_array() const noexcept
         {
-            return (cJSON_IsArray(base::get())) ? true : false;
+            return (cJSON_IsArray(get()));
         }
 
         bool is_object() const noexcept
         {
-            return (cJSON_IsObject(base::get())) ? true : false;
+            return (cJSON_IsObject(get()));
         }
 
-        std::string dump() const
+        bool is_object_item() const
         {
-            std::unique_ptr<char, decltype(&cJSON_free)> buff{ cJSON_PrintUnformatted(base::get()), &cJSON_free };
-
-            if (!buff)
-            {
-                return std::string{};
-            }
-
-            return std::string(buff.get());
+            return (get()->string);
         }
 
-        ~json_impl() = default;
-
-    protected:
-
-        json_impl(cJSON* ptr) noexcept :
-            base{ ptr }
+        bool is_array_item() const
         {
-
+            return (!is_object_item() && (get()->prev || get()->next));
         }
 
+        bool is_basic_type() const
+        {
+            return (!is_object_item() && !is_array_item());
+        }
+
+        std::string dump(bool formatted = false) const;
+
+        ~json() = default;
+    };
+
+    class json_ref : public json
+    {
+    public:
+
+        using base = json;
+
+        json_ref() noexcept;
+
+        json_ref(cJSON* json_ptr) noexcept;
+
+        json_ref(const json_ref&) = delete;
+
+        json_ref(json_ref&&) = default;
+
+        json_ref& operator=(const json_ref&) = delete;
+
+        json_ref& operator=(json_ref&&) = default;
+
+        ~json_ref();
     };
 
     class json_object_item final : public json_ref
@@ -488,115 +226,137 @@ namespace hub::json
 
         json_object_item() = delete;
 
-        json_object_item(json_ptr<false> item, json_ptr<false> parent) noexcept;
+        json_object_item(cJSON* item, cJSON* parent);
 
-        template<typename T>
-        json_object_item& operator=(T&& value)
-        {
-            cJSON_ReplaceItemInObjectCaseSensitive(parent.get(), base::get()->string, json_ref{ std::forward<T>(value) }.get());
-            return *this;
-        }
+        json_object_item(const json_object_item&) = delete;
+
+        json_object_item(json_object_item&&) = default;
+
+        json_object_item& operator=(const json_object_item&) = delete;
+
+        json_object_item& operator=(json_object_item&&) = default;
+
+        json_object_item& operator=(json&& other);
 
     private:
 
-        json_ptr<false> parent;
+        cJSON* parent;
     };
 
     class json_array_item final : public json_ref
     {
     public:
 
+        using index_type = json::index_type;
+
         using base = json_ref;
 
         json_array_item() = delete;
 
-        json_array_item(json_ptr<false> item, json_ptr<false> parent, index_type index) noexcept;
+        json_array_item(cJSON* item, cJSON* parent, index_type index);
 
-        template<typename T>
-        json_array_item& operator=(T&& value)
-        {
-            cJSON_ReplaceItemInArray(parent.get(), index, json_ref{ std::forward<T>(value) }.get());
-            return *this;
-        }
+        json_array_item(const json_array_item&) = delete;
+
+        json_array_item(json_array_item&&) = default;
+
+        json_array_item& operator=(const json_array_item&) = delete;
+
+        json_array_item& operator=(json_array_item&&) = default;
+
+        json_array_item& operator=(json&& other);
 
     private:
 
-        json_ptr<false> parent;
+        cJSON* parent;
         index_type index;
     };
 
-    template<bool Is_owning>
-    json_object_item json_impl<Is_owning>::operator[](key_type key)
+    namespace traits
     {
-        if (!cJSON_IsObject(base::get()))
-        {
-            throw std::logic_error("Not an object.");
-        }
+        template<typename T>
+        inline constexpr bool is_null                       = std::is_same_v<T, json::null_type>;
 
-        json_ptr<false> item{ cJSON_GetObjectItemCaseSensitive(base::get(), key) };
+        template<typename T>
+        inline constexpr bool is_bool                       = std::is_same_v<T, json::bool_type>;
 
-        if (!item)
-        {
-            item = json_ptr<false>(cJSON_CreateNull());
-            cJSON_AddItemToObject(base::get(), key, item.get());
-        }
+        template<typename T>
+        inline constexpr bool is_number                     = !is_bool<T> && std::is_integral_v<T>;
 
-        return json_object_item(std::move(item), json_ptr<false>(base::get()));
+        template<typename T>
+        inline constexpr bool is_integer                    = !is_bool<T> && std::is_same_v<T, json::integer_type>;
+
+        template<typename T>
+        inline constexpr bool is_float                      = std::is_floating_point_v<T>;
+
+        template<typename T>
+        inline constexpr bool is_string                     = std::is_convertible_v<T, std::string_view>;
     }
 
-    template<bool Is_owning>
-    json_object_item json_impl<Is_owning>::operator[](key_type key) const
+    /*
+    *   Cast json object to one of the basic types.
+    *   Returns value of the provided type.
+    *   Throws std::invalid_argument on error.
+    * 
+    *   Note:
+    *   Currently does not support casting to objects and arrays.
+    */
+    template<typename T>
+    inline T json_cast(const json& value)
     {
-        if (!cJSON_IsObject(base::get()))
+        if constexpr (traits::is_null<T>)
         {
-            throw std::logic_error("Not an object.");
+            if (!value.is_null())
+            {
+                throw std::invalid_argument("Value type is not NULL.");
+            }
+
+            return nullptr;
         }
-
-        json_ptr<false> item{ cJSON_GetObjectItemCaseSensitive(base::get(), key) };
-
-        if (!item)
+        else if constexpr (traits::is_bool<T>)
         {
-            item = json_ptr<false>(cJSON_CreateNull());
-            cJSON_AddItemToObject(base::get(), key, item.get());
-        }
+            if (!value.is_bool())
+            {
+                throw std::invalid_argument("Value type is not bool.");
+            }
 
-        return json_object_item(std::move(item), json_ptr<false>(base::get()));
+            return static_cast<bool>(cJSON_IsTrue(value.get()));
+        }
+        else if constexpr (traits::is_integer<T>)
+        {
+            if (!value.is_number())
+            {
+                throw std::invalid_argument("Value type is not an integer.");
+            }
+
+            return static_cast<T>(value.get()->valueint);
+        }
+        else if constexpr (traits::is_float<T>)
+        {
+            if (!value.is_number())
+            {
+                throw std::invalid_argument("Value type is not float.");
+            }
+
+            return static_cast<T>(value.get()->valuedouble);
+        }
+        else if constexpr (traits::is_string<T>)
+        {
+            if (!value.is_string())
+            {
+                throw std::invalid_argument("Value type is not string.");
+            }
+
+            return T(value.get()->valuestring);
+        }
+        else
+        {
+            throw std::invalid_argument("Bad value type.");
+        }
     }
 
-    template<bool Is_owning>
-    json_array_item json_impl<Is_owning>::operator[](index_type index)
+    inline std::ostream& operator<<(std::ostream& os, const json& js)
     {
-        if (!cJSON_IsArray(base::get()))
-        {
-            throw std::logic_error("Not an array.");
-        }
-
-        json_ptr<false> item{ cJSON_GetArrayItem(base::get(), index) };
-
-        if (!item)
-        {
-            throw std::out_of_range("Array subscript out of range.");
-        }
-
-        return json_array_item(std::move(item), json_ptr<false>(base::get()), index);
-    }
-
-    template<bool Is_owning>
-    json_array_item json_impl<Is_owning>::operator[](index_type index) const
-    {
-        if (!cJSON_IsArray(base::get()))
-        {
-            throw std::logic_error("Not an array.");
-        }
-
-        json_ptr<false> item{ cJSON_GetArrayItem(base::get(), index) };
-
-        if (!item)
-        {
-            throw std::out_of_range("Array subscript out of range.");
-        }
-
-        return json_array_item(std::move(item), json_ptr<false>(base::get()), index);
+        return os << js.dump(true);
     }
 }
 
