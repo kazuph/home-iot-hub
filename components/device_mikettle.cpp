@@ -84,13 +84,13 @@ namespace hub
     {    
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        json::json json_data{ json::json::parse(data) };
+        utils::json json_data{ utils::json::parse(data) };
 
         try 
         {
-            keep_warm_type          = json::json_cast<json::integer_type>(json_data["keep_warm_type"]);
-            keep_warm_temperature   = json::json_cast<json::integer_type>(json_data["keep_warm_temperature"]);
-            keep_warm_time_limit    = json::json_cast<json::integer_type>(json_data["keep_warm_time_limit"]) * 2;
+            keep_warm_type          = utils::json_cast<int>(json_data["keep_warm_type"]);
+            keep_warm_temperature   = utils::json_cast<int>(json_data["keep_warm_temperature"]);
+            keep_warm_time_limit    = utils::json_cast<int>(json_data["keep_warm_time_limit"]) * 2;
         } 
         catch (const std::invalid_argument& err) 
         {
@@ -122,17 +122,17 @@ namespace hub
             std::copy(data.begin(), data.end(), last_notify.data_array);
 
             {
-                json::json json_data{ {
-                    { "id",                     get_id().data() },
-                    { "action",                 last_notify.data_struct.action },
-                    { "mode",                   last_notify.data_struct.mode },
-                    { "temperature_set",        last_notify.data_struct.temperature_set },
-                    { "temperature_current",    last_notify.data_struct.temperature_current },
-                    { "keep_warm_type",         last_notify.data_struct.keep_warm_type },
-                    { "keep_warm_time",         last_notify.data_struct.keep_warm_time },
-                    { "keep_warm_time_limit",   static_cast<float>(keep_warm_time_limit) / 2.0f },
-                    { "turn_off_after_boil",    static_cast<bool>(turn_off_after_boil) }
-                } };
+                utils::json json_data = utils::json::json_object({ {
+                    { { "id",                     get_id()                                        } },
+                    { { "action",                 last_notify.data_struct.action                  } },
+                    { { "mode",                   last_notify.data_struct.mode                    } },
+                    { { "temperature_set",        last_notify.data_struct.temperature_set         } },
+                    { { "temperature_current",    last_notify.data_struct.temperature_current     } },
+                    { { "keep_warm_type",         last_notify.data_struct.keep_warm_type          } },
+                    { { "keep_warm_time",         last_notify.data_struct.keep_warm_time          } },
+                    { { "keep_warm_time_limit",   static_cast<float>(keep_warm_time_limit) / 2.0f } },
+                    { { "turn_off_after_boil",    static_cast<bool>(turn_off_after_boil)          } }
+                } });
 
                 if (!notify_callback)
                 {
