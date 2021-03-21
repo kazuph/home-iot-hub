@@ -43,7 +43,12 @@ namespace hub::utils
 
             auto task_code = [](void* param) {
                 auto& [fun, args] = *(reinterpret_cast<param_t*>(param));
-                std::apply(fun, args);
+
+                if (fun)
+                {
+                    std::apply(fun, args);
+                }
+                
                 vTaskDelete(nullptr);
             };
 
