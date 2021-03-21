@@ -58,7 +58,7 @@ namespace hub::utils
 
     private:
 
-        static constexpr const char* TAG{ "lock" };
+        static constexpr const char* TAG{ "LOCK" };
         mutex_type& mtx;
     };
 
