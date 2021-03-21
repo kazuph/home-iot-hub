@@ -74,11 +74,7 @@ namespace hub::utils
 
         task& operator=(task&& other);
 
-        bool joinable() const
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            return task_started;
-        }
+        bool joinable() const;
 
         void join();
 
