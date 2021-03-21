@@ -42,8 +42,14 @@ namespace hub::utils
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
             auto task_code = [](void* param) {
+                ESP_LOGD(TAG, "Function: task_code (lambda).");
                 auto& [fun, args] = *(reinterpret_cast<param_t*>(param));
-                std::apply(fun, args);
+
+                if (fun)
+                {
+                    std::apply(fun, args);
+                }
+
                 vTaskDelete(nullptr);
             };
 
@@ -52,16 +58,18 @@ namespace hub::utils
                 ESP_LOGE(TAG, "Could not create task.");
                 abort();
             }
+
+            ESP_LOGI(TAG, "Task created successfully.");
         }
 
         ~task() = default;
 
     private:
 
-        static constexpr const char* TAG{ "task_templ" };
+        static constexpr const char* TAG{ "task" };
 
-        mutable TaskHandle_t    _task;
-        mutable param_ptr_t     _param_ptr;
+        TaskHandle_t    _task;
+        param_ptr_t     _param_ptr;
     };
 
     template<typename _FunTy, typename... _Args>
