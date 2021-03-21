@@ -33,6 +33,18 @@ namespace hub
         using function_type         = std::function<void(EventArgsT)>;
         using function_list_type    = std::list<function_type>;
 
+        event_handler()                                 = default;
+
+        event_handler(const event_handler&)             = delete;
+
+        event_handler(event_handler&&)                  = default;
+
+        event_handler& operator=(const event_handler&)  = delete;
+
+        event_handler& operator=(event_handler&&)       = default;
+
+        ~event_handler()                                = default;
+
         void invoke(EventArgsT args)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
