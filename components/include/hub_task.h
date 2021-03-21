@@ -9,71 +9,89 @@
 #include <functional>
 #include <tuple>
 #include <memory>
+#include <exception>
+#include <stdexcept>
+
+#include "hub_mutex.h"
+#include "hub_lock.h"
 
 namespace hub::utils
 {
-    template<typename _FunTy, typename... _Args>
     class task
     {
-        using param_t           = std::pair<_FunTy, std::tuple<_Args...>>;
-        using param_ptr_t       = std::unique_ptr<param_t>;
-
     public:
 
-        task() noexcept :
-            _task       { nullptr }, 
-            _param_ptr  { nullptr }
+        task() noexcept;
+
+        task(const task&) = delete;
+
+        task(task&& other) noexcept;
+
+        template<typename FunTy, typename... Args>
+        task(configSTACK_DEPTH_TYPE stack_size, UBaseType_t priority, FunTy&& fun, Args&&... args) : 
+            task_handle     { nullptr },
+            mtx             { },
+            task_started    { false }
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
-        }
 
-        task(const task&)               = delete;
-
-        task& operator=(const task&)    = delete;
-
-        task(task&&)                    = default;
-
-        task& operator=(task&&)         = default;
-
-        task(configSTACK_DEPTH_TYPE stack_size, UBaseType_t priority, _FunTy&& fun, _Args&&... args) noexcept : 
-            _task       { nullptr },
-            _param_ptr  { std::make_unique<param_t>(std::make_pair(std::forward<_FunTy>(fun), std::make_tuple(std::forward<_Args>(args)...))) }
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
+            struct param_t
+            {
+                FunTy                   fun;
+                std::tuple<Args...>     args;
+                recursive_mutex&        mtx;
+                volatile bool&          task_started;
+            };
 
             auto task_code = [](void* param) {
-                auto& [fun, args] = *(reinterpret_cast<param_t*>(param));
+                ESP_LOGD(TAG, "Function: task_code (lambda).");
+                param_t* _param = reinterpret_cast<param_t*>(param);
 
-                if (fun)
                 {
-                    std::apply(fun, args);
+                    lock<recursive_mutex> mtx_lock{ _param->mtx };
+                    _param->task_started = true;
+                    std::apply(_param->fun, _param->args);
                 }
-                
+
+                delete _param;
                 vTaskDelete(nullptr);
             };
 
-            if (xTaskCreate(task_code, "task", stack_size, reinterpret_cast<void*>(_param_ptr.get()), priority, &_task) != pdPASS)
+            std::unique_ptr<param_t> param_ptr{ new param_t{ std::forward<FunTy>(fun), std::make_tuple(std::forward<Args>(args)...), mtx, task_started } };
+
+            if (xTaskCreate(task_code, "task", stack_size, reinterpret_cast<void*>(param_ptr.get()), priority, &task_handle) != pdPASS)
             {
-                ESP_LOGE(TAG, "Could not create task.");
-                abort();
+                ESP_LOGE(TAG, "Task creation failed.");
+                throw std::runtime_error("Task creation failed.");
             }
+
+            param_ptr.release();
+
+            ESP_LOGI(TAG, "Task created successfully.");
         }
+
+        task& operator=(const task&) = delete;
+
+        task& operator=(task&& other);
+
+        bool joinable() const
+        {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
+            return task_started;
+        }
+
+        void join();
 
         ~task() = default;
 
     private:
 
-        static constexpr const char* TAG{ "task_templ" };
+        static constexpr const char* TAG{ "TASK" };
 
-        mutable TaskHandle_t    _task;
-        mutable param_ptr_t     _param_ptr;
+        mutable TaskHandle_t    task_handle;
+        mutable recursive_mutex mtx;
+        mutable volatile bool   task_started;
     };
-
-    template<typename _FunTy, typename... _Args>
-    task<_FunTy, _Args...> make_task(configSTACK_DEPTH_TYPE stack_size, UBaseType_t priority, _FunTy&& fun, _Args&&... args)
-    {
-        return task<_FunTy, _Args...>(stack_size, priority, std::forward<_FunTy>(fun), std::forward<_Args>(args)...);
-    }
 }
 
 #endif
