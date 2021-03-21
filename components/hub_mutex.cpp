@@ -4,7 +4,7 @@
 
 namespace hub::utils
 {
-    static constexpr const char* TAG{ "mutex" };
+    static constexpr const char* TAG{ "MUTEX" };
 
     mutex_base::mutex_base(const SemaphoreHandle_t handle) noexcept : mutex_handle{ handle }
     {
