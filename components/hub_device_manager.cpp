@@ -53,15 +53,9 @@ namespace hub
         mqtt_client.subscribe(MQTT_BLE_DISCONNECT_TOPIC);
         mqtt_client.subscribe(MQTT_BLE_DEVICE_WRITE_TOPIC);
 
-        result = mqtt_client.register_data_callback([this](std::string_view topic, std::string_view data) {
-            mqtt_data_callback(topic, data);
-        });
-
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "MQTT client register data callback failed.");
-            return result;
-        }
+        mqtt_client.data_event_handler += [this](mqtt::data_event_args args) {
+            mqtt_data_callback(args.topic, args.data);
+        };
 
         return result;
     }

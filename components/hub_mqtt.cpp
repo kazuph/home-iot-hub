@@ -10,7 +10,7 @@
 
 namespace hub::mqtt
 {
-    constexpr const char *TAG = "HUB MQTT";
+    static constexpr const char *TAG{ "HUB MQTT" };
 
     void client::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) 
     {
@@ -30,13 +30,12 @@ namespace hub::mqtt
                 break;
             }
 
-            if (mqtt_client->data_callback == nullptr)
+            if (!mqtt_client->data_event_handler)
             {
-                ESP_LOGE(TAG, "Client data callback not valid.");
                 break;
             }
 
-            mqtt_client->data_callback(std::string_view(event->topic, event->topic_len), std::string_view(event->data, event->data_len));              
+            mqtt_client->data_event_handler.invoke(data_event_args{ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });       
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGW(TAG, "MQTT_EVENT_ERROR");
@@ -50,9 +49,16 @@ namespace hub::mqtt
         }
     }
 
+    client::client() :
+        data_event_handler  {  },
+        client_handle{ nullptr }
+    {
+
+    }
+
     client::client(std::string_view uri, uint16_t port) :
-        client_handle{ nullptr },
-        data_callback{ nullptr }
+        data_event_handler  {  },
+        client_handle{ nullptr }
     {
         {
             esp_mqtt_client_config_t mqtt_client_config{};
@@ -69,12 +75,13 @@ namespace hub::mqtt
         }
     }
 
-    client::client(client&& other) : client_handle{ other.client_handle }, data_callback{ std::move(other.data_callback) }
+    client::client(client&& other) :
+        data_event_handler  {  },
+        client_handle       { nullptr }
     {
         ESP_LOGD(TAG, "Function: %s. (move constructor)", __func__);
 
-        other.client_handle = nullptr;
-        other.data_callback = nullptr;
+        *this = std::move(other);
     }
 
     client::~client()
@@ -82,8 +89,6 @@ namespace hub::mqtt
         ESP_LOGD(TAG, "Function: %s.", __func__);
         
         esp_err_t result = ESP_OK;
-
-        data_callback = nullptr;
 
         if (client_handle == nullptr)
         {
@@ -106,9 +111,15 @@ namespace hub::mqtt
     {
         ESP_LOGD(TAG, "Function: %s. (move assignment)", __func__);
 
-        client_handle = other.client_handle;
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        data_event_handler  = std::move(other.data_event_handler);
+        client_handle       = other.client_handle;
         other.client_handle = nullptr;
-        data_callback = std::move(other.data_callback);
+
         return *this;
     }
 
@@ -198,16 +209,6 @@ namespace hub::mqtt
         }
 
         ESP_LOGI(TAG, "Client unsubscribed from topic: %s.", topic.data());
-        return ESP_OK;
-    }
-
-    esp_err_t client::register_data_callback(data_callback_t callback)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        data_callback = callback;
-
-        ESP_LOGI(TAG, "Client callback set.");
         return ESP_OK;
     }
 }
