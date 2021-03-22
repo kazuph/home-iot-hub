@@ -12,6 +12,8 @@ namespace hub::mqtt
 {
     static constexpr const char *TAG{ "HUB MQTT" };
 
+    data_event_handler_t client::data_event_handler{};
+
     void client::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) 
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -30,12 +32,18 @@ namespace hub::mqtt
                 break;
             }
 
-            if (!mqtt_client->data_event_handler)
+            if (!data_event_handler)
             {
                 break;
             }
 
-            mqtt_client->data_event_handler.invoke(data_event_args{ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });       
+            data_event_handler.invoke(
+                mqtt_client, 
+                { 
+                    std::string(event->topic, event->topic_len), 
+                    std::string(event->data, event->data_len) 
+                }
+            );       
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGW(TAG, "MQTT_EVENT_ERROR");
@@ -50,14 +58,12 @@ namespace hub::mqtt
     }
 
     client::client() :
-        data_event_handler  {  },
         client_handle{ nullptr }
     {
 
     }
 
     client::client(std::string_view uri, uint16_t port) :
-        data_event_handler  {  },
         client_handle{ nullptr }
     {
         {
@@ -76,7 +82,6 @@ namespace hub::mqtt
     }
 
     client::client(client&& other) :
-        data_event_handler  {  },
         client_handle       { nullptr }
     {
         ESP_LOGD(TAG, "Function: %s. (move constructor)", __func__);
@@ -116,7 +121,6 @@ namespace hub::mqtt
             return *this;
         }
 
-        data_event_handler  = std::move(other.data_event_handler);
         client_handle       = other.client_handle;
         other.client_handle = nullptr;
 
@@ -141,6 +145,7 @@ namespace hub::mqtt
             static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA | MQTT_EVENT_ERROR | MQTT_EVENT_DISCONNECTED), 
             &mqtt_event_handler,
             this);
+            
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "Event registration failed with error code %x [%s].", result, esp_err_to_name(result));
@@ -167,10 +172,8 @@ namespace hub::mqtt
     esp_err_t client::publish(std::string_view topic, std::string_view data, bool retain)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        int message_id = esp_mqtt_client_publish(client_handle, topic.data(), data.data(), data.length(), 1, retain);
         
-        if (message_id == -1)
+        if (esp_mqtt_client_publish(client_handle, topic.data(), data.data(), data.length(), 1, retain) == -1)
         {
             ESP_LOGE(TAG, "Client publish failed.");
             return ESP_FAIL;
@@ -184,9 +187,7 @@ namespace hub::mqtt
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        int message_id = esp_mqtt_client_subscribe(client_handle, topic.data(), 0);
-
-        if (message_id == -1)
+        if (esp_mqtt_client_subscribe(client_handle, topic.data(), 0) == -1)
         {
             ESP_LOGE(TAG, "Client subscribe failed.");
             return ESP_FAIL;
@@ -200,9 +201,7 @@ namespace hub::mqtt
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        int message_id = esp_mqtt_client_unsubscribe(client_handle, topic.data());
-
-        if (message_id == -1)
+        if (esp_mqtt_client_unsubscribe(client_handle, topic.data()) == -1)
         {
             ESP_LOGE(TAG, "Client unsubscribe failed.");
             return ESP_FAIL;

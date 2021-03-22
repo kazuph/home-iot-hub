@@ -19,13 +19,15 @@ namespace hub::mqtt
         std::string data;
     };
 
-    using data_event_handler_t = event_handler<data_event_args>;
+    class client;
+
+    using data_event_handler_t = event_handler<client, data_event_args>;
 
     class client
     {
     public:
 
-        data_event_handler_t data_event_handler;
+        static data_event_handler_t data_event_handler;
 
         client();
 
