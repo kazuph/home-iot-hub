@@ -1,6 +1,7 @@
 #ifndef HUB_TASK_H
 #define HUB_TASK_H
 
+#define configUSE_TIME_SLICING 1
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
