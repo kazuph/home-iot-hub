@@ -1,4 +1,9 @@
 #include "hub_dispatch_queue.h"
+#include "hub_timing.h"
+
+#include <exception>
+#include <stdexcept>
+#include <cstring>
 
 namespace hub::utils
 {
@@ -43,12 +48,15 @@ namespace hub::utils
     dispatch_queue::~dispatch_queue()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using namespace timing::literals;
+
         lock<recursive_mutex> _lock{ _mutex };
         _exit = true;
 
         while (!_task.joinable()) 
         {
-            vTaskDelay(1 / portTICK_PERIOD_MS);
+            timing::sleep_for(20_ms);
         }
 
         _task.join();
@@ -115,6 +123,8 @@ namespace hub::utils
     void dispatch_queue::task_code() noexcept
     {
         ESP_LOGD(TAG, "Function: main task (lambda).");
+
+        using namespace timing::literals;
         
         while (!_exit)
         {
@@ -122,9 +132,12 @@ namespace hub::utils
             {
                 front()();
                 pop();
+
+                timing::sleep_for(20_ms);
             }
             else
             {
+                ESP_LOGD(TAG, "Sleep.");
                 xEventGroupWaitBits(_event_group, QUEUE_EMPTY, pdTRUE, pdFALSE, portMAX_DELAY);
             }
         }

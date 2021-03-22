@@ -13,8 +13,6 @@
 #include <functional>
 #include <queue>
 #include <tuple>
-#include <exception>
-#include <stdexcept>
 #include <utility>
 
 namespace hub::utils
