@@ -25,12 +25,12 @@ namespace hub
         }
     };
 
-    template<typename EventArgsT>
+    template<typename SenderT, typename EventArgsT>
     class event_handler : protected dispatcher
     {
     public:
 
-        using function_type         = std::function<void(EventArgsT)>;
+        using function_type         = std::function<void(const SenderT*, EventArgsT)>;
         using function_list_type    = std::list<function_type>;
 
         event_handler()                                 = default;
@@ -45,16 +45,16 @@ namespace hub
 
         ~event_handler()                                = default;
 
-        void invoke(EventArgsT args)
+        void invoke(const SenderT* sender, EventArgsT args)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            std::for_each(callback_list.begin(), callback_list.end(), [this, args](const auto& fun) {
-                dispatch(fun, args);
+            std::for_each(callback_list.begin(), callback_list.end(), [this, sender, args](const auto& fun) {
+                dispatch(fun, sender, args);
             });
         }
 
-        void operator+=(function_type fun)
+        void operator+=(function_type&& fun)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
             callback_list.push_back(std::forward<function_type>(fun));
