@@ -266,23 +266,8 @@ namespace hub::utils
 
     std::string json::dump(bool formatted) const
     {
-        static constexpr std::string::size_type BUFFER_INIT_SIZE{ 64 };
-
-        std::string buff;
-        buff.resize(BUFFER_INIT_SIZE);
-
-        while (true)
-        {
-            if (!cJSON_PrintPreallocated(get(), buff.data(), buff.size(), formatted))
-            {
-                buff.resize(buff.size() + BUFFER_INIT_SIZE);
-                continue;
-            }
-
-            break;
-        }
-
-        return buff;
+        auto buff = std::unique_ptr<char>((formatted) ? cJSON_Print(get()) : cJSON_PrintUnformatted(get()));
+        return buff.get();
     }
 
     json_ref::json_ref() noexcept :
@@ -329,6 +314,7 @@ namespace hub::utils
     {
 
     }
+    
     json_array_item& json_array_item::operator=(json&& other)
     {
         if (!cJSON_ReplaceItemInArray(parent, index, other.release()))

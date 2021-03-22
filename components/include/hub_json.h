@@ -358,6 +358,14 @@ namespace hub::utils
     {
         return os << js.dump(true);
     }
+
+    namespace literals
+    {
+        inline json operator"" _json(const char* str)
+        {
+            return json::parse(str);
+        }
+    }
 }
 
 #endif
