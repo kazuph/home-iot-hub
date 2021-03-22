@@ -12,6 +12,11 @@ namespace hub::timing
 
     namespace literals
     {
+        inline constexpr TickType_t operator"" _s(unsigned long long int value)
+        {
+            return static_cast<TickType_t>(1000u) * static_cast<TickType_t>(value) / portTICK_PERIOD_MS;
+        }
+
         inline constexpr TickType_t operator"" _ms(unsigned long long int value)
         {
             return static_cast<TickType_t>(value) / portTICK_PERIOD_MS;
@@ -20,6 +25,7 @@ namespace hub::timing
 
     inline void sleep_for(TickType_t value)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         vTaskDelay(value);
     }
 }
