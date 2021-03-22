@@ -35,9 +35,11 @@ namespace hub::ble
 
     static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
-    static scan_callback_t      scan_callback       = nullptr;
     static EventGroupHandle_t   scan_event_group    = nullptr;
-    static volatile bool        scan_enabled        = false;
+
+    scan_results_event_handler_t scan_results_event_handler{};
+
+    std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> client::clients{};
 
     static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -58,8 +60,6 @@ namespace hub::ble
                     break;
                 }
 
-                scan_enabled = true;
-
                 xEventGroupSetBits(scan_event_group, SCAN_START_BIT);
                 break;
             case ESP_GAP_BLE_SCAN_RESULT_EVT:
@@ -74,17 +74,21 @@ namespace hub::ble
 
                         if (adv_name == nullptr || adv_name_len == 0)
                         {
-                            return;
+                            break;
                         }
 
-                        if (scan_callback == nullptr)
+                        if (!scan_results_event_handler)
                         {
-                            return;
+                            break;
                         }
 
-                        scan_callback(
-                            std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
-                            mac(param->scan_rst.bda, param->scan_rst.ble_addr_type));
+                        scan_results_event_handler.invoke(
+                            nullptr, 
+                            { 
+                                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
+                                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type) 
+                            }
+                        );
                     }
                     break;
                 case ESP_GAP_SEARCH_INQ_CMPL_EVT:
@@ -101,8 +105,6 @@ namespace hub::ble
                     ESP_LOGE(TAG, "Scan stop failed with error code %x.", param->scan_stop_cmpl.status);
                     break;
                 }
-
-                scan_enabled = false;
 
                 xEventGroupSetBits(scan_event_group, SCAN_STOP_BIT);
                 break;
@@ -171,8 +173,6 @@ namespace hub::ble
             goto cleanup_bluedroid_enable;
         }
 
-        scan_callback = nullptr;
-
         scan_event_group = xEventGroupCreate();
         if (scan_event_group == nullptr)
         {
@@ -200,8 +200,6 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        scan_callback = nullptr;
-
         if (scan_event_group != nullptr)
         {
             vEventGroupDelete(scan_event_group);
@@ -219,79 +217,53 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (scan_enabled)
+        esp_err_t result = esp_ble_gap_start_scanning(scan_time);
+
+        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+        if (bits & SCAN_START_BIT)
         {
-            return ESP_OK;
+            ESP_LOGI(TAG, "Scan started successfully.");
+        }
+        else if (bits & FAIL_BIT)
+        {
+            result = ESP_FAIL;
+            ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
+        }
+        else
+        {
+            result = ESP_ERR_TIMEOUT;
+            ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
         }
 
-        {
-            esp_err_t result = esp_ble_gap_start_scanning(scan_time);
-
-            EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
-
-            if (bits & SCAN_START_BIT)
-            {
-                ESP_LOGI(TAG, "Scan started successfully.");
-            }
-            else if (bits & FAIL_BIT)
-            {
-                result = ESP_FAIL;
-                ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-            else
-            {
-                result = ESP_ERR_TIMEOUT;
-                ESP_LOGE(TAG, "Scan start failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-
-            return result;
-        }
+        return result;
     }
 
     esp_err_t stop_scanning()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (!scan_enabled)
+        esp_err_t result = esp_ble_gap_stop_scanning();
+
+        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+
+        if (bits & SCAN_STOP_BIT)
         {
-            return ESP_OK;
+            ESP_LOGI(TAG, "Scan stopped successfully.");
+        }
+        else if (bits & FAIL_BIT)
+        {
+            result = ESP_FAIL;
+            ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
+        }
+        else
+        {
+            result = ESP_ERR_TIMEOUT;
+            ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
         }
 
-        {
-            esp_err_t result = esp_ble_gap_stop_scanning();
-
-            EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
-
-            if (bits & SCAN_STOP_BIT)
-            {
-                ESP_LOGI(TAG, "Scan stopped successfully.");
-            }
-            else if (bits & FAIL_BIT)
-            {
-                result = ESP_FAIL;
-                ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-            else
-            {
-                result = ESP_ERR_TIMEOUT;
-                ESP_LOGE(TAG, "Scan stop failed with error code %x [%s].", result, esp_err_to_name(result));
-            }
-
-            return result;
-        }
+        return result;
     }
-
-    esp_err_t register_scan_callback(scan_callback_t&& callback)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        scan_callback = std::move(callback);
-        ESP_LOGI(TAG, "Scan callback set.");
-
-        return ESP_OK;
-    }
-
-    std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> client::clients{};
 
     void client::gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
     {

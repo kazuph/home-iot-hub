@@ -19,10 +19,19 @@
 #include "freertos/event_groups.h"
 
 #include "hub_ble_mac.h"
+#include "hub_event.h"
 
 namespace hub::ble
 {
-    using scan_callback_t = std::function<void(std::string_view, const mac&)>;
+    struct scan_results_event_args
+    {
+        const std::string device_name;
+        const mac device_address;
+    };
+
+    using scan_results_event_handler_t = event_handler<std::nullptr_t, scan_results_event_args>;
+
+    extern scan_results_event_handler_t scan_results_event_handler;
 
     inline constexpr uint16_t MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
 
@@ -33,8 +42,6 @@ namespace hub::ble
     esp_err_t start_scanning(uint32_t scan_time);
 
     esp_err_t stop_scanning();
-
-    esp_err_t register_scan_callback(scan_callback_t&& callback);
 
     class client
     {

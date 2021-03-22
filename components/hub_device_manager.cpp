@@ -22,6 +22,10 @@ namespace hub
         disconnected_devices    {  }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        ble::scan_results_event_handler += [this](auto sender, ble::scan_results_event_args args) {
+            ble_scan_callback(args.device_name, args.device_address);
+        };
     }
 
     esp_err_t device_manager::mqtt_start(std::string_view mqtt_uri, const uint16_t mqtt_port)
@@ -53,7 +57,7 @@ namespace hub
         mqtt_client.subscribe(MQTT_BLE_DISCONNECT_TOPIC);
         mqtt_client.subscribe(MQTT_BLE_DEVICE_WRITE_TOPIC);
 
-        mqtt_client.data_event_handler += [this](mqtt::data_event_args args) {
+        mqtt_client.data_event_handler += [this](const mqtt::client* client, mqtt::data_event_args args) {
             mqtt_data_callback(args.topic, args.data);
         };
 
@@ -209,8 +213,8 @@ namespace hub
                 const auto& [device_address, device_name] = elem;
 
                 scan_results_json.push_back({ {
-                    { { "name",       device_name                 } },
-                    { { "address",    device_address.to_string()  } }
+                    { { "name",       device_name                   } },
+                    { { "address",    device_address.to_string()    } }
                 } });
             });
 
