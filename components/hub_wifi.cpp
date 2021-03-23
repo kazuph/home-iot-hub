@@ -194,16 +194,16 @@ namespace hub::wifi
         return ESP_OK;
     }
 
-    esp_err_t wait_for_connection(const int timeout)
+    esp_err_t wait_for_connection(timing::duration_t timeout)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         
         esp_err_t result = ESP_OK;
 
     #ifndef CONFIG_WIFI_RETRY_INFINITE
-        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdTRUE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
+        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(timeout));
     #else
-        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdTRUE, pdFALSE, (TickType_t)timeout / portTICK_PERIOD_MS);
+        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(timeout));
     #endif
 
         if (bits & WIFI_CONNECTED_BIT)

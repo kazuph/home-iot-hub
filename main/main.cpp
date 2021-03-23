@@ -1,5 +1,6 @@
 #include "hub_wifi.h"
 #include "hub_ble.h"
+#include "hub_timing.h"
 #include "hub_filesystem.h"
 #include "hub_device_manager.h"
 
@@ -21,9 +22,11 @@
 
 namespace hub
 {
+    using namespace timing::literals;
+
     static constexpr const char* TAG{ "HUB_MAIN" };
 
-    static constexpr uint16_t WIFI_CONNECTION_TIMEOUT{ 10000U }; // ms
+    static constexpr auto WIFI_CONNECTION_TIMEOUT{ 10_s };
 
     static device_manager manager{  };
 
