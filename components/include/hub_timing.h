@@ -18,6 +18,8 @@ namespace hub::timing
      */
     enum class duration_t : TickType_t {};
 
+    inline constexpr duration_t MAX_DELAY{ static_cast<duration_t>(portMAX_DELAY) };
+
     /**
      * @brief Function converting time duration from miliseconds to its representation in duration_t.
      * 
@@ -26,7 +28,7 @@ namespace hub::timing
      */
     inline constexpr duration_t miliseconds(unsigned long long int duration) noexcept
     {
-        return static_cast<duration_t>(static_cast<TickType_t>(value) / portTICK_PERIOD_MS);
+        return static_cast<duration_t>(static_cast<TickType_t>(duration) / portTICK_PERIOD_MS);
     }
 
     /**
@@ -37,7 +39,30 @@ namespace hub::timing
      */
     inline constexpr duration_t seconds(unsigned long long int duration) noexcept
     {
-        return static_cast<duration_t>((1000u * static_cast<TickType_t>(value)) / portTICK_PERIOD_MS);
+        return static_cast<duration_t>((1000u * static_cast<TickType_t>(duration)) / portTICK_PERIOD_MS);
+    }
+
+    /**
+     * @brief Convert duration_t to TickType_t.
+     * Effectively does static_cast<TickType_t>(duration).
+     * 
+     * @param duration Duration to be converted to TickType_t.
+     * @return constexpr TickType_t Duration representation in TickType_t.
+     */
+    inline constexpr TickType_t to_ticks(duration_t duration) noexcept
+    {
+        return static_cast<TickType_t>(duration);
+    }
+
+    /**
+     * @brief Delay current task for the specified duration.
+     * 
+     * @param duration Requested delay duration.
+     */
+    inline void sleep_for(duration_t duration) noexcept
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        vTaskDelay(static_cast<TickType_t>(duration));
     }
 
     /**
@@ -52,7 +77,7 @@ namespace hub::timing
          */
         inline constexpr duration_t operator"" _ms(unsigned long long int duration) noexcept
         {
-            return miliseconds(value);
+            return miliseconds(duration);
         }
 
         /**
@@ -61,19 +86,8 @@ namespace hub::timing
          */
         inline constexpr duration_t operator"" _s(unsigned long long int duration) noexcept
         {
-            return seconds(value);
+            return seconds(duration);
         }
-    }
-
-    /**
-     * @brief Delay current task for the specified duration.
-     * 
-     * @param duration Requested delay duration.
-     */
-    inline void sleep_for(duration_t duration) noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        vTaskDelay(static_cast<TickType_t>(value));
     }
 }
 
