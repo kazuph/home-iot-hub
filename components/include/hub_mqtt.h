@@ -27,7 +27,7 @@ namespace hub::mqtt
     {
     public:
 
-        static data_event_handler_t data_event_handler;
+        data_event_handler_t data_event_handler;
 
         client();
 
@@ -57,7 +57,7 @@ namespace hub::mqtt
 
         static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
-        esp_mqtt_client_handle_t    client_handle;
+        esp_mqtt_client_handle_t client_handle;
     };
 }
 
