@@ -1,8 +1,12 @@
 #ifndef DEVICE_MIKETTLE_H
 #define DEVICE_MIKETTLE_H
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+
 #include "stdint.h"
 #include "esp_err.h"
+
 #include "hub_ble.h"
 #include "hub_device.h"
 
@@ -12,6 +16,31 @@ namespace hub
 {
     class MiKettle : public device_base
     {
+    public:
+
+        static constexpr const char* TAG                { "MiKettle" };
+        static constexpr std::string_view device_name   { TAG };
+
+        MiKettle()  = delete;
+
+        MiKettle(std::string_view id);
+
+        ~MiKettle();
+
+        std::string_view get_device_name() const override;
+
+        esp_err_t connect(const ble::mac& address) override;
+
+        esp_err_t disconnect() override;
+
+        esp_err_t send_data(std::string_view data) override;
+
+        void data_received(const uint16_t char_handle, std::string_view data) override;
+
+        void device_disconnected() override;
+
+    private:
+
         enum class action_t : uint8_t
         {
             idle            = 0,
@@ -49,11 +78,11 @@ namespace hub
             uint8_t data_array[sizeof(data_struct)];
         };
 
-        static constexpr uint8_t KEY_LENGTH     { 4 };
-        static constexpr uint8_t TOKEN_LENGTH   { 12 };
-        static constexpr uint16_t PERM_LENGTH   { 256 };
+        static constexpr uint8_t KEY_LENGTH                         { 4 };
+        static constexpr uint8_t TOKEN_LENGTH                       { 12 };
+        static constexpr uint16_t PERM_LENGTH                       { 256 };
 
-        static constexpr uint16_t PRODUCT_ID    { 275 };
+        static constexpr uint16_t PRODUCT_ID                        { 275 };
 
         static constexpr std::array<uint8_t, KEY_LENGTH> key1       { 0x90, 0xCA, 0x85, 0xDE };
         static constexpr std::array<uint8_t, KEY_LENGTH> key2       { 0x92, 0xAB, 0x54, 0xFA };
@@ -61,29 +90,31 @@ namespace hub
         static constexpr uint8_t subscribe[]                        { 0x01, 0x00 };
 
         /* MiKettle services */
-        static constexpr uint16_t GATT_UUID_KETTLE_SRV          { 0xfe95 };
-        static constexpr uint16_t GATT_UUID_KETTLE_DATA_SRV[]   { 0x56, 0x61, 0x23, 0x37, 0x28, 0x26, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x36, 0x47, 0x34, 0x01 };
+        static constexpr uint16_t GATT_UUID_KETTLE_SRV              { 0xfe95 };
+        static constexpr uint16_t GATT_UUID_KETTLE_DATA_SRV[]       { 0x56, 0x61, 0x23, 0x37, 0x28, 0x26, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x36, 0x47, 0x34, 0x01 };
 
         /* MiKettle characteristics */
-        static constexpr uint16_t GATT_UUID_AUTH_INIT   { 0x0010 };
-        static constexpr uint16_t GATT_UUID_AUTH        { 0x0001 };
-        static constexpr uint16_t GATT_UUID_VERSION     { 0x0004 };
-        static constexpr uint16_t GATT_UUID_SETUP       { 0xaa01 };
-        static constexpr uint16_t GATT_UUID_STATUS      { 0xaa02 };
-        static constexpr uint16_t GATT_UUID_TIME        { 0xaa04 };
-        static constexpr uint16_t GATT_UUID_BOIL_MODE   { 0xaa05 };
-        static constexpr uint16_t GATT_UUID_MCU_VERSION { 0x2a28 };
+        static constexpr uint16_t GATT_UUID_AUTH_INIT               { 0x0010 };
+        static constexpr uint16_t GATT_UUID_AUTH                    { 0x0001 };
+        static constexpr uint16_t GATT_UUID_VERSION                 { 0x0004 };
+        static constexpr uint16_t GATT_UUID_SETUP                   { 0xaa01 };
+        static constexpr uint16_t GATT_UUID_STATUS                  { 0xaa02 };
+        static constexpr uint16_t GATT_UUID_TIME                    { 0xaa04 };
+        static constexpr uint16_t GATT_UUID_BOIL_MODE               { 0xaa05 };
+        static constexpr uint16_t GATT_UUID_MCU_VERSION             { 0x2a28 };
 
         /* MiKettle handles */
-        static constexpr uint8_t HANDLE_READ_FIRMWARE_VERSION   { 26 };
-        static constexpr uint8_t HANDLE_READ_NAME               { 20 };
-        static constexpr uint8_t HANDLE_AUTH_INIT               { 44 };
-        static constexpr uint8_t HANDLE_AUTH                    { 37 };
-        static constexpr uint8_t HANDLE_VERSION                 { 42 };
-        static constexpr uint8_t HANDLE_KEEP_WARM               { 58 };
-        static constexpr uint8_t HANDLE_STATUS                  { 61 };
-        static constexpr uint8_t HANDLE_TIME_LIMIT              { 65 };
-        static constexpr uint8_t HANDLE_BOIL_MODE               { 68 };
+        static constexpr uint8_t HANDLE_READ_FIRMWARE_VERSION       { 26 };
+        static constexpr uint8_t HANDLE_READ_NAME                   { 20 };
+        static constexpr uint8_t HANDLE_AUTH_INIT                   { 44 };
+        static constexpr uint8_t HANDLE_AUTH                        { 37 };
+        static constexpr uint8_t HANDLE_VERSION                     { 42 };
+        static constexpr uint8_t HANDLE_KEEP_WARM                   { 58 };
+        static constexpr uint8_t HANDLE_STATUS                      { 61 };
+        static constexpr uint8_t HANDLE_TIME_LIMIT                  { 65 };
+        static constexpr uint8_t HANDLE_BOIL_MODE                   { 68 };
+
+        static constexpr EventBits_t AUTHENTICATED_BIT              { BIT0 };
 
         static constexpr esp_bt_uuid_t uuid_service_kettle{
             ESP_UUID_LEN_16,
@@ -108,34 +139,11 @@ namespace hub
         uint8_t keep_warm_time_limit;
         uint8_t turn_off_after_boil;
 
-        volatile bool auth_notify;
+        EventGroupHandle_t event_group;
 
         esp_err_t authorize(const ble::mac& address);
 
         esp_err_t wait_for_authorization();
-
-    public:
-
-        static constexpr const char* TAG                { "MiKettle" };
-        static constexpr std::string_view device_name   { TAG };
-
-        MiKettle()  = delete;
-
-        MiKettle(std::string_view id);
-
-        ~MiKettle() = default;
-
-        std::string_view get_device_name() const override;
-
-        esp_err_t connect(const ble::mac& address) override;
-
-        esp_err_t disconnect() override;
-
-        esp_err_t send_data(std::string_view data) override;
-
-        void data_received(const uint16_t char_handle, std::string_view data) override;
-
-        void device_disconnected() override;
     };
 
     inline std::string_view MiKettle::get_device_name() const

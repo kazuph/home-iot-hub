@@ -8,19 +8,19 @@
 namespace hub::utils
 {
     dispatch_queue::dispatch_queue(configSTACK_DEPTH_TYPE stack_size, UBaseType_t priority) : 
-        _exit           { false }, 
-        _mutex          {  }, 
-        _event_group    { xEventGroupCreate() },
-        _task           { stack_size, priority, [this]() mutable { task_code(); } }
+        exit_flag       { false }, 
+        mtx             {  }, 
+        event_group     { xEventGroupCreate() },
+        dispatch_task   { stack_size, priority, [this]() mutable { task_code(); } }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
     }
 
     dispatch_queue::dispatch_queue(dispatch_queue&& other) :
-        _exit           { false }, 
-        _mutex          {  }, 
-        _event_group    {  },
-        _task           {  }
+        exit_flag       { false }, 
+        mtx             {  }, 
+        event_group     {  },
+        dispatch_task   {  }
     {
         ESP_LOGD(TAG, "Function: %s (move constructor).", __func__);
         *this = std::move(other);
@@ -34,13 +34,13 @@ namespace hub::utils
             return *this;
         }
 
-        _exit           = other._exit;
-        _mutex          = std::move(other._mutex);
-        _event_group    = other._event_group;
-        _task           = std::move(other._task);
+        exit_flag       = other.exit_flag;
+        mtx             = std::move(other.mtx);
+        event_group     = other.event_group;
+        dispatch_task   = std::move(other.dispatch_task);
 
-        other._exit         = false;
-        other._event_group  = nullptr;
+        other.exit_flag     = false;
+        other.event_group   = nullptr;
 
         return *this;
     }
@@ -51,72 +51,65 @@ namespace hub::utils
 
         using namespace timing::literals;
 
-        lock<recursive_mutex> _lock{ _mutex };
-        _exit = true;
-
-        while (!_task.joinable()) 
-        {
-            timing::sleep_for(20_ms);
-        }
-
-        _task.join();
-        xEventGroupSetBits(_event_group, QUEUE_EMPTY);
-        vEventGroupDelete(_event_group);
+        exit_flag = true;
+        dispatch_task.join();
+        xEventGroupSetBits(event_group, QUEUE_EMPTY_BIT);
+        vEventGroupDelete(event_group);
     }
 
     bool dispatch_queue::empty() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::empty();
     }
 
     dispatch_queue::size_type dispatch_queue::size() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::size();
     }
 
     dispatch_queue::reference dispatch_queue::front()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::front();
     }
 
     dispatch_queue::const_reference dispatch_queue::front() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::front();
     }
 
     dispatch_queue::reference dispatch_queue::back()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::back();
     }
 
     dispatch_queue::const_reference dispatch_queue::back() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         return base::back();
     }
 
     void dispatch_queue::pop()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         base::pop();
     }
 
     void dispatch_queue::swap(dispatch_queue& other) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        lock<recursive_mutex> _lock{ _mutex };
+        lock<recursive_mutex> _lock{ mtx };
         base::swap(other);
     }
 
@@ -126,19 +119,16 @@ namespace hub::utils
 
         using namespace timing::literals;
         
-        while (!_exit)
+        while (!exit_flag)
         {
             if (!empty())
             {
                 front()();
                 pop();
-
-                timing::sleep_for(20_ms);
             }
             else
             {
-                ESP_LOGD(TAG, "Sleep.");
-                xEventGroupWaitBits(_event_group, QUEUE_EMPTY, pdTRUE, pdFALSE, portMAX_DELAY);
+                xEventGroupWaitBits(event_group, QUEUE_EMPTY_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
             }
         }
     }

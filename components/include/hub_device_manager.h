@@ -29,7 +29,7 @@ namespace hub
 
         static constexpr std::string_view CONNECTED_DEVICES_FILE_NAME       { "connected_devices.json" };
 
-        static constexpr uint16_t BLE_DEFAULT_SCAN_TIME{ 30 }; // seconds
+        static constexpr uint16_t BLE_DEFAULT_SCAN_TIME{ 1 }; // seconds
 
         device_manager();
 

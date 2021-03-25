@@ -4,10 +4,13 @@
 #include <functional>
 #include <string_view>
 #include <cstdint>
+#include <string>
 #include <array>
 
 #include "esp_err.h"
+
 #include "hub_ble.h"
+#include "hub_json.h"
 
 namespace hub
 {
@@ -15,22 +18,24 @@ namespace hub
     {
     public:
 
+        struct connect_event_args {};
+        
+        struct disconnect_event_args {};
+
+        struct notify_event_args
+        {
+            const std::string data;
+        };
+
+        using connect_event_handler_t       = event_handler<device_base, connect_event_args>;
+        using disconnect_event_handler_t    = event_handler<device_base, disconnect_event_args>;
+        using notify_event_handler_t        = event_handler<device_base, notify_event_args>;
+
         using base = ble::client;
-        using notify_callback_t         = std::function<void(std::string_view)>;
-        using disconnect_callback_t     = std::function<void(void)>;
 
-        /*
-            This function object is to be called every time the fresh data is received from the device
-            and formatted to the JSON string. This is done by setting ble::client::notify_callback
-            to the device specific function that handles data.
-        */
-        notify_callback_t       notify_callback;
-
-        /*
-            This function object should be called whenever device disconnects and after device-specific (if any)
-            cleanup/retry actions are finished.
-        */
-        disconnect_callback_t   disconnect_callback;
+        connect_event_handler_t      connect_event_handler;
+        disconnect_event_handler_t   disconnect_event_handler;
+        notify_event_handler_t       notify_event_handler;
 
         device_base()                               = delete;
 

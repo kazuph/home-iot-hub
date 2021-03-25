@@ -15,9 +15,7 @@
 
 #include "esp_log.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
+#include "hub_timing.h"
 #include "hub_json.h"
 
 namespace hub
@@ -29,9 +27,14 @@ namespace hub
         keep_warm_temperature   { 0 },
         keep_warm_time_limit    { 0 },
         turn_off_after_boil     { 0 },
-        auth_notify             { false }
+        event_group             { xEventGroupCreate() }
     {
 
+    }
+
+    MiKettle::~MiKettle()
+    {
+        vEventGroupDelete(event_group);
     }
 
     esp_err_t MiKettle::connect(const ble::mac& address)
@@ -134,17 +137,17 @@ namespace hub
                     { { "turn_off_after_boil",    static_cast<bool>(turn_off_after_boil)          } }
                 } };
 
-                if (!notify_callback)
+                if (!notify_event_handler)
                 {
                     return;
                 }
 
-                notify_callback(json_data.dump());
+                notify_event_handler.invoke(this, { json_data.dump() });
             }
         }
         else if (char_handle == HANDLE_AUTH)
         {
-            auth_notify = true;
+            xEventGroupSetBits(event_group, AUTHENTICATED_BIT);
         }
     }
 
@@ -152,13 +155,13 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (!disconnect_callback)
+        if (!disconnect_event_handler)
         {
             return;
         }
 
         // Let the app handle reconnection
-        disconnect_callback();
+        disconnect_event_handler.invoke(this, {});
     }
 
     esp_err_t MiKettle::authorize(const ble::mac& address)
@@ -166,7 +169,6 @@ namespace hub
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         esp_err_t result{ ESP_OK };
-        auth_notify = false;
 
         result = ble::client::get_service(&uuid_service_kettle);
         if (result != ESP_OK)
@@ -288,17 +290,15 @@ namespace hub
 
     esp_err_t MiKettle::wait_for_authorization()
     {
-        static constexpr TickType_t TIMEOUT_MS    { 2000 };
-        static constexpr TickType_t SLEEP_MS      { 50 };
+        using namespace timing::literals;
+        
+        static constexpr auto TIMEOUT{ 3_s };
 
-        for (TickType_t i{ 0 }; i < (TIMEOUT_MS / SLEEP_MS); i++)
+        EventBits_t bit = xEventGroupWaitBits(event_group, AUTHENTICATED_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(TIMEOUT));
+
+        if (bit & AUTHENTICATED_BIT)
         {
-            vTaskDelay(SLEEP_MS / portTICK_PERIOD_MS);
-
-            if (auth_notify == true)
-            {
-                return ESP_OK;
-            }
+            return ESP_OK;
         }
 
         return ESP_ERR_TIMEOUT;

@@ -23,7 +23,8 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        ble::scan_results_event_handler += [this](auto sender, ble::scan_results_event_args args) {
+        ble::scan_results_event_handler += [this](const ble::scanner* sender, ble::scan_results_event_args args) {
+            ESP_LOGD(TAG, "Function: scan_results_event_handler (lambda).");
             ble_scan_callback(args.device_name, args.device_address);
         };
     }
@@ -248,20 +249,19 @@ namespace hub
             return;
         }
 
-        /* 
-            Publish on device topic when new data arrives
-        */
-        device->notify_callback = [this](std::string_view data) {
-            if (mqtt_client.publish(MQTT_BLE_DEVICE_READ_TOPIC, data) != ESP_OK)
+        device->disconnect_event_handler += [this, id{ std::string(id) }](const device_base* sender, device_base::disconnect_event_args args) {
+            ESP_LOGD(TAG, "Function: disconnect_event_handler (lambda).");
+            connected_devices[id].swap(disconnected_devices[id]);
+            ble_scan_start();
+        };
+
+        device->notify_event_handler += [this](const device_base* sender, device_base::notify_event_args args) {
+            ESP_LOGD(TAG, "Function: notify_event_handler (lambda).");
+            if (mqtt_client.publish(MQTT_BLE_DEVICE_READ_TOPIC, args.data) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Client publish failed.");
                 return;
             }
-        };
-
-        device->disconnect_callback = [this, id{ device->get_id() }]() {
-            connected_devices[id].swap(disconnected_devices[id]);
-            ble_scan_start(60 /* seconds */);
         };
 
         device.swap(connected_devices[device->get_id()]);

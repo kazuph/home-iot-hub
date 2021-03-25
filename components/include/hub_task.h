@@ -4,6 +4,7 @@
 #define configUSE_TIME_SLICING 1
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 
 #include "esp_log.h"
 
@@ -13,8 +14,7 @@
 #include <exception>
 #include <stdexcept>
 
-#include "hub_mutex.h"
-#include "hub_lock.h"
+#include "hub_timing.h"
 
 namespace hub::utils
 {
@@ -31,8 +31,7 @@ namespace hub::utils
         template<typename FunTy, typename... Args>
         task(configSTACK_DEPTH_TYPE stack_size, UBaseType_t priority, FunTy&& fun, Args&&... args) : 
             task_handle     { nullptr },
-            mtx             { },
-            task_started    { false }
+            event_group     { xEventGroupCreate() }
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -40,35 +39,37 @@ namespace hub::utils
             {
                 FunTy                   fun;
                 std::tuple<Args...>     args;
-                recursive_mutex&        mtx;
-                volatile bool&          task_started;
+                EventGroupHandle_t      event_group;
             };
+
+            if (!event_group)
+            {
+                ESP_LOGE(TAG, "Event group was nullptr.");
+                throw std::runtime_error("Event group was nullptr.");
+            }
 
             auto task_code = [](void* param) {
                 ESP_LOGD(TAG, "Function: task_code (lambda).");
-                param_t* _param = reinterpret_cast<param_t*>(param);
-
                 {
-                    lock<recursive_mutex> mtx_lock{ _param->mtx };
-                    _param->task_started = true;
-                    std::apply(_param->fun, _param->args);
+                    std::unique_ptr<param_t> param_ptr{ reinterpret_cast<param_t*>(param) };          
+                    xEventGroupSetBits(param_ptr->event_group, TASK_STARTED_BIT);
+                    std::apply(param_ptr->fun, param_ptr->args);
+                    xEventGroupSetBits(param_ptr->event_group, TASK_FINISHED_BIT);
                 }
-
-                delete _param;
                 vTaskDelete(nullptr);
             };
 
-            std::unique_ptr<param_t> param_ptr{ new param_t{ std::forward<FunTy>(fun), std::make_tuple(std::forward<Args>(args)...), mtx, task_started } };
-
-            if (xTaskCreate(task_code, "task", stack_size, reinterpret_cast<void*>(param_ptr.get()), priority, &task_handle) != pdPASS)
             {
-                ESP_LOGE(TAG, "Task creation failed.");
-                throw std::runtime_error("Task creation failed.");
+                std::unique_ptr<param_t> param_ptr{ new param_t{ std::forward<FunTy>(fun), std::make_tuple(std::forward<Args>(args)...), event_group } };
+
+                if (xTaskCreate(task_code, "task", stack_size, reinterpret_cast<void*>(param_ptr.get()), priority, &task_handle) != pdPASS)
+                {
+                    ESP_LOGE(TAG, "Task creation failed.");
+                    throw std::runtime_error("Task creation failed.");
+                }
+
+                param_ptr.release();
             }
-
-            param_ptr.release();
-
-            ESP_LOGI(TAG, "Task created successfully.");
         }
 
         task& operator=(const task&) = delete;
@@ -79,15 +80,16 @@ namespace hub::utils
 
         void join();
 
-        ~task() = default;
+        ~task();
 
     private:
 
-        static constexpr const char* TAG{ "TASK" };
+        static constexpr const char* TAG                { "TASK" };
+        static constexpr EventBits_t TASK_STARTED_BIT   { BIT0 };
+        static constexpr EventBits_t TASK_FINISHED_BIT  { BIT1 };
 
-        mutable TaskHandle_t    task_handle;
-        mutable recursive_mutex mtx;
-        mutable volatile bool   task_started;
+        mutable TaskHandle_t        task_handle;
+        mutable EventGroupHandle_t  event_group;
     };
 }
 

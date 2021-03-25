@@ -30,7 +30,7 @@ namespace hub::ble
 
         ~mac()                          = default;
 
-        mac& operator=(const mac&)      = default;
+        mac& operator=(const mac&)      = default; 
 
         mac& operator=(mac&&)           = default;
 

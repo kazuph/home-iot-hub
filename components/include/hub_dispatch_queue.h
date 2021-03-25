@@ -59,7 +59,7 @@ namespace hub::utils
             ESP_LOGD(TAG, "Function: %s.", __func__);
             
             {
-                lock<recursive_mutex> _lock{ _mutex };
+                lock<recursive_mutex> _lock{ mtx };
                 base::push(
                     [
                         fun{ std::forward<_FunTy>(fun) }, 
@@ -69,7 +69,7 @@ namespace hub::utils
                     });
             }
 
-            xEventGroupSetBits(_event_group, QUEUE_EMPTY);
+            xEventGroupSetBits(event_group, QUEUE_EMPTY_BIT);
         }
 
         template<typename _FunTy, typename... _Args>
@@ -78,8 +78,9 @@ namespace hub::utils
             ESP_LOGD(TAG, "Function: %s.", __func__);
             
             {
-                lock<recursive_mutex> _lock{ _mutex };
-                base::emplace(                    [
+                lock<recursive_mutex> _lock{ mtx };
+                base::emplace(                    
+                    [
                         fun{ std::forward<_FunTy>(fun) }, 
                         args{ std::make_tuple(std::forward<_Args>(args)...) }
                     ]() { 
@@ -88,7 +89,7 @@ namespace hub::utils
                 );
             }
 
-            xEventGroupSetBits(_event_group, QUEUE_EMPTY);
+            xEventGroupSetBits(event_group, QUEUE_EMPTY_BIT);
         }
 
         void pop();
@@ -99,13 +100,13 @@ namespace hub::utils
 
         void task_code() noexcept;
 
-        static constexpr const char* TAG    { "DISPATCH QUEUE" };
-        static constexpr int QUEUE_EMPTY    { BIT0 };
+        static constexpr const char* TAG                { "DISPATCH QUEUE" };
+        static constexpr EventBits_t QUEUE_EMPTY_BIT    { BIT0 };
 
-        mutable volatile bool       _exit;
-        mutable recursive_mutex     _mutex;
-        mutable EventGroupHandle_t  _event_group;
-        task                        _task;
+        mutable volatile bool       exit_flag;
+        mutable recursive_mutex     mtx;
+        mutable EventGroupHandle_t  event_group;
+        mutable task                dispatch_task;
     };
 }
 

@@ -6,27 +6,48 @@
 #include <functional>
 #include <algorithm>
 #include <list>
-#include <any>
 
 #include "hub_dispatch_queue.h"
 
 namespace hub
 {
+    template<std::size_t TasksNum>
     struct dispatcher
     {
+        using dispatch_queue_array = std::array<utils::dispatch_queue, TasksNum>;
+
         static constexpr const char* TAG{ "DISPATCHER" };
-        static utils::dispatch_queue dispatch_queue;
 
         template<typename Fun, typename... Args>
         void dispatch(Fun&& fun, Args&&... args)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
-            dispatch_queue.push(std::forward<Fun>(fun), std::forward<Args>(args)...);
+
+            if (current_queue_iter == dispatch_queues.end())
+            {
+                current_queue_iter = dispatch_queues.begin();
+            }
+
+            ESP_LOGI(TAG, "Pushing to task %i.", std::distance(current_queue_iter, dispatch_queues.end()));
+
+            current_queue_iter->push(std::forward<Fun>(fun), std::forward<Args>(args)...);
+            ++current_queue_iter;
         }
+
+    private:
+
+        static dispatch_queue_array                     dispatch_queues;
+        static typename dispatch_queue_array::iterator  current_queue_iter;
     };
 
+    template<std::size_t TasksNum>
+    typename dispatcher<TasksNum>::dispatch_queue_array dispatcher<TasksNum>::dispatch_queues{};
+
+    template<std::size_t TasksNum>
+    typename dispatcher<TasksNum>::dispatch_queue_array::iterator dispatcher<TasksNum>::current_queue_iter{ dispatch_queues.begin() };
+
     template<typename SenderT, typename EventArgsT>
-    class event_handler : protected dispatcher
+    class event_handler : protected dispatcher<4>
     {
     public:
 
@@ -45,7 +66,7 @@ namespace hub
 
         ~event_handler()                                = default;
 
-        void invoke(const SenderT* sender, EventArgsT args)
+        void invoke(const SenderT* sender, EventArgsT&& args)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 

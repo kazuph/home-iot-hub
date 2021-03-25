@@ -5,20 +5,25 @@
 namespace hub
 {
     device_base::device_base(std::string_view id) :
-        notify_callback     { nullptr },
-        disconnect_callback { nullptr },
-        id                  {  }
+        connect_event_handler       {  },
+        disconnect_event_handler    {  },
+        notify_event_handler        {  },
+        id                          {  }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         std::copy(id.begin(), id.end(), this->id.begin());
 
-        base::disconnect_callback = [this]() { 
-            device_disconnected(); 
+        base::connect_event_handler += [this](const base* sender, base::connect_event_args args) {
+            connect_event_handler.invoke(this, {});
         };
 
-        base::notify_callback = [this](const uint16_t char_handle, std::string_view data) {
-            data_received(char_handle, data);
+        base::disconnect_event_handler += [this](const base* sender, base::disconnect_event_args args) {
+            device_disconnected();
+        };
+
+        base::notify_event_handler += [this](const base* sender, base::notify_event_args args) {
+            data_received(args.handle, args.data);
         };
     }
 }

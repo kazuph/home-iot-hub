@@ -1,4 +1,5 @@
 #include "hub_ble.h"
+#include "hub_timing.h"
 
 #include <cstring>
 #include <memory>
@@ -11,18 +12,21 @@
 #include "esp_gatt_common_api.h"
 #include "esp_gap_ble_api.h"
 
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 namespace hub::ble
 {
-    constexpr const char* TAG = "HUB_BLE";
+    using namespace timing::literals;
+
+    constexpr const char* TAG{ "HUB_BLE" };
     
-    constexpr TickType_t BLE_TIMEOUT{ (TickType_t)10000 / portTICK_PERIOD_MS };
-    constexpr EventBits_t FAIL_BIT{ BIT15 };
+    constexpr auto BLE_TIMEOUT      { 10_s };
+    constexpr EventBits_t FAIL_BIT  { BIT15 };
 
     /* Bits used by GAP */
-    constexpr EventBits_t SCAN_START_BIT{ BIT0 };
-    constexpr EventBits_t SCAN_STOP_BIT{ BIT1 };
+    constexpr EventBits_t SCAN_START_BIT    { BIT0 };
+    constexpr EventBits_t SCAN_STOP_BIT     { BIT1 };
 
     constexpr esp_ble_scan_params_t ble_scan_params{
         BLE_SCAN_TYPE_ACTIVE,           // Scan type
@@ -39,7 +43,7 @@ namespace hub::ble
 
     scan_results_event_handler_t scan_results_event_handler{};
 
-    std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN> client::clients{};
+    std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN>  client::clients{};
 
     static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
@@ -219,7 +223,7 @@ namespace hub::ble
 
         esp_err_t result = esp_ble_gap_start_scanning(scan_time);
 
-        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & SCAN_START_BIT)
         {
@@ -245,7 +249,7 @@ namespace hub::ble
 
         esp_err_t result = esp_ble_gap_stop_scanning();
 
-        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & SCAN_STOP_BIT)
         {
@@ -308,14 +312,18 @@ namespace hub::ble
         case ESP_GATTC_NOTIFY_EVT:
             ESP_LOGV(TAG, "ESP_GATTC_NOTIFY_EVT");
 
-            if (ble_client->notify_callback == nullptr)
+            if (!ble_client->notify_event_handler)
             {
                 break;
             }
 
-            ble_client->notify_callback(
-                param->notify.handle, 
-                std::string_view(reinterpret_cast<const char*>(param->notify.value), static_cast<size_t>(param->notify.value_len)));
+            ble_client->notify_event_handler.invoke(
+                ble_client, 
+                {
+                    param->notify.handle,
+                    std::string(reinterpret_cast<const char*>(param->notify.value), static_cast<size_t>(param->notify.value_len))
+                }
+            );
 
             break;
         case ESP_GATTC_CONNECT_EVT:
@@ -332,6 +340,14 @@ namespace hub::ble
                 break;
             }
             ESP_LOGI(TAG, "MTU configuration success.");
+
+            if (!ble_client->connect_event_handler)
+            {
+                break;
+            }
+
+            ble_client->connect_event_handler.invoke(ble_client, {});
+
             break;
         case ESP_GATTC_OPEN_EVT:
             ESP_LOGV(TAG, "ESP_GATTC_OPEN_EVT");
@@ -442,12 +458,12 @@ namespace hub::ble
                 break;
             }
 
-            if (ble_client->disconnect_callback == nullptr)
+            if (!ble_client->disconnect_event_handler)
             {
                 break;
             }
 
-            ble_client->disconnect_callback();
+            ble_client->disconnect_event_handler.invoke(ble_client, {});
 
             break;
         case ESP_GATTC_CLOSE_EVT:
@@ -470,7 +486,10 @@ namespace hub::ble
         return (iter != clients.end()) ? *iter : nullptr;
     }
 
-    client::client() : 
+    client::client() :
+        connect_event_handler{},
+        disconnect_event_handler{},
+        notify_event_handler{},
         app_id{ 0 }, 
         gattc_if{ ESP_GATT_IF_NONE }, 
         conn_id{ 0 },
@@ -479,9 +498,7 @@ namespace hub::ble
         address{ "00:00:00:00:00:00" },
         event_group{ nullptr },
         buff_length{ nullptr },
-        buff{ nullptr },
-        notify_callback{ nullptr }, 
-        disconnect_callback{ nullptr }
+        buff{ nullptr }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         esp_err_t result = ESP_OK;
@@ -555,7 +572,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & CONNECT_BIT)
         {
@@ -587,7 +604,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & DISCONNECT_BIT)
         {
@@ -619,7 +636,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, REG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, REG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & REG_FOR_NOTIFY_BIT)
         {
@@ -651,7 +668,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, UNREG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, UNREG_FOR_NOTIFY_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         ESP_LOGI(TAG, "Unregister for notify success.");
 
@@ -691,7 +708,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & SEARCH_SERVICE_BIT)
         {
@@ -768,7 +785,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, WRITE_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & WRITE_CHAR_BIT)
         {
@@ -809,7 +826,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, READ_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, READ_CHAR_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & READ_CHAR_BIT)
         {
@@ -888,7 +905,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, WRITE_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, WRITE_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & WRITE_DESCR_BIT)
         {
@@ -929,7 +946,7 @@ namespace hub::ble
             return result;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(event_group, READ_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, BLE_TIMEOUT);
+        EventBits_t bits = xEventGroupWaitBits(event_group, READ_DESCR_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
         if (bits & READ_DESCR_BIT)
         {
