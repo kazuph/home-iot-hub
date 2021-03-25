@@ -24,11 +24,9 @@ namespace hub
 {
     using namespace timing::literals;
 
-    static constexpr const char* TAG{ "HUB_MAIN" };
+    static constexpr const char* TAG    { "HUB_MAIN" };
 
-    static constexpr auto WIFI_CONNECTION_TIMEOUT{ 10_s };
-
-    static device_manager manager{  };
+    static device_manager manager       {  };
 
     static esp_err_t app_init();
 
@@ -49,7 +47,7 @@ namespace hub
         ESP_LOGI(TAG, "Application initialization success.");
 
         manager.load_connected_devices();
-
+        
         if (manager.mqtt_start(CONFIG_MQTT_URI, CONFIG_MQTT_PORT) != ESP_OK)
         {
             goto restart;
@@ -66,6 +64,9 @@ namespace hub
     static esp_err_t app_init()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        static constexpr auto WIFI_CONNECTION_TIMEOUT   { 10_s };
+
         esp_err_t result = ESP_OK;
 
         result = nvs_flash_init();
