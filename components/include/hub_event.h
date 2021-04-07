@@ -28,8 +28,6 @@ namespace hub
                 current_queue_iter = dispatch_queues.begin();
             }
 
-            ESP_LOGI(TAG, "Pushing to task %i.", std::distance(current_queue_iter, dispatch_queues.end()));
-
             current_queue_iter->push(std::forward<Fun>(fun), std::forward<Args>(args)...);
             ++current_queue_iter;
         }
