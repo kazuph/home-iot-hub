@@ -12,7 +12,6 @@
 #include "esp_gatt_common_api.h"
 #include "esp_gap_ble_api.h"
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 namespace hub::ble
@@ -39,7 +38,7 @@ namespace hub::ble
 
     static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
-    static EventGroupHandle_t   scan_event_group    = nullptr;
+    static EventGroupHandle_t scan_event_group = nullptr;
 
     scan_results_event_handler_t scan_results_event_handler{};
 
@@ -216,7 +215,7 @@ namespace hub::ble
 
         return ESP_OK;
     }
-
+    
     esp_err_t start_scanning(uint32_t scan_time)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
