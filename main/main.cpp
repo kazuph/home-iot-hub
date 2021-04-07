@@ -36,6 +36,8 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        static constexpr auto INITIAL_BLE_SCAN_TIME{ 3 };
+
         std::atexit(&app_cleanup);
 
         if (app_init() != ESP_OK)
@@ -53,6 +55,8 @@ namespace hub
             goto restart;
         }
 
+        manager.ble_scan_start(INITIAL_BLE_SCAN_TIME);
+
         return;
 
     restart:
@@ -65,7 +69,7 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        static constexpr auto WIFI_CONNECTION_TIMEOUT   { 10_s };
+        static constexpr auto WIFI_CONNECTION_TIMEOUT{ 10_s };
 
         esp_err_t result = ESP_OK;
 
