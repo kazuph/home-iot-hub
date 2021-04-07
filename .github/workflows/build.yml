@@ -1,0 +1,46 @@
+name: Build workflow
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Build latest commit
+        run: |
+          cd ~/esp-idf
+          git pull
+          cd ~/build/home-iot-hub
+          git fetch https://github.com/Chylynsky/home-iot-hub.git $GITHUB_REF
+          git merge $GITHUB_SHA
+          . ~/esp-idf/export.sh
+          idf.py app
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
