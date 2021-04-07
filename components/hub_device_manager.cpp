@@ -271,8 +271,20 @@ namespace hub
 
     void device_manager::ble_device_disconnect(std::string_view id) noexcept
     {
-        connected_devices.erase(id);
-        disconnected_devices.erase(id);
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        if (auto iter = connected_devices.find(id); iter != connected_devices.end())
+        {
+            ESP_LOGI(TAG, "Disconnecting with %s.", (iter->second)->get_device_name().data());
+            (iter->second)->disconnect();
+            connected_devices.erase(iter);
+        }
+        else if (auto iter = disconnected_devices.find(id); iter != disconnected_devices.end())
+        {
+            disconnected_devices.erase(iter);
+        }
+
+        dump_connected_devices();
     }
 
     void device_manager::mqtt_data_callback(std::string_view topic, std::string_view data)
