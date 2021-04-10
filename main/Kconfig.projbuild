@@ -1,55 +1,12 @@
 menu "Home IoT Hub config"
 
-    config MQTT_PORT
-        int "MQTT broker PORT"
-        default 1883
-        help
-            Port of MQTT broker.
-
-    config MQTT_URI
-        string "MQTT broker URI"
-        default "broker"
-        help
-            URL of MQTT broker.
-
-    config MQTT_USERNAME
-        string "MQTT username"
-        default "username"
-        help
-            Client username.
-
-    config MQTT_PASSWORD
-        string "MQTT password"
-        default "password"
-        help
-            Client password.
-
-    config MQTT_CLIENT_ID
-        string "MQTT client ID"
-        default "id"
-        help
-            Client ID.
-
-    config WIFI_SSID
-        string "WiFi SSID"
-        default "ssid"
-        help
-            SSID (network name) for the project to connect to.
-
-    config WIFI_PASSWORD
-        string "WiFi Password"
-        default "password"
-        help
-            WiFi password (WPA or WPA2) for the project to use.
-            Can be left blank if the network has no security set.
-
     config WIFI_RETRY_INFINITE
         bool "WiFi infinite retries"
         default y
         help
             Set if WiFi should retry connection infinite times.
 
-    config MAXIMUM_RETRY
+    config WIFI_MAXIMUM_RETRY
         int "WiFi Connection Retries"
         depends on !WIFI_RETRY_INFINITE
         default 5

@@ -46,7 +46,7 @@ namespace hub::wifi
         else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
         {
     #ifndef CONFIG_WIFI_RETRY_INFINITE
-            if (s_retry_num < CONFIG_MAXIMUM_RETRY)
+            if (s_retry_num < CONFIG_WIFI_MAXIMUM_RETRY)
             {
                 result = esp_wifi_connect();
 
@@ -56,7 +56,7 @@ namespace hub::wifi
                 }
 
                 s_retry_num++;
-                ESP_LOGI(TAG, "Disconnected, retrying...\t[%i/%i]\r", s_retry_num, CONFIG_MAXIMUM_RETRY);
+                ESP_LOGI(TAG, "Disconnected, retrying...\t[%i/%i]\r", s_retry_num, CONFIG_WIFI_MAXIMUM_RETRY);
             }
             else
             {

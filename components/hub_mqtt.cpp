@@ -62,14 +62,13 @@ namespace hub::mqtt
 
     }
 
-    client::client(std::string_view uri, uint16_t port) :
+    client::client(std::string_view uri) :
         data_event_handler{  },
         client_handle{ nullptr }
     {
         {
             esp_mqtt_client_config_t mqtt_client_config{};
-            mqtt_client_config.uri  = uri.data();
-            mqtt_client_config.port = port;
+            mqtt_client_config.uri = uri.data();
 
             client_handle = esp_mqtt_client_init(&mqtt_client_config);
         }

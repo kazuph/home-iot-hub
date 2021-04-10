@@ -14,4 +14,3 @@ idf_component_register(
     "hub_dispatch_queue.cpp"
     "hub_task.cpp"
     INCLUDE_DIRS "include" REQUIRES "mqtt" "log" "nvs_flash" "bt" "json" "vfs" "spiffs")
-    spiffs_create_partition_image("storage" "../partition" FLASH_IN_PROJECT)

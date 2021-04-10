@@ -42,7 +42,7 @@ namespace hub
         device_manager& operator=(const device_manager&)    = delete;
 
         /*  Start MQTT client. */
-        esp_err_t mqtt_start(std::string_view mqtt_uri, const uint16_t mqtt_port);
+        esp_err_t mqtt_start(std::string_view mqtt_uri);
 
         /*  Stop MQTT client. */
         esp_err_t mqtt_stop();

@@ -1,7 +1,6 @@
 .vscode
 build
 venv
-sdkconfig
 sdkconfig.old
 config.json
 debug.log

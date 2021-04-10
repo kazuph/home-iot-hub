@@ -3,7 +3,7 @@
 namespace hub::utils
 {
     json_base::json_base() noexcept :
-        json_ptr{ nullptr }
+        json_ptr(nullptr)
     {
 
     }
@@ -266,18 +266,18 @@ namespace hub::utils
 
     std::string json::dump(bool formatted) const
     {
-        auto buff = std::unique_ptr<char>((formatted) ? cJSON_Print(get()) : cJSON_PrintUnformatted(get()));
+        auto buff = std::unique_ptr<char, decltype(&cJSON_free)>((formatted) ? cJSON_Print(get()) : cJSON_PrintUnformatted(get()), &cJSON_free);
         return buff.get();
     }
 
     json_ref::json_ref() noexcept :
-        base{ nullptr }
+        base()
     {
 
     }
 
     json_ref::json_ref(cJSON* json_ptr) noexcept :
-        base{ base(json_ptr) }
+        base(json_ptr)
     {
 
     }
@@ -289,8 +289,8 @@ namespace hub::utils
     }
 
     json_object_item::json_object_item(cJSON* item, cJSON* parent) :
-        base{ item },
-        parent{ parent }
+        base(item),
+        parent(parent)
     {
 
     }
@@ -308,9 +308,9 @@ namespace hub::utils
     }
 
     json_array_item::json_array_item(cJSON* item, cJSON* parent, index_type index) :
-        base{ item },
-        parent{ parent },
-        index{ index }
+        base(item),
+        parent(parent),
+        index(index)
     {
 
     }

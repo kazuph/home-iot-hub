@@ -107,7 +107,7 @@ namespace hub::utils
 
         json(std::string_view value) noexcept;
 
-        json(json_initializer_list init = {});
+        json(json_initializer_list init);
 
         json& operator=(const json&) = delete;
 
@@ -280,10 +280,7 @@ namespace hub::utils
         inline constexpr bool is_bool                       = std::is_same_v<T, json::bool_type>;
 
         template<typename T>
-        inline constexpr bool is_number                     = !is_bool<T> && std::is_integral_v<T>;
-
-        template<typename T>
-        inline constexpr bool is_integer                    = !is_bool<T> && std::is_same_v<T, json::integer_type>;
+        inline constexpr bool is_integer                     = !is_bool<T> && std::is_integral_v<T>;
 
         template<typename T>
         inline constexpr bool is_float                      = std::is_floating_point_v<T>;
@@ -352,6 +349,13 @@ namespace hub::utils
         {
             throw std::invalid_argument("Bad value type.");
         }
+    }
+
+    inline std::istream& operator>>(std::istream& is, json& js)
+    {
+        std::string str{ std::istreambuf_iterator<char>(is), std::istreambuf_iterator<char>() };
+        js = json::parse(str);
+        return is;
     }
 
     inline std::ostream& operator<<(std::ostream& os, const json& js)

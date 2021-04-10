@@ -29,7 +29,7 @@ namespace hub
         };
     }
 
-    esp_err_t device_manager::mqtt_start(std::string_view mqtt_uri, const uint16_t mqtt_port)
+    esp_err_t device_manager::mqtt_start(std::string_view mqtt_uri)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -37,7 +37,7 @@ namespace hub
 
         try 
         {
-            mqtt_client = mqtt::client(mqtt_uri, mqtt_port);
+            mqtt_client = mqtt::client(mqtt_uri);
         }
         catch (const std::runtime_error& err)
         {
@@ -50,7 +50,7 @@ namespace hub
         if (result != ESP_OK)
         {
             ESP_LOGE(TAG, "MQTT client start failed.");
-            throw std::runtime_error("MQTT client start failed.");
+            return result;
         }
 
         mqtt_client.subscribe(MQTT_BLE_SCAN_ENABLE_TOPIC);
@@ -125,8 +125,7 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        std::string devices_dumped;
-        utils::json json_data{ utils::json::json_array() };
+        utils::json json_data;
 
         {
             std::ifstream ifs;
@@ -138,22 +137,21 @@ namespace hub
                 return;
             }
 
-            ifs >> devices_dumped;
+            ifs >> json_data;
         }
-
-        json_data = utils::json::parse(devices_dumped);
 
         for (int i = 0; i < json_data.size(); i++)
         {
             std::string_view id;
             std::string_view name;
             std::string_view address;
+            auto json_device_object = json_data[i];
 
             try
             {
-                id = utils::json_cast<std::string_view>(json_data["id"]);
-                name = utils::json_cast<std::string_view>(json_data["name"]);
-                address = utils::json_cast<std::string_view>(json_data["address"]);
+                id = utils::json_cast<std::string_view>(json_device_object["id"]);
+                name = utils::json_cast<std::string_view>(json_device_object["name"]);
+                address = utils::json_cast<std::string_view>(json_device_object["address"]);
             }
             catch (const std::invalid_argument& err)
             {

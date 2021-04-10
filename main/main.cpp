@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string_view>
+#include <fstream>
 
 #include "esp_system.h"
 #include "esp_event.h"
@@ -23,10 +24,13 @@
 namespace hub
 {
     using namespace timing::literals;
+    using namespace std::literals;
 
-    static constexpr const char* TAG    { "HUB_MAIN" };
+    static constexpr const char* TAG{ "HUB_MAIN" };
 
-    static device_manager manager       {  };
+    static constexpr const char* CONFIG_FILE{ "/spiffs/config.json" };
+
+    static device_manager manager{};
 
     static esp_err_t app_init();
 
@@ -49,12 +53,6 @@ namespace hub
         ESP_LOGI(TAG, "Application initialization success.");
 
         manager.load_connected_devices();
-        
-        if (manager.mqtt_start(CONFIG_MQTT_URI, CONFIG_MQTT_PORT) != ESP_OK)
-        {
-            goto restart;
-        }
-
         manager.ble_scan_start(INITIAL_BLE_SCAN_TIME);
 
         return;
@@ -87,18 +85,45 @@ namespace hub
             goto cleanup_nvs;
         }
 
-        result = wifi::connect(CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD);
+        result = filesystem::init();
         if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Wifi initialization failed.");
-            goto cleanup_event_loop;
+            ESP_LOGE(TAG, "Filesystem initialization failed.");
+            goto cleanup_ble;
         }
 
-        result = wifi::wait_for_connection(WIFI_CONNECTION_TIMEOUT);
-        if (result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Wifi connection failed.");
-            goto cleanup_wifi_connect;
+            std::ifstream ifs{ CONFIG_FILE };
+            utils::json config{};
+
+            if (!ifs)
+            {
+                goto cleanup_event_loop;
+            }
+
+            ifs >> config;
+            
+            result = wifi::connect(
+                utils::json_cast<std::string_view>(config["WIFI_SSID"sv]), 
+                utils::json_cast<std::string_view>(config["WIFI_PASSWORD"sv]));
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Wifi initialization failed.");
+                goto cleanup_event_loop;
+            }
+
+            result = wifi::wait_for_connection(WIFI_CONNECTION_TIMEOUT);
+            if (result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Wifi connection failed.");
+                goto cleanup_wifi_connect;
+            }
+
+            result = manager.mqtt_start(utils::json_cast<std::string>(config["MQTT_URI"sv]));
+            if (result != ESP_OK)
+            {
+                goto cleanup_wifi_connect;
+            }
         }
 
         result = ble::init();
@@ -106,13 +131,6 @@ namespace hub
         {
             ESP_LOGE(TAG, "BLE initialization failed.");
             goto cleanup_wifi_connect;
-        }
-
-        result = filesystem::init();
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Filesystem initialization failed.");
-            goto cleanup_ble;
         }
 
         return result;

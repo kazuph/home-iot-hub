@@ -31,7 +31,7 @@ namespace hub::mqtt
 
         client();
 
-        explicit client(std::string_view uri, uint16_t port);
+        explicit client(std::string_view uri);
 
         client(client&& other);
 
