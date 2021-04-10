@@ -1,4 +1,4 @@
-name: Build workflow
+name: Build
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build latest commit
+      - name: Build Latest Commit
         run: |
           . ~/esp-idf/export.sh
           idf.py app
