@@ -6,32 +6,35 @@
 
 namespace hub::concurrency
 {
-    /**
-     * @brief Base class for different types of mutexes.
-     */
-    struct mutex_base
+    namespace
     {
-        SemaphoreHandle_t m_mutex_handle;
+        struct mutex_base
+        {
+            SemaphoreHandle_t m_mutex_handle;
 
-        mutex_base()                                = delete;
+            mutex_base()                                = delete;
 
-        explicit mutex_base(const SemaphoreHandle_t handle);
+            explicit mutex_base(const SemaphoreHandle_t handle);
 
-        mutex_base(const mutex_base&)               = delete;
+            mutex_base(const mutex_base&)               = delete;
 
-        mutex_base(mutex_base&&)                    = default;
+            mutex_base(mutex_base&&)                    = default;
 
-        mutex_base& operator=(const mutex_base&)    = delete;
+            mutex_base& operator=(const mutex_base&)    = delete;
 
-        mutex_base& operator=(mutex_base&&)         = default;
+            mutex_base& operator=(mutex_base&&)         = default;
 
-        virtual ~mutex_base();
+            virtual ~mutex_base();
 
-        virtual void lock()    = 0;
+            virtual void lock()    = 0;
 
-        virtual void unlock()  = 0;
-    };
+            virtual void unlock()  = 0;
+        };
+    }
 
+    /**
+     * @brief Struct representing a basic mutex.
+     */
     struct mutex : public mutex_base
     {
         using base = mutex_base;
@@ -46,11 +49,20 @@ namespace hub::concurrency
 
         mutex& operator=(mutex&&)         = default;
 
+        /**
+         * @brief Take ownership of mutex.
+         */
         void lock() override;
 
+        /**
+         * @brief Release ownership of the mutex.
+         */
         void unlock() override;
     };
 
+    /**
+     * @brief Struct representing mutex that can be acquired in recursive calls.
+     */
     struct recursive_mutex : public mutex_base
     {
         using base = mutex_base;
@@ -65,8 +77,14 @@ namespace hub::concurrency
 
         recursive_mutex& operator=(recursive_mutex&&)         = default;
 
+        /**
+         * @brief Take ownership of mutex.
+         */
         void lock() override;
 
+        /**
+         * @brief Release ownership of the mutex.
+         */
         void unlock() override;
     };
 }
