@@ -70,7 +70,7 @@ namespace hub
 
         mqtt::client                                                    mqtt_client;            /*  MQTT client used to manage devices. */
 
-        std::map<ble::mac, std::string_view>                            scan_results;           /*  Cache scan results in order to avoid resending the same scan results over MQTT. 
+        std::map<std::string, std::string_view>                         scan_results;           /*  Cache scan results in order to avoid resending the same scan results over MQTT. 
                                                                                                     Scan results are cached only for the period of BLE scan. */
 
         std::map<std::string_view, std::unique_ptr<hub::device_base>>   connected_devices;      /*  Map holding devices connected at the given time. */

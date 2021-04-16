@@ -172,8 +172,10 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        std::string address_str = address.to_string();
+
         // Return if already in scan_results.
-        if (scan_results.find(address) != scan_results.end())
+        if (scan_results.find(address_str) != scan_results.end())
         {
             return;
         }
@@ -202,7 +204,7 @@ namespace hub
             return;
         }
 
-        scan_results[address] = device_factory::view_on_name(name);
+        scan_results[address_str] = device_factory::view_on_name(name);
 
         {
             utils::json scan_results_json{ utils::json::json_array() };
@@ -212,8 +214,8 @@ namespace hub
                 const auto& [device_address, device_name] = elem;
 
                 scan_results_json.push_back({ {
-                    { { "name",       device_name                   } },
-                    { { "address",    device_address.to_string()    } }
+                    { { "name",       device_name       } },
+                    { { "address",    device_address    } }
                 } });
             });
 
