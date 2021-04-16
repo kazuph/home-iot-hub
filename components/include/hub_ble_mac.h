@@ -11,18 +11,23 @@
 
 namespace hub::ble
 {
+    /**
+     * @brief Class for BLE MAC address representation. It offers conversions to std::string and uint8_t*.
+     */
     class mac
     {
-        std::array<uint8_t, ESP_BD_ADDR_LEN>    address;
-        esp_ble_addr_type_t                     type;
-
     public:
 
-        mac() = delete;
+        mac()
+            m_address   { 0, 0, 0, 0, 0, 0 },
+            m_type      { 0 } 
+        {
 
-        explicit mac(esp_bd_addr_t address, esp_ble_addr_type_t type = BLE_ADDR_TYPE_PUBLIC);
+        }
 
-        explicit mac(std::string_view address, esp_ble_addr_type_t type = BLE_ADDR_TYPE_PUBLIC);
+        explicit mac(esp_bd_addr_t m_address, esp_ble_addr_type_t m_type = BLE_ADDR_TYPE_PUBLIC);
+
+        explicit mac(std::string_view m_address, esp_ble_addr_type_t m_type = BLE_ADDR_TYPE_PUBLIC);
 
         mac(const mac& other)           = default;
 
@@ -34,43 +39,49 @@ namespace hub::ble
 
         mac& operator=(mac&&)           = default;
 
-        bool operator<(const mac& other) const noexcept
-        {
-            return ((address < other.address) || (type < other.type));
-        }
-
-        bool operator<=(const mac& other) const noexcept
-        {
-            return ((address <= other.address) || (type <= other.type));
-        }
-
         bool operator==(const mac& other) const noexcept
         {
-            return ((address == other.address) || (type == other.type));
+            return ((m_address == other.m_address) && (m_type == other.m_type));
         }
 
-        bool operator>=(const mac& other) const noexcept
+        bool operator!=(const mac& other) const noexcept
         {
-            return ((address >= other.address) || (type >= other.type));
+            return !operator==(other);
         }
 
-        bool operator>(const mac& other) const noexcept
-        {
-            return ((address > other.address) || (type > other.type));
-        }
-
+        /**
+         * @brief Conversion to uint8_t*, implicintly convertible to esp_bd_addr_t.
+         * 
+         * @return uint8_t* Pointer to the first byte of the address.
+         */
         constexpr explicit operator uint8_t*() noexcept
         {
-            return address.data();
+            return m_address.data();
         }
 
+        /**
+         * @brief Conversion to uint8_t*, implicintly convertible to esp_bd_addr_t.
+         * 
+         * @return uint8_t* Pointer to the first byte of the address.
+         */
         constexpr explicit operator const uint8_t*() const noexcept
         {
-            return address.data();
+            return m_address.data();
         }
 
+        /**
+         * @brief Conversion to std:string. Converts address from byte form to XX:XX:XX:XX:XX:XX form.
+         * 
+         * @return std::string 
+         */
         explicit operator std::string() const noexcept;
 
+        /**
+         * @brief Conversion to std:string. Converts address from byte form to XX:XX:XX:XX:XX:XX form.
+         * Effectively calls operator std::string().
+         * 
+         * @return std::string 
+         */
         std::string to_string() const noexcept
         {
             return static_cast<std::string>(*this);
@@ -78,38 +89,68 @@ namespace hub::ble
         
         constexpr auto begin() noexcept
         {
-            return address.begin();
+            return m_address.begin();
         }
 
         constexpr auto begin() const noexcept
         {
-            return address.begin();
+            return m_address.cbegin();
+        }
+
+        constexpr auto cbegin() const noexcept
+        {
+            return m_address.cbegin();
         }
 
         constexpr auto end() noexcept
         {
-            return address.end();
+            return m_address.end();
         }
 
         constexpr auto end() const noexcept
         {
-            return address.end();
+            return m_address.cend();
         }
 
+        constexpr auto cend() const noexcept
+        {
+            return m_address.cend();
+        }
+
+        /**
+         * @brief Conversion to uint8_t*, implicintly convertible to esp_bd_addr_t.
+         * 
+         * @return uint8_t* Pointer to the first byte of the address.
+         */
         uint8_t* to_address() noexcept
         {
             return static_cast<uint8_t*>(*this);
         }
 
+        /**
+         * @brief Conversion to uint8_t*, implicintly convertible to esp_bd_addr_t.
+         * 
+         * @return uint8_t* Pointer to the first byte of the address.
+         */
         const uint8_t* to_address() const noexcept
         {
             return static_cast<const uint8_t*>(*this);
         }
 
+        /**
+         * @brief Get address type.
+         * 
+         * @return esp_ble_addr_type_t Address type.
+         */
         esp_ble_addr_type_t get_type() const noexcept
         {
-            return type;
+            return m_type;
         }
+
+    private:
+
+        std::array<uint8_t, ESP_BD_ADDR_LEN>    m_address;
+        esp_ble_addr_type_t                     m_type;
     };
 }
 
