@@ -9,6 +9,12 @@
 
 namespace hub::event
 {
+    /**
+     * @brief Struct dispatcher handles managing execution of event handlers and their dispatch to
+     * dispatch queues. 
+     * 
+     * @tparam TasksNum Number of concurrent tasks to which event handler function are dispatched.
+     */
     template<std::size_t TasksNum>
     struct dispatcher
     {
@@ -38,6 +44,14 @@ namespace hub::event
     template<std::size_t TasksNum>
     typename dispatcher<TasksNum>::dispatch_queue_array::iterator dispatcher<TasksNum>::s_current_queue_iter{ s_dispatch_queues.begin() };
 
+    /**
+     * @brief Generic implementation of event handler. New event handlers are added via operator+=. 
+     * Adding a new concrete type of event handler is performed by specifying the type of the sender
+     * and the type of the event arguments.
+     * 
+     * @tparam SenderT Sender type.
+     * @tparam EventArgsT Argument type.
+     */
     template<typename SenderT, typename EventArgsT>
     class event_handler : protected dispatcher<4>
     {
