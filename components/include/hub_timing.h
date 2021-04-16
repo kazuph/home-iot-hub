@@ -4,12 +4,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "esp_log.h"
-
 namespace hub::timing
 {
-    inline constexpr const char* TAG{ "TIMING" };
-
     /**
      * @brief Type representing time duration in a type-safe manner.
      * Explicitly convertible to FreeRTOS TickType_t.
@@ -61,7 +57,6 @@ namespace hub::timing
      */
     inline void sleep_for(duration_t duration) noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
         vTaskDelay(static_cast<TickType_t>(duration));
     }
 
