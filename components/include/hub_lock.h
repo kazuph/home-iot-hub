@@ -19,14 +19,14 @@ namespace hub::concurrency
 
         using mutex_type = MutexT;
 
-        explicit lock(mutex_type& mutex) : mtx{ mutex } 
+        explicit lock(mutex_type& mutex) : m_mutex_ref{ mutex } 
         {
-            mtx.lock();
+            m_mutex_ref.lock();
         }
 
         ~lock()
         {
-            mtx.unlock();
+            m_mutex_ref.unlock();
         }
 
         lock(const lock&)             = delete;
@@ -36,7 +36,7 @@ namespace hub::concurrency
 
     private:
 
-        mutex_type& mtx;
+        mutex_type& m_mutex_ref;
     };
 }
 
