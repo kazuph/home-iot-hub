@@ -6,31 +6,28 @@
 
 namespace hub::concurrency
 {
-    namespace
+    struct mutex_base
     {
-        struct mutex_base
-        {
-            SemaphoreHandle_t m_mutex_handle;
+        SemaphoreHandle_t m_mutex_handle;
 
-            mutex_base()                                = delete;
+        mutex_base()                                = delete;
 
-            explicit mutex_base(const SemaphoreHandle_t handle);
+        explicit mutex_base(const SemaphoreHandle_t handle);
 
-            mutex_base(const mutex_base&)               = delete;
+        mutex_base(const mutex_base&)               = delete;
 
-            mutex_base(mutex_base&&)                    = default;
+        mutex_base(mutex_base&&)                    = default;
 
-            mutex_base& operator=(const mutex_base&)    = delete;
+        mutex_base& operator=(const mutex_base&)    = delete;
 
-            mutex_base& operator=(mutex_base&&)         = default;
+        mutex_base& operator=(mutex_base&&)         = default;
 
-            virtual ~mutex_base();
+        virtual ~mutex_base();
 
-            virtual void lock()    = 0;
+        virtual void lock()    = 0;
 
-            virtual void unlock()  = 0;
-        };
-    }
+        virtual void unlock()  = 0;
+    };
 
     /**
      * @brief Struct representing a basic mutex.
