@@ -5,8 +5,6 @@
 #include "hub_mutex.h"
 #include "hub_task.h"
 
-#include "esp_log.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
@@ -15,8 +13,11 @@
 #include <tuple>
 #include <utility>
 
-namespace hub::utils
+namespace hub::concurrency
 {
+    /**
+     * @brief The dispatch_queue class dispatches callable objects to be called on seperate task.
+     */
     class dispatch_queue : private std::queue<std::function<void(void)>>
     {
     public:
@@ -29,6 +30,12 @@ namespace hub::utils
         using size_type       = typename base::size_type;
         using container_type  = typename base::container_type;
 
+        /**
+         * @brief Constructor.
+         * 
+         * @param stack_size Stack size to be allocated by the internal FreeRTOS task.
+         * @param priority Priority on which dispatched function objects should be run.
+         */
         dispatch_queue(configSTACK_DEPTH_TYPE stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY);
 
         dispatch_queue(const dispatch_queue&) = delete;
@@ -41,55 +48,44 @@ namespace hub::utils
 
         ~dispatch_queue();
 
+        /**
+         * @brief Check if the queue is empty.
+         * 
+         * @return true if the queue is empty
+         * @return false otherwise
+         */
         bool empty() const;
 
+        /**
+         * @brief Get current size of the queue. This method is thread safe.
+         * 
+         * @return size_type Size of the queue.
+         */
         size_type size() const;
 
-        reference front();
-
-        const_reference front() const;
-
-        reference back();
-
-        const_reference back() const;
-
-        template<typename _FunTy, typename... _Args>
-        void push(_FunTy&& fun, _Args&&... args)
+        /**
+         * @brief Push function object and arguments to be passed to it to the end of the queue.
+         * 
+         * @tparam FunT Type of the function to be called.
+         * @tparam ArgsT Types of the arguments to be passed to the function.
+         * @param fun Function to be called.
+         * @param args Arguments to be passed to the function.
+         */
+        template<typename FunT, typename... ArgsT>
+        void push(FunT&& fun, ArgsT&&... args)
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            
             {
-                lock<recursive_mutex> _lock{ mtx };
+                lock<recursive_mutex> _lock{ m_mutex };
                 base::push(
                     [
-                        fun{ std::forward<_FunTy>(fun) }, 
-                        args{ std::make_tuple(std::forward<_Args>(args)...) }
+                        fun     { std::forward<FunT>(fun) }, 
+                        args    { std::make_tuple(std::forward<ArgsT>(args)...) }
                     ]() { 
                         std::apply(fun, args);
                     });
             }
 
-            xEventGroupSetBits(event_group, QUEUE_EMPTY_BIT);
-        }
-
-        template<typename _FunTy, typename... _Args>
-        void emplace(_FunTy&& fun, _Args&&... args)
-        {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-            
-            {
-                lock<recursive_mutex> _lock{ mtx };
-                base::emplace(                    
-                    [
-                        fun{ std::forward<_FunTy>(fun) }, 
-                        args{ std::make_tuple(std::forward<_Args>(args)...) }
-                    ]() { 
-                        std::apply(fun, args);
-                    }
-                );
-            }
-
-            xEventGroupSetBits(event_group, QUEUE_EMPTY_BIT);
+            xEventGroupSetBits(m_event_group, QUEUE_EMPTY_BIT);
         }
 
         void pop();
@@ -98,15 +94,42 @@ namespace hub::utils
 
     private:
 
-        void task_code() noexcept;
-
-        static constexpr const char* TAG                { "DISPATCH QUEUE" };
         static constexpr EventBits_t QUEUE_EMPTY_BIT    { BIT0 };
 
-        mutable volatile bool       exit_flag;
-        mutable recursive_mutex     mtx;
-        mutable EventGroupHandle_t  event_group;
-        mutable task                dispatch_task;
+        mutable volatile bool       m_exit_flag;
+        mutable recursive_mutex     m_mutex;
+        mutable EventGroupHandle_t  m_event_group;
+        mutable task                m_dispatch_task;
+
+        /**
+         * @brief Task function being responsible for fetching function objects
+         * and arguments from the queue and executing them.
+         */
+        void task_code() noexcept;
+
+        /**
+         * @brief Get reference to the first element of the queue.
+         * @return reference Reference to the first element.
+         */
+        reference front();
+
+        /**
+         * @brief Get const reference to the first element of the queue.
+         * @return const_reference Const reference to the first element.
+         */
+        const_reference front() const;
+
+        /**
+         * @brief Get reference to the last element of the queue.
+         * @return reference Reference to the last element.
+         */
+        reference back();
+
+        /**
+         * @brief Get const reference to the last element of the queue.
+         * @return reference Const reference to the last element.
+         */
+        const_reference back() const;
     };
 }
 
