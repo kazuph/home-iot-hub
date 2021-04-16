@@ -1,6 +1,5 @@
 #include "hub_filesystem.h"
 
-#include "esp_log.h"
 #include "esp_spiffs.h"
 
 #include <exception>
@@ -8,8 +7,6 @@
 
 namespace hub::filesystem
 {
-    static constexpr const char* TAG{ "filesystem" };
-
     static constexpr esp_vfs_spiffs_conf_t fs_config{
         "/spiffs",  // base path
         nullptr,    // partition label
