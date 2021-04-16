@@ -18,9 +18,9 @@ namespace hub::ble
     {
     public:
 
-        mac()
+        mac() :
             m_address   { 0, 0, 0, 0, 0, 0 },
-            m_type      { 0 } 
+            m_type      { BLE_ADDR_TYPE_PUBLIC } 
         {
 
         }
