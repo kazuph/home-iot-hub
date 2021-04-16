@@ -93,7 +93,7 @@ namespace hub::wifi
         }
     }
 
-    esp_err_t connect(std::string_view ssid, std::string_view password)
+    esp_err_t connect(std::string_view ssid, std::string_view password) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -179,7 +179,7 @@ namespace hub::wifi
         return result;
     }
 
-    esp_err_t disconnect()
+    esp_err_t disconnect() noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -194,7 +194,7 @@ namespace hub::wifi
         return ESP_OK;
     }
 
-    esp_err_t wait_for_connection(timing::duration_t timeout)
+    esp_err_t wait_for_connection(timing::duration_t timeout) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         
