@@ -4,15 +4,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-namespace hub::utils
+namespace hub::concurrency
 {
+    /**
+     * @brief Base class for different types of mutexes.
+     */
     struct mutex_base
     {
-        SemaphoreHandle_t mutex_handle;
+        SemaphoreHandle_t m_mutex_handle;
 
         mutex_base()                                = delete;
 
-        explicit mutex_base(const SemaphoreHandle_t handle) noexcept;
+        explicit mutex_base(const SemaphoreHandle_t handle);
 
         mutex_base(const mutex_base&)               = delete;
 
@@ -24,20 +27,16 @@ namespace hub::utils
 
         virtual ~mutex_base();
 
-        virtual void lock() noexcept    = 0;
+        virtual void lock()    = 0;
 
-        virtual void unlock() noexcept  = 0;
-
-        void lock_from_isr() noexcept;
-
-        void unlock_from_isr() noexcept;
+        virtual void unlock()  = 0;
     };
 
     struct mutex : public mutex_base
     {
         using base = mutex_base;
 
-        mutex() noexcept;
+        mutex();
 
         mutex(const mutex&)               = delete;
 
@@ -47,16 +46,16 @@ namespace hub::utils
 
         mutex& operator=(mutex&&)         = default;
 
-        void lock() noexcept override;
+        void lock() override;
 
-        void unlock() noexcept override;
+        void unlock() override;
     };
 
     struct recursive_mutex : public mutex_base
     {
         using base = mutex_base;
 
-        recursive_mutex() noexcept;
+        recursive_mutex();
 
         recursive_mutex(const recursive_mutex&)               = delete;
 
@@ -66,9 +65,9 @@ namespace hub::utils
 
         recursive_mutex& operator=(recursive_mutex&&)         = default;
 
-        void lock() noexcept override;
+        void lock() override;
 
-        void unlock() noexcept override;
+        void unlock() override;
     };
 }
 

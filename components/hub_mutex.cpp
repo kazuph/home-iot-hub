@@ -1,103 +1,73 @@
 #include "hub_mutex.h"
 
-#include "esp_log.h"
+#include <cassert>
+#include <stdexcept>
+#include <new>
 
-namespace hub::utils
+namespace hub::concurrency
 {
-    static constexpr const char* TAG{ "MUTEX" };
-
-    mutex_base::mutex_base(const SemaphoreHandle_t handle) noexcept : mutex_handle{ handle }
+    mutex_base::mutex_base(const SemaphoreHandle_t handle) : 
+        m_mutex_handle{ handle }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (!mutex_handle)
+        if (!m_mutex_handle)
         {
-            ESP_LOGE(TAG, "Could not create mutex.");
-            abort();
+            throw std::bad_alloc();
         }
     }
 
     mutex_base::~mutex_base()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        vSemaphoreDelete(mutex_handle);
+        vSemaphoreDelete(m_mutex_handle);
     }
 
-    void mutex_base::lock_from_isr() noexcept
+    mutex::mutex() : base{ xSemaphoreCreateMutex() }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        
+    }
 
-        BaseType_t higherPriorityTaskWoken{ 0 };
-        if (xSemaphoreTakeFromISR(mutex_handle, &higherPriorityTaskWoken) != pdTRUE)
+    void mutex::lock()
+    {
+        assert(m_mutex_handle);
+
+        if (xSemaphoreTake(m_mutex_handle, portMAX_DELAY) != pdTRUE)
         {
-            ESP_LOGE(TAG, "Could not lock mutex.");
-            abort();
+            throw std::runtime_error("Mutex lock failed.");
         }
     }
 
-    void mutex_base::unlock_from_isr() noexcept
+    void mutex::unlock()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        assert(m_mutex_handle);
 
-        BaseType_t higherPriorityTaskWoken{ 0 };
-        if (xSemaphoreGiveFromISR(mutex_handle, &higherPriorityTaskWoken) != pdTRUE)
+        if (xSemaphoreGive(m_mutex_handle) != pdTRUE)
         {
-            ESP_LOGE(TAG, "Could not unlock mutex.");
-            abort();
+            throw std::runtime_error("Mutex unlock failed.");
         }
     }
 
-    mutex::mutex() noexcept : base{ xSemaphoreCreateMutex() }
+    recursive_mutex::recursive_mutex() : 
+        base{ xSemaphoreCreateRecursiveMutex() }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+
     }
 
-    void mutex::lock() noexcept
+    void recursive_mutex::lock()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        assert(m_mutex_handle);
 
-        if (xSemaphoreTake(mutex_handle, portMAX_DELAY) != pdTRUE)
+        if (xSemaphoreTakeRecursive(m_mutex_handle, portMAX_DELAY) != pdTRUE)
         {
-            ESP_LOGE(TAG, "Could not lock mutex.");
-            abort();
+            throw std::runtime_error("Mutex lock failed.");
         }
     }
 
-    void mutex::unlock() noexcept
+    void recursive_mutex::unlock()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        assert(m_mutex_handle);
 
-        if (xSemaphoreGive(mutex_handle) != pdTRUE)
+        if (xSemaphoreGiveRecursive(m_mutex_handle) != pdTRUE)
         {
-            ESP_LOGE(TAG, "Could not unlock mutex.");
-            abort();
-        }
-    }
-
-    recursive_mutex::recursive_mutex() noexcept : base{ xSemaphoreCreateRecursiveMutex() }
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-    }
-
-    void recursive_mutex::lock() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (xSemaphoreTakeRecursive(mutex_handle, portMAX_DELAY) != pdTRUE)
-        {
-            ESP_LOGE(TAG, "Could not lock mutex.");
-            abort();
-        }
-    }
-
-    void recursive_mutex::unlock() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (xSemaphoreGiveRecursive(mutex_handle) != pdTRUE)
-        {
-            ESP_LOGE(TAG, "Could not unlock mutex.");
-            abort();
+            throw std::runtime_error("Mutex unlock failed.");
         }
     }
 }
