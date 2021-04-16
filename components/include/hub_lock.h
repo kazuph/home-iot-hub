@@ -1,72 +1,43 @@
-#ifndef HUB_SEMAPHORElock_impl_H
-#define HUB_SEMAPHORElock_impl_H
+#ifndef HUB_LOCK_H
+#define HUB_LOCK_H
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-#include "esp_log.h"
-
 #include <type_traits>
 
-namespace hub::utils
-{
-    enum class lock_context
-    {
-        non_isr,
-        isr
-    };
+#include "hub_mutex.h"
 
-    template<typename _Mutex, lock_context _Context>
-    class lock_impl
+namespace hub::concurrency
+{
+    template<typename MutexT>
+    class lock
     {
     public:
 
-        using mutex_type = _Mutex;
+        static_assert(std::is_base_of_v<mutex_base, MutexT>, "MutexT must derive from mutex_base.");
 
-        explicit lock_impl(mutex_type& mutex) : mtx{ mutex } 
+        using mutex_type = MutexT;
+
+        explicit lock(mutex_type& mutex) : mtx{ mutex } 
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
-            if constexpr (_Context == lock_context::non_isr)
-            {
-                mtx.lock();
-            }
-            else
-            {
-                mtx.lock_from_isr();
-            }
+            mtx.lock();
         }
 
-        ~lock_impl()
+        ~lock()
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
-            if constexpr (_Context == lock_context::non_isr)
-            {
-                mtx.unlock();
-            }
-            else
-            {
-                mtx.unlock_from_isr();
-            }
+            mtx.unlock();
         }
 
-        lock_impl(const lock_impl&)             = delete;
-        lock_impl(lock_impl&&)                  = default;
-        lock_impl& operator=(const lock_impl&)  = delete;
-        lock_impl& operator=(lock_impl&&)       = default;
+        lock(const lock&)             = delete;
+        lock(lock&&)                  = default;
+        lock& operator=(const lock&)  = delete;
+        lock& operator=(lock&&)       = default;
 
     private:
 
-        static constexpr const char* TAG{ "LOCK" };
         mutex_type& mtx;
     };
-
-    template<typename _Mutex>
-    using lock      = lock_impl<_Mutex, lock_context::non_isr>;
-
-    template<typename _Mutex>
-    using isr_lock  = lock_impl<_Mutex, lock_context::isr>;
 }
 
 #endif
