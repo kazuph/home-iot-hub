@@ -27,9 +27,9 @@ namespace hub
             const std::string data;
         };
 
-        using connect_event_handler_t       = event_handler<device_base, connect_event_args>;
-        using disconnect_event_handler_t    = event_handler<device_base, disconnect_event_args>;
-        using notify_event_handler_t        = event_handler<device_base, notify_event_args>;
+        using connect_event_handler_t       = event::event_handler<device_base, connect_event_args>;
+        using disconnect_event_handler_t    = event::event_handler<device_base, disconnect_event_args>;
+        using notify_event_handler_t        = event::event_handler<device_base, notify_event_args>;
 
         using base = ble::client;
 

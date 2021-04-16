@@ -27,11 +27,11 @@ namespace hub::ble
 
     struct scan_results_event_args
     {
-        const std::string device_name;
-        const mac device_address;
+        std::string device_name;
+        mac device_address;
     };
 
-    using scan_results_event_handler_t = event_handler<scanner, scan_results_event_args>;
+    using scan_results_event_handler_t = event::event_handler<scanner, scan_results_event_args>;
 
     extern scan_results_event_handler_t scan_results_event_handler;
 
@@ -61,9 +61,9 @@ namespace hub::ble
             const std::string   data;
         };
 
-        using connect_event_handler_t       = event_handler<client, connect_event_args>;
-        using disconnect_event_handler_t    = event_handler<client, disconnect_event_args>;
-        using notify_event_handler_t        = event_handler<client, notify_event_args>;
+        using connect_event_handler_t       = event::event_handler<client, connect_event_args>;
+        using disconnect_event_handler_t    = event::event_handler<client, disconnect_event_args>;
+        using notify_event_handler_t        = event::event_handler<client, notify_event_args>;
 
         connect_event_handler_t      connect_event_handler;
         disconnect_event_handler_t   disconnect_event_handler;

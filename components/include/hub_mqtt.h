@@ -21,7 +21,7 @@ namespace hub::mqtt
 
     class client;
 
-    using data_event_handler_t = event_handler<client, data_event_args>;
+    using data_event_handler_t = event::event_handler<client, data_event_args>;
 
     class client
     {
