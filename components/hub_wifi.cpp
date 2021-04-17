@@ -11,6 +11,9 @@
 #include "esp_event.h"
 #include "esp_log.h"
 
+#include "nvs.h"
+#include "nvs_flash.h"
+
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
@@ -98,18 +101,32 @@ namespace hub::wifi
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         esp_err_t result = ESP_OK;
+        wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
+
+        result = nvs_flash_init();
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "NVS flash initialization failed.");
+            return ESP_FAIL;
+        }
+
+        result = esp_event_loop_create_default();
+        if (result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Default event loop creation failed.");
+            goto cleanup_nvs;
+        }
 
         wifi_event_group = xEventGroupCreate();
         if (wifi_event_group == nullptr)
         {
             ESP_LOGE(TAG, "Could not create event group.");
-            return ESP_FAIL;
+            result = ESP_FAIL;
+            goto cleanup_event_loop;
         }
 
         esp_netif_init();
         esp_netif_create_default_wifi_sta();
-
-        wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
 
         result = esp_wifi_init(&wifi_init_config);
         if (result != ESP_OK)
@@ -175,6 +192,10 @@ namespace hub::wifi
         esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &event_handler);
     cleanup_wifi_init:
         esp_wifi_deinit();
+    cleanup_event_loop:
+        esp_event_loop_delete_default();
+    cleanup_nvs:
+        nvs_flash_deinit();
 
         return result;
     }
@@ -190,6 +211,8 @@ namespace hub::wifi
         esp_wifi_stop();
         esp_wifi_deinit();
         vEventGroupDelete(wifi_event_group);
+        esp_event_loop_delete_default();
+        nvs_flash_deinit();
 
         return ESP_OK;
     }

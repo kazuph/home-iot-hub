@@ -1,35 +1,87 @@
-#include "hub_device_manager.h"
+#include "application.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 
-#include <exception>
 #include <stdexcept>
 #include <fstream>
+#include <string>
 
 #include "hub_ble.h"
 #include "hub_filesystem.h"
 #include "hub_device_factory.h"
 #include "hub_const_map.h"
+#include "hub_wifi.h"
+#include "hub_timing.h"
 
 namespace hub
 {
-    device_manager::device_manager() :
+    application::application() :
         mqtt_client             {  },
         scan_results            {  },
         connected_devices       {  },
         disconnected_devices    {  }
     {
+        using namespace std::literals;
+        using namespace timing::literals;
+
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        filesystem::init();
+
+        {
+            utils::json config{};
+
+            {
+                constexpr const char* CONFIG_FILE   { "/spiffs/config.json" };
+                std::ifstream ifs                   { CONFIG_FILE };
+
+                if (!ifs)
+                {
+                    throw std::runtime_error("Could not open "s + CONFIG_FILE + "."s);
+                }
+
+                ifs >> config;
+            }
+            
+            if (wifi::connect(
+                utils::json_cast<std::string_view>(config["WIFI_SSID"sv]), 
+                utils::json_cast<std::string_view>(config["WIFI_PASSWORD"sv])) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Wifi initialization failed.");
+                throw std::runtime_error("WiFi initialization failed.");
+            }
+
+            if (wifi::wait_for_connection(10_s) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "WiFi connection failed.");
+                throw std::runtime_error("WiFi connection failed.");
+            }
+
+            if (mqtt_start(utils::json_cast<std::string_view>(config["MQTT_URI"sv])) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "MQTT start failed.");
+                throw std::runtime_error("MQTT start failed.");
+            }
+        }
+
+        if (ble::init() != ESP_OK)
+        {
+            ESP_LOGE(TAG, "BLE initialization failed.");
+            throw std::runtime_error("BLE initialization failed.");
+        }
 
         ble::scan_results_event_handler += [this](const ble::scanner* sender, ble::scan_results_event_args args) {
             ESP_LOGD(TAG, "Function: scan_results_event_handler (lambda).");
             ble_scan_callback(args.device_name, args.device_address);
         };
+
+        load_connected_devices();
+        ble_scan_start(3);
     }
 
-    esp_err_t device_manager::mqtt_start(std::string_view mqtt_uri)
+    esp_err_t application::mqtt_start(std::string_view mqtt_uri)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -65,13 +117,13 @@ namespace hub
         return result;
     }
 
-    esp_err_t device_manager::mqtt_stop()
+    esp_err_t application::mqtt_stop()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         return mqtt_client.stop();
     }
 
-    void device_manager::ble_scan_start(uint16_t ble_scan_time)
+    void application::ble_scan_start(uint16_t ble_scan_time)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -79,7 +131,7 @@ namespace hub
         ble::start_scanning(ble_scan_time);
     }
 
-    void device_manager::ble_scan_stop()
+    void application::ble_scan_stop()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -87,7 +139,7 @@ namespace hub
         scan_results.clear();
     }
 
-    void device_manager::dump_connected_devices()
+    void application::dump_connected_devices()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -121,7 +173,12 @@ namespace hub
         }
     }
 
-    void device_manager::load_connected_devices()
+    void application::run()
+    {
+        timing::sleep_for(timing::MAX_DELAY);
+    }
+
+    void application::load_connected_devices()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -163,12 +220,16 @@ namespace hub
         }
     }
 
-    device_manager::~device_manager()
+    application::~application()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        filesystem::deinit();
+        ble::deinit();
+        wifi::disconnect();
     }
 
-    void device_manager::ble_scan_callback(std::string_view name, const ble::mac& address)
+    void application::ble_scan_callback(std::string_view name, const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -227,7 +288,7 @@ namespace hub
         }
     }
 
-    void device_manager::ble_device_connect(std::string_view id, std::string_view name, const ble::mac& address)
+    void application::ble_device_connect(std::string_view id, std::string_view name, const ble::mac& address)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -269,7 +330,7 @@ namespace hub
         return;
     }
 
-    void device_manager::ble_device_disconnect(std::string_view id) noexcept
+    void application::ble_device_disconnect(std::string_view id) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -287,7 +348,7 @@ namespace hub
         dump_connected_devices();
     }
 
-    void device_manager::mqtt_data_callback(std::string_view topic, std::string_view data)
+    void application::mqtt_data_callback(std::string_view topic, std::string_view data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -304,7 +365,7 @@ namespace hub
         }
     }
 
-    void device_manager::mqtt_scan_enable_topic_callback(const utils::json& data)
+    void application::mqtt_scan_enable_topic_callback(const utils::json& data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -332,7 +393,7 @@ namespace hub
         }
     }
 
-    void device_manager::mqtt_connect_topic_callback(const utils::json& data)
+    void application::mqtt_connect_topic_callback(const utils::json& data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -357,7 +418,7 @@ namespace hub
         ble_device_connect(id, name, ble::mac(address));
     }
 
-    void device_manager::mqtt_disconnect_topic_callback(const utils::json& data)
+    void application::mqtt_disconnect_topic_callback(const utils::json& data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -380,7 +441,7 @@ namespace hub
         ESP_LOGI(TAG, "Disonnected with %s.", device_id.data());
     }
 
-    void device_manager::mqtt_device_write_topic_callback(const utils::json& data)
+    void application::mqtt_device_write_topic_callback(const utils::json& data)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 

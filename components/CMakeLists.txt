@@ -9,7 +9,7 @@ idf_component_register(
     "hub_device_factory.cpp"
     "hub_mutex.cpp"
     "hub_json.cpp"
-    "hub_device_manager.cpp"
+    "application.cpp"
     "hub_filesystem.cpp"
     "hub_dispatch_queue.cpp"
     "hub_task.cpp"

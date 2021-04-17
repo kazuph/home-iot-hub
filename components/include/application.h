@@ -15,11 +15,11 @@ namespace hub
     /*
         Class responsible for managing BLE devices, controlled via MQTT protocol.
     */
-    class device_manager
+    class application
     {
     public:
 
-        /* MQTT topics by which the device_manager instance is controlled. */
+        /* MQTT topics by which the application instance is controlled. */
         static constexpr std::string_view MQTT_BLE_SCAN_ENABLE_TOPIC        { "/scan/enable" };
         static constexpr std::string_view MQTT_BLE_SCAN_RESULTS_TOPIC       { "/scan/results" };
         static constexpr std::string_view MQTT_BLE_CONNECT_TOPIC            { "/connect" };
@@ -31,15 +31,15 @@ namespace hub
 
         static constexpr uint16_t BLE_DEFAULT_SCAN_TIME{ 1 }; // seconds
 
-        device_manager();
+        application();
 
-        device_manager(device_manager&& other)              = default;
+        application(application&& other)              = default;
 
-        device_manager(const device_manager&)               = delete;
+        application(const application&)               = delete;
 
-        device_manager& operator=(device_manager&&)         = default;
+        application& operator=(application&&)         = default;
 
-        device_manager& operator=(const device_manager&)    = delete;
+        application& operator=(const application&)    = delete;
 
         /*  Start MQTT client. */
         esp_err_t mqtt_start(std::string_view mqtt_uri);
@@ -62,11 +62,13 @@ namespace hub
             disconnected_devices map to ensure their reconnection whenever they are discovered by the BLE scan. */
         void load_connected_devices();
 
-        ~device_manager();
+        void run();
+
+        ~application();
 
     private:
 
-        static constexpr const char* TAG{ "device_manager" };
+        static constexpr const char* TAG{ "application" };
 
         mqtt::client                                                    mqtt_client;            /*  MQTT client used to manage devices. */
 
