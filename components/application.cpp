@@ -72,13 +72,13 @@ namespace hub
             throw std::runtime_error("BLE initialization failed.");
         }
 
-        ble::scan_results_event_handler += [this](const ble::scanner* sender, ble::scan_results_event_args args) {
+        ble::scan_results_event_handler += [this](auto sender, auto args) {
             ESP_LOGD(TAG, "Function: scan_results_event_handler (lambda).");
             ble_scan_callback(args.device_name, args.device_address);
         };
 
         load_connected_devices();
-        ble_scan_start(3);
+        ble_scan_start();
     }
 
     esp_err_t application::mqtt_start(std::string_view mqtt_uri)
@@ -110,7 +110,7 @@ namespace hub
         mqtt_client.subscribe(MQTT_BLE_DISCONNECT_TOPIC);
         mqtt_client.subscribe(MQTT_BLE_DEVICE_WRITE_TOPIC);
 
-        mqtt_client.data_event_handler += [this](const mqtt::client* client, mqtt::data_event_args args) {
+        mqtt_client.data_event_handler += [this](auto client, auto args) {
             mqtt_data_callback(args.topic, args.data);
         };
 
@@ -206,8 +206,8 @@ namespace hub
 
             try
             {
-                id = utils::json_cast<std::string_view>(json_device_object["id"]);
-                name = utils::json_cast<std::string_view>(json_device_object["name"]);
+                id      = utils::json_cast<std::string_view>(json_device_object["id"]);
+                name    = utils::json_cast<std::string_view>(json_device_object["name"]);
                 address = utils::json_cast<std::string_view>(json_device_object["address"]);
             }
             catch (const std::invalid_argument& err)
@@ -233,14 +233,6 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        std::string address_str = address.to_string();
-
-        // Return if already in scan_results.
-        if (scan_results.find(address_str) != scan_results.end())
-        {
-            return;
-        }
-
         // Reconnect to disconnected devices.
         if (auto iter = std::find_if(
                 disconnected_devices.begin(), 
@@ -265,19 +257,19 @@ namespace hub
             return;
         }
 
-        scan_results[address_str] = device_factory::view_on_name(name);
+        scan_results[address.to_string()] = device_factory::view_on_name(name);
 
         {
-            utils::json scan_results_json{ utils::json::json_array() };
+            utils::json scan_results_json = utils::json::json_array();
 
             std::for_each(scan_results.begin(), scan_results.end(), [&scan_results_json](const auto& elem) {
 
                 const auto& [device_address, device_name] = elem;
 
-                scan_results_json.push_back({ {
-                    { { "name",       device_name       } },
-                    { { "address",    device_address    } }
-                } });
+                scan_results_json.push_back({
+                    { "name",    device_name     },
+                    { "address", device_address  }
+                });
             });
 
             if (mqtt_client.publish(MQTT_BLE_SCAN_RESULTS_TOPIC, scan_results_json.dump(), true) != ESP_OK)
@@ -310,13 +302,13 @@ namespace hub
             return;
         }
 
-        device->disconnect_event_handler += [this, id{ std::string(id) }](const device_base* sender, device_base::disconnect_event_args args) {
+        device->disconnect_event_handler += [this, id{ std::string(id) }](auto sender, auto args) {
             ESP_LOGD(TAG, "Function: disconnect_event_handler (lambda).");
             connected_devices[id].swap(disconnected_devices[id]);
             ble_scan_start();
         };
 
-        device->notify_event_handler += [this](const device_base* sender, device_base::notify_event_args args) {
+        device->notify_event_handler += [this](auto sender, auto args) {
             ESP_LOGD(TAG, "Function: notify_event_handler (lambda).");
             if (mqtt_client.publish(MQTT_BLE_DEVICE_READ_TOPIC, args.data) != ESP_OK)
             {
@@ -405,8 +397,8 @@ namespace hub
 
         try 
         {
-            name = utils::json_cast<std::string_view>(data["name"]);
-            id = utils::json_cast<std::string_view>(data["id"]);
+            name    = utils::json_cast<std::string_view>(data["name"]);
+            id      = utils::json_cast<std::string_view>(data["id"]);
             address = utils::json_cast<std::string_view>(data["address"]);
         }
         catch (const std::invalid_argument& err)

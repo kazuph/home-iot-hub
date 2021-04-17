@@ -4,8 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <algorithm>
-#include <vector>
-#include <charconv>
+#include <map>
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -18,7 +17,7 @@ namespace hub::ble
 {
     using namespace timing::literals;
 
-    constexpr const char* TAG{ "HUB_BLE" };
+    constexpr const char* TAG       { "HUB_BLE" };
     
     constexpr auto BLE_TIMEOUT      { 10_s };
     constexpr EventBits_t FAIL_BIT  { BIT15 };
@@ -45,80 +44,79 @@ namespace hub::ble
     std::array<client*, CONFIG_BTDM_CTRL_BLE_MAX_CONN>  client::clients{};
 
     static void esp_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        static std::map<std::string, mac> scan_cache{};
+
+        switch (event)
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
+        case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
+            ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
 
-            switch (event)
+            if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
             {
-            case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
-                ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT");
-                break;
-            case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
-                ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_START_COMPLETE_EVT");
-
-                if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
-                {
-                    xEventGroupSetBits(scan_event_group, FAIL_BIT);
-                    ESP_LOGE(TAG, "Scan start failed with error code %x.", param->scan_start_cmpl.status);
-                    break;
-                }
-
-                xEventGroupSetBits(scan_event_group, SCAN_START_BIT);
-                break;
-            case ESP_GAP_BLE_SCAN_RESULT_EVT:
-                ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_RESULT_EVT");
-                switch (param->scan_rst.search_evt)
-                {
-                case ESP_GAP_SEARCH_INQ_RES_EVT:
-                    ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_RES_EVT");
-                    {
-                        uint8_t adv_name_len = 0;
-                        uint8_t* adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
-
-                        if (adv_name == nullptr || adv_name_len == 0)
-                        {
-                            break;
-                        }
-
-                        if (!scan_results_event_handler)
-                        {
-                            break;
-                        }
-
-                        scan_results_event_handler.invoke(
-                            nullptr, 
-                            { 
-                                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)), 
-                                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type) 
-                            }
-                        );
-                    }
-                    break;
-                case ESP_GAP_SEARCH_INQ_CMPL_EVT:
-                    ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_CMPL_EVT");
-                    break;
-                default: break;
-                }
-                break;
-            case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
-                ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
-                if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
-                {
-                    xEventGroupSetBits(scan_event_group, FAIL_BIT);
-                    ESP_LOGE(TAG, "Scan stop failed with error code %x.", param->scan_stop_cmpl.status);
-                    break;
-                }
-
-                xEventGroupSetBits(scan_event_group, SCAN_STOP_BIT);
-                break;
-            case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
-                ESP_LOGV(TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT");
-                break;
-            default:
-                ESP_LOGW(TAG, "Other GAP event: %x.", event);
+                xEventGroupSetBits(scan_event_group, FAIL_BIT);
+                ESP_LOGE(TAG, "Scan start failed with error code %x.", param->scan_start_cmpl.status);
                 break;
             }
+
+            scan_cache.clear();
+
+            xEventGroupSetBits(scan_event_group, SCAN_START_BIT);
+            break;
+        case ESP_GAP_BLE_SCAN_RESULT_EVT:
+            ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_RESULT_EVT");
+            switch (param->scan_rst.search_evt)
+            {
+            case ESP_GAP_SEARCH_INQ_RES_EVT:
+                ESP_LOGV(TAG, "ESP_GAP_SEARCH_INQ_RES_EVT");
+                {
+                    uint8_t adv_name_len = 0;
+                    uint8_t* adv_name = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
+
+                    if (adv_name == nullptr || adv_name_len == 0)
+                    {
+                        break;
+                    }
+
+                    if (!scan_results_event_handler)
+                    {
+                        break;
+                    }
+
+                    {
+                        std::string device_name(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len));
+                        mac device_address(param->scan_rst.bda, param->scan_rst.ble_addr_type);
+
+                        if (auto device_iter = scan_cache.find(device_name); device_iter == scan_cache.cend())
+                        {
+                            scan_cache[device_name] = device_address;
+                            scan_results_event_handler.invoke(nullptr, { std::move(device_name), std::move(device_address) });
+                        }
+                    }
+                }
+                break;
+            default: break;
+            }
+            break;
+        case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
+            ESP_LOGV(TAG, "ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT");
+            if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
+            {
+                xEventGroupSetBits(scan_event_group, FAIL_BIT);
+                ESP_LOGE(TAG, "Scan stop failed with error code %x.", param->scan_stop_cmpl.status);
+                break;
+            }
+
+            scan_cache.clear();
+
+            xEventGroupSetBits(scan_event_group, SCAN_STOP_BIT);
+            break;
+        default:
+            break;
         }
+    }
 
     esp_err_t init()
     {
@@ -348,12 +346,6 @@ namespace hub::ble
             ble_client->connect_event_handler.invoke(ble_client, {});
 
             break;
-        case ESP_GATTC_OPEN_EVT:
-            ESP_LOGV(TAG, "ESP_GATTC_OPEN_EVT");
-            break;
-        case ESP_GATTC_DIS_SRVC_CMPL_EVT:
-            ESP_LOGV(TAG, "ESP_GATTC_DIS_SRVC_CMPL_EVT");
-            break;
         case ESP_GATTC_CFG_MTU_EVT:
             ESP_LOGV(TAG, "ESP_GATTC_CFG_MTU_EVT");
             xEventGroupSetBits(ble_client->event_group, CONNECT_BIT);
@@ -443,9 +435,6 @@ namespace hub::ble
 
             xEventGroupSetBits(ble_client->event_group, READ_DESCR_BIT);
             break;
-        case ESP_GATTC_SRVC_CHG_EVT:
-            ESP_LOGV(TAG, "ESP_GATTC_SRVC_CHG_EVT");
-            break;
         case ESP_GATTC_DISCONNECT_EVT:
             ESP_LOGV(TAG, "ESP_GATTC_DISCONNECT_EVT");
             ESP_LOGI(TAG, "Disconnect reason: %#04x", param->disconnect.reason);
@@ -465,11 +454,7 @@ namespace hub::ble
             ble_client->disconnect_event_handler.invoke(ble_client, {});
 
             break;
-        case ESP_GATTC_CLOSE_EVT:
-            ESP_LOGV(TAG, "ESP_GATTC_CLOSE_EVT");
-            break;
         default:
-            ESP_LOGW(TAG, "Other GATTC event: %i.", event);
             break;
         }
     }
