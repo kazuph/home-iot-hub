@@ -1,0 +1,14 @@
+idf_component_register(
+    SRCS
+       "client.cpp"
+       "service.cpp"
+       "characteristic.cpp"
+       "descriptor.cpp"
+       "mac.cpp"     
+    INCLUDE_DIRS
+        "include"
+    REQUIRES 
+        "bt" 
+        "log"
+        "event"
+        "timing")
