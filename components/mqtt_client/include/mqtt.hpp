@@ -1,9 +1,9 @@
 #ifndef MQTT_HPP
 #define MQTT_HPP
 
-#include "mqtt.hpp"
 #include "event.hpp"
 
+#include "mqtt_client.h"
 #include "esp_err.h"
 
 #include <functional>

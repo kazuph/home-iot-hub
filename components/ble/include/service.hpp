@@ -1,18 +1,16 @@
 #ifndef SERVICE_HPP
 #define SERVICE_HPP
 
-#include "client.hpp"
-#include "characteristic.hpp"
-
-#include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
-#include "esp_gattc_api.h"
 
 #include <vector>
 #include <memory>
 
 namespace hub::ble
 {
+    class client;
+    class characteristic;
+    
     class service
     {
     public:
@@ -29,7 +27,7 @@ namespace hub::ble
 
         esp_gattc_service_elem_t    m_service;
         std::shared_ptr<client>     m_client_ptr;
-    }
+    };
 }
 
 #endif

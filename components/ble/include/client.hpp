@@ -1,18 +1,16 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include "service.hpp"
 #include "mac.hpp"
+#include "timing.hpp"
 
-#include "hub_timing.h"
-
-#include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
 #include "esp_gattc_api.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <new>
@@ -23,6 +21,10 @@ namespace hub::ble
 
     inline constexpr uint16_t   MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
     inline constexpr auto       BLE_TIMEOUT{ 5_s };
+
+    class service;
+    class characteristic;
+    class descriptor;
 
     class client : public std::enable_shared_from_this<client>
     {
@@ -36,7 +38,11 @@ namespace hub::ble
 
         static std::shared_ptr<client> make_client();
 
-        std::shared_ptr<client> get_shared_client() const
+        client();
+
+        ~client();
+
+        std::shared_ptr<client> get_shared_client()
         {
             return shared_client::shared_from_this();
         }
@@ -46,8 +52,6 @@ namespace hub::ble
         void disconnect();
 
         std::vector<service> get_services() const;
-
-        ~client();
 
     private:
 
@@ -62,6 +66,7 @@ namespace hub::ble
         static constexpr EventBits_t REG_FOR_NOTIFY_BIT     { BIT6 };
         static constexpr EventBits_t UNREG_FOR_NOTIFY_BIT   { BIT7 };
         static constexpr EventBits_t DISCONNECT_BIT         { BIT8 };
+        static constexpr EventBits_t FAIL_BIT               { BIT15 };
 
         static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param);
 
@@ -74,9 +79,7 @@ namespace hub::ble
         mutable std::vector<service>    m_services_cache;
         mutable std::vector<uint8_t>    m_characteristic_data_cache;
         mutable std::vector<uint8_t>    m_descriptor_data_cache;
-
-        client();
-    }
+    };
 }
 
 #endif

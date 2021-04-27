@@ -1,6 +1,10 @@
 #include "client.hpp"
-#include "hub_error.h"
+#include "service.hpp"
+#include "characteristic.hpp"
+#include "descriptor.hpp"
+#include "error.hpp"
 
+#include "esp_bt_defs.h"
 #include "esp_err.h"
 
 #include <array>
@@ -9,15 +13,6 @@
 namespace hub::ble
 {
     static std::array<std::weak_ptr<client>, MAX_CLIENTS> g_client_refs;
-
-    constexpr esp_ble_scan_params_t BLE_SCAN_PARAMS{
-        BLE_SCAN_TYPE_ACTIVE,           // Scan type
-        BLE_ADDR_TYPE_PUBLIC,           // Address type
-        BLE_SCAN_FILTER_ALLOW_ALL,      // Filter policy
-        0x50,                           // Scan interval
-        0x30,                           // Scan window
-        BLE_SCAN_DUPLICATE_DISABLE      // Advertise duplicates filter policy
-    };
 
     std::shared_ptr<client> client::make_client()
     {
@@ -44,15 +39,36 @@ namespace hub::ble
         }
     }
 
+    client::client() :
+        m_connection_id             { 0 },
+        m_app_id                    { 0 },
+        m_gattc_interface           { 0 },
+        m_address                   {  },
+        m_event_group               { xEventGroupCreate() },
+        m_services_cache            {  },
+        m_characteristic_data_cache {  },
+        m_descriptor_data_cache     {  }
+    {
+        if (!m_event_group)
+        {
+            throw std::bad_alloc();
+        }
+    }
+
+    client::~client()
+    {
+        g_client_refs[m_app_id].reset();
+        esp_ble_gattc_app_unregister(m_gattc_interface);
+        vEventGroupDelete(m_event_group);
+    }
+
     void client::gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
     {
-        esp_err_t result = ESP_OK;
-
         auto get_shared_client = [](esp_gatt_if_t gattc_interface) {
             if (auto iter = std::find_if(
                     g_client_refs.cbegin(), 
                     g_client_refs.cend(), 
-                    [gattc_interface](auto client_ref) { return client_ref->m_gattc_interface == gattc_interface; }); 
+                    [gattc_interface](auto client_ref) { return client_ref.lock()->m_gattc_interface == gattc_interface; }); 
                 iter != g_client_refs.cend())
             {
                 return iter->lock();
@@ -77,8 +93,6 @@ namespace hub::ble
                     std::shared_ptr<client> client_ptr = g_client_refs[param->reg.app_id].lock();
                     client_ptr->m_gattc_interface = gattc_if;
                 }
-
-                esp_ble_gap_set_scan_params(const_cast<esp_ble_scan_params_t*>(&BLE_SCAN_PARAMS));
             }
 
             return;
@@ -106,10 +120,10 @@ namespace hub::ble
                 service(
                     client_ptr, 
                     { 
-                        param->is_primary,
+                        param->search_res.is_primary,
                         param->search_res.start_handle,
                         param->search_res.end_handle,
-                        param->srvc_id.uuid
+                        param->search_res.srvc_id.uuid
                     }
                 )
             );
@@ -133,7 +147,7 @@ namespace hub::ble
             break;
         case ESP_GATTC_WRITE_DESCR_EVT:
             client_ptr->m_descriptor_data_cache.resize(param->read.value_len);
-            std::copy(param->read.value, param->read.value + param->read.value_len, ble_client->m_descriptor_data_cache.begin());
+            std::copy(param->read.value, param->read.value + param->read.value_len, client_ptr->m_descriptor_data_cache.begin());
             xEventGroupSetBits(client_ptr->m_event_group, WRITE_DESCR_BIT);
             break;
         case ESP_GATTC_READ_DESCR_EVT:
@@ -144,30 +158,6 @@ namespace hub::ble
             break;
         default:
             break;
-        }
-    }
-
-    client::~client()
-    {
-        clients[m_app_id].reset();
-        esp_ble_gattc_app_unregister(m_gattc_interface);
-        vEventGroupDelete(m_event_group);
-    }
-
-    client::client() :
-        m_connection_id             { 0 },
-        m_app_id                    { 0 },
-        m_gattc_interface           { 0 },
-        m_address                   {  },
-        m_event_group               { xEventGroupCreate() }
-        m_services_cache            {  },
-        m_characteristic_data_cache {  },
-        m_descriptor_data_cache     {  }
-
-    {
-        if (!m_event_group)
-        {
-            throw std::bad_alloc();
         }
     }
 

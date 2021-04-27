@@ -1,5 +1,10 @@
-#include "hub_ble_characteristic.hpp"
-#include "hub_error.h"
+#include "characteristic.hpp"
+#include "client.hpp"
+#include "descriptor.hpp"
+#include "error.hpp"
+
+#include "esp_bt_defs.h"
+#include "esp_gattc_api.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -7,8 +12,8 @@
 namespace hub::ble
 {
     characteristic::characteristic(std::shared_ptr<client> client_ptr, esp_gattc_char_elem_t characteristic) :
-        m_client_ptr(client_ptr),
-        m_characteristic(characteristic)
+        m_characteristic(characteristic),
+        m_client_ptr(client_ptr)
     {
 
     }
@@ -47,8 +52,6 @@ namespace hub::ble
         {
             throw hub::esp_exception(ESP_ERR_TIMEOUT, "Write characteristic timed out.");
         }
-
-        return result;
     }
 
     std::vector<uint8_t> characteristic::read() const
@@ -91,8 +94,8 @@ namespace hub::ble
         return m_characteristic.char_handle;
     }
 
-    std::vector<descriptor> get_descriptors() const
+    std::vector<descriptor> characteristic::get_descriptors() const
     {
-        
+        return std::vector<descriptor>();
     }
 }

@@ -1,6 +1,9 @@
 #include "descriptor.hpp"
-#include "hub_error.h"
+#include "client.hpp"
+#include "error.hpp"
 
+#include "esp_bt_defs.h"
+#include "esp_gattc_api.h"
 #include "esp_err.h"
 
 namespace hub::ble
@@ -17,7 +20,7 @@ namespace hub::ble
         if (esp_err_t result = esp_ble_gattc_write_char_descr(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_connection_id,
-                m_descriptor.char_handle,
+                m_descriptor.handle,
                 data.size(),
                 data.data(),
                 ESP_GATT_WRITE_TYPE_RSP,
@@ -53,7 +56,7 @@ namespace hub::ble
         if (esp_err_t result = esp_ble_gattc_read_char_descr(
             m_client_ptr->m_gattc_interface, 
             m_client_ptr->m_connection_id,
-            m_descriptor.char_handle,
+            m_descriptor.handle,
             ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
         {

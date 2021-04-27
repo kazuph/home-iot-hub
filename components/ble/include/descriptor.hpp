@@ -1,16 +1,16 @@
 #ifndef DESCRIPTOR_HPP
 #define DESCRIPTOR_HPP
 
-#include "client.hpp"
-
-#include "esp_bt_defs.h"
 #include "esp_gatt_defs.h"
-#include "esp_gattc_api.h"
 
+#include <cstdint>
+#include <vector>
 #include <memory>
 
 namespace hub::ble
 {
+    class client;
+
     class descriptor
     {
     public:
@@ -29,7 +29,7 @@ namespace hub::ble
 
         esp_gattc_descr_elem_t  m_descriptor;
         std::shared_ptr<client> m_client_ptr;
-    }
+    };
 }
 
 #endif
