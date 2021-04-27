@@ -26,6 +26,9 @@ namespace hub::ble
     class characteristic;
     class descriptor;
 
+    /**
+     * @brief Class client represents a BLE peripheral.
+     */
     class client : public std::enable_shared_from_this<client>
     {
     public:
@@ -36,21 +39,46 @@ namespace hub::ble
 
         using shared_client = std::enable_shared_from_this<client>;
 
+        /**
+         * @brief Create client object. Constructor of class client does not initialize all the neccessary data
+         * and should not be called directly. This function checks whether a new client can be created, assigns application
+         * ID and, indirectly, GATT interface ID.
+         * 
+         * @return std::shared_ptr<client> 
+         */
         static std::shared_ptr<client> make_client();
 
         client();
 
         ~client();
 
+        /**
+         * @brief Get the shared client object.
+         * 
+         * @return std::shared_ptr<client> 
+         */
         std::shared_ptr<client> get_shared_client()
         {
             return shared_client::shared_from_this();
         }
 
+        /**
+         * @brief Connect with the client with the given MAC address.
+         * 
+         * @param address Address of the client.
+         */
         void connect(mac address);
 
+        /**
+         * @brief Disconnecy with the client.
+         */
         void disconnect();
 
+        /**
+         * @brief Get the client services.
+         * 
+         * @return std::vector<service> 
+         */
         std::vector<service> get_services() const;
 
     private:
