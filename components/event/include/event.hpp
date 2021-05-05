@@ -4,6 +4,7 @@
 #include <functional>
 #include <algorithm>
 #include <list>
+#include <type_traits>
 
 #include "dispatch_queue.hpp"
 
@@ -52,12 +53,13 @@ namespace hub::event
      * @tparam SenderT Sender type.
      * @tparam EventArgsT Argument type.
      */
-    template<typename SenderT, typename EventArgsT>
+    template<typename EventArgsT>
     class event_handler : protected dispatcher<4>
     {
     public:
 
-        using function_type         = std::function<void(const SenderT*, EventArgsT)>;
+        using argument_type         = std::remove_cv_t<std::remove_reference_t<std::remove_pointer_t<EventArgsT>>>;
+        using function_type         = std::function<void(const argument_type&)>;
         using function_list_type    = std::list<function_type>;
 
         event_handler()                                 = default;
@@ -72,22 +74,16 @@ namespace hub::event
 
         ~event_handler()                                = default;
 
-        void invoke(const SenderT* sender, EventArgsT&& args) const
+        void invoke(argument_type&& args) const
         {
-            std::for_each(m_callback_list.begin(), m_callback_list.end(), 
-                [
-                    this, 
-                    sender, 
-                    &args
-                ](const function_type& fun) {
-                    dispatch(fun, sender, std::forward<EventArgsT>(args));
-                }
-            );
+            std::for_each(m_callback_list.cbegin(), m_callback_list.cend(), [this, args{ std::forward<argument_type>(args) }](const auto& fun) {
+                dispatch(fun, args);
+            });
         }
 
-        void operator+=(function_type&& fun)
+        void operator+=(function_type fun)
         {
-            m_callback_list.push_back(std::forward<function_type>(fun));
+            m_callback_list.push_back(fun);
         }
 
         operator bool() const

@@ -10,7 +10,7 @@ namespace hub::filesystem
     static constexpr esp_vfs_spiffs_conf_t fs_config{
         "/spiffs",  // base path
         nullptr,    // partition label
-        5,          // max_files
+        2,          // max_files
         true        // format if mount failed
     };
 

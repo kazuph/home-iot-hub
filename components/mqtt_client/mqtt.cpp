@@ -30,18 +30,11 @@ namespace hub::mqtt
                 break;
             }
 
-            if (!mqtt_client->data_event_handler)
+            if (mqtt_client->data_event_handler)
             {
-                break;
+                mqtt_client->data_event_handler.invoke({ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });   
             }
-
-            mqtt_client->data_event_handler.invoke(
-                mqtt_client, 
-                { 
-                    std::string(event->topic, event->topic_len), 
-                    std::string(event->data, event->data_len) 
-                }
-            );       
+    
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGW(TAG, "MQTT_EVENT_ERROR");
@@ -78,7 +71,7 @@ namespace hub::mqtt
             throw std::runtime_error("MQTT client handle initialization failed.");
         }
 
-        if (!start())
+        if (start() != ESP_OK)
         {
             throw std::runtime_error("MQTT client could not be started.");
         }
@@ -199,7 +192,7 @@ namespace hub::mqtt
 
     void client::set_data_event_handler(event::data_event_handler_fun_t event_handler)
     {
-        data_event_handler += std::move(event_handler);
+        data_event_handler += event_handler;
     }
 
     esp_err_t client::start()

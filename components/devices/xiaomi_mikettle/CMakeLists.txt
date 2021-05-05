@@ -4,7 +4,7 @@ idf_component_register(
     INCLUDE_DIRS 
         "include"
     REQUIRES
-        "json"
         "log"
         "ble"
-        "timing")
+        "timing"
+        "utils")

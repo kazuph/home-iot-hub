@@ -12,8 +12,6 @@
 
 namespace hub::mqtt
 {
-    class client;
-
     namespace event
     {
         struct data_event_args
@@ -22,10 +20,14 @@ namespace hub::mqtt
             std::string data;
         };
 
-        using data_event_handler_t      = hub::event::event_handler<client, data_event_args>;
-        using data_event_handler_fun_t  = std::function<void(const client*, data_event_args)>;
+
+        using data_event_handler_t      = hub::event::event_handler<data_event_args>;
+        using data_event_handler_fun_t  = data_event_handler_t::function_type;
     }
 
+    /**
+     * @brief Class representing a single MQTT client.
+     */
     class client
     {
     public:

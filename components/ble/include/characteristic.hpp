@@ -60,6 +60,16 @@ namespace hub::ble
          */
         std::vector<descriptor> get_descriptors() const;
 
+        /**
+         * @brief Subscribe to characteristic notifications.
+         */
+        void subscribe();
+
+        /**
+         * @brief Unsubscribe from characteristic notifications.
+         */
+        void unsubscribe();
+
     private:
 
         static constexpr const char* TAG{ "CHARACTERISTIC" };

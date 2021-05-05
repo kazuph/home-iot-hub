@@ -6,8 +6,6 @@
 #include "esp_bt_defs.h"
 #include "esp_gattc_api.h"
 
-#include "range/v3/view.hpp"
-
 namespace hub::ble
 {
     service::service(std::shared_ptr<client> client_ptr, esp_gattc_service_elem_t service) :
@@ -53,6 +51,11 @@ namespace hub::ble
             throw hub::esp_exception(ESP_FAIL, "Could not retrieve characteristics.");
         }
 
-        return characteristics | ranges::views::transform([this](auto elem) { return characteristic(m_client_ptr, elem); }) | ranges::to<std::vector<characteristic>>;
+        {
+            std::vector<characteristic> result;
+            result.reserve(characteristics.size());
+            std::transform(characteristics.cbegin(), characteristics.cend(), std::back_inserter(result), [this](auto elem) { return characteristic(m_client_ptr, elem); });
+            return result;
+        }
     }
 }

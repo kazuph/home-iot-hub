@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "mqtt_service.cpp"
+        "ble_service.cpp"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES
+        "ble"
+        "mqtt_client"
+        "utils")

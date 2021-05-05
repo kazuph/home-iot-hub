@@ -3,6 +3,10 @@
 
 #include "mac.hpp"
 #include "timing.hpp"
+#include "event.hpp"
+#include "service.hpp"
+#include "characteristic.hpp"
+#include "descriptor.hpp"
 
 #include "esp_gatt_defs.h"
 #include "esp_gattc_api.h"
@@ -14,6 +18,9 @@
 #include <vector>
 #include <memory>
 #include <new>
+#include <functional>
+#include <utility>
+#include <string_view>
 
 namespace hub::ble
 {
@@ -22,9 +29,17 @@ namespace hub::ble
     inline constexpr uint16_t   MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
     inline constexpr auto       BLE_TIMEOUT{ 5_s };
 
-    class service;
-    class characteristic;
-    class descriptor;
+    namespace event
+    {
+        struct notify_event_args_t
+        {
+            uint16_t                m_handle;
+            std::vector<uint8_t>    m_data;
+        };
+
+        using notify_event_handler_t    = hub::event::event_handler<notify_event_args_t>;
+        using notify_function_t         = notify_event_handler_t::function_type;
+    }
 
     /**
      * @brief Class client represents a BLE peripheral.
@@ -36,6 +51,7 @@ namespace hub::ble
         friend class service;
         friend class characteristic;
         friend class descriptor;
+        friend std::shared_ptr<client> get_client_by_mac(const mac& address) noexcept;
 
         using shared_client = std::enable_shared_from_this<client>;
 
@@ -44,9 +60,15 @@ namespace hub::ble
          * and should not be called directly. This function checks whether a new client can be created, assigns application
          * ID and, indirectly, GATT interface ID.
          * 
+         * @param id ID of the client.
+         * 
          * @return std::shared_ptr<client> 
          */
-        static std::shared_ptr<client> make_client();
+        static std::shared_ptr<client> make_client(std::string_view id);
+
+        static std::shared_ptr<client> get_client_by_mac(const mac& address) noexcept;
+
+        static std::shared_ptr<client> get_client_by_id(std::string_view id) noexcept;
 
         client();
 
@@ -81,6 +103,16 @@ namespace hub::ble
          */
         std::vector<service> get_services() const;
 
+        /**
+         * @brief Subscribe to the BLE characteristic being represented by the current characteristic object.
+         * 
+         * @param fun Callback function handling event.
+         */
+        void set_notify_event_handler(event::notify_function_t fun)
+        {
+            m_notify_event_handler += fun;
+        }
+
     private:
 
         static constexpr const char* TAG{ "CLIENT" };
@@ -98,15 +130,18 @@ namespace hub::ble
 
         static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param);
 
-        uint16_t                        m_connection_id;
-        uint16_t                        m_app_id;
-        uint16_t                        m_gattc_interface;
-        mac                             m_address;
-        EventGroupHandle_t              m_event_group;
+        uint16_t                                m_connection_id;
+        uint16_t                                m_app_id;
+        uint16_t                                m_gattc_interface;
+        mac                                     m_address;
+        EventGroupHandle_t                      m_event_group;
+        std::string                             m_id;
 
-        mutable std::vector<service>    m_services_cache;
-        mutable std::vector<uint8_t>    m_characteristic_data_cache;
-        mutable std::vector<uint8_t>    m_descriptor_data_cache;
+        mutable std::vector<service>            m_services_cache;
+        mutable std::vector<uint8_t>            m_characteristic_data_cache;
+        mutable std::vector<uint8_t>            m_descriptor_data_cache;
+
+        event::notify_event_handler_t           m_notify_event_handler;
     };
 }
 

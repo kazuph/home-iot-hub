@@ -1,10 +1,11 @@
 #include "client.hpp"
-#include "service.hpp"
-#include "characteristic.hpp"
-#include "descriptor.hpp"
 #include "error.hpp"
 
+#include "esp_bt.h"
+#include "esp_bt_main.h"
 #include "esp_bt_defs.h"
+#include "esp_gatt_common_api.h"
+#include "esp_gap_ble_api.h"
 #include "esp_err.h"
 
 #include <array>
@@ -14,8 +15,19 @@ namespace hub::ble
 {
     static std::array<std::weak_ptr<client>, MAX_CLIENTS> g_client_refs;
 
-    std::shared_ptr<client> client::make_client()
+    std::shared_ptr<client> client::make_client(std::string_view id)
     {
+        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
+        {
+            return std::shared_ptr<client>();
+        }
+
+        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
+        {
+            return std::shared_ptr<client>();
+        }
+
+    
         auto iter = std::find_if(g_client_refs.cbegin(), g_client_refs.cend(), [](const auto& client_ref) {
             return !(client_ref.expired());
         });
@@ -28,7 +40,8 @@ namespace hub::ble
         {
             std::shared_ptr<client> client_ptr = iter->lock();
 
-            client_ptr->m_app_id = std::distance(g_client_refs.cbegin(), iter);
+            client_ptr->m_app_id    = std::distance(g_client_refs.cbegin(), iter);
+            client_ptr->m_id        = std::string(id);
 
             if (esp_ble_gattc_app_register(client_ptr->m_app_id) != ESP_OK)
             {
@@ -39,6 +52,34 @@ namespace hub::ble
         }
     }
 
+    std::shared_ptr<client> client::get_client_by_mac(const mac& address) noexcept
+    {
+        if (auto iter = std::find_if(
+                g_client_refs.cbegin(), 
+                g_client_refs.cend(), 
+                [address](auto client_ref) { return client_ref.lock()->m_address == address; }); 
+            iter != g_client_refs.cend())
+        {
+            return iter->lock();
+        }
+
+        return std::shared_ptr<client>();
+    }
+
+    std::shared_ptr<client> client::get_client_by_id(std::string_view id) noexcept
+    {
+        if (auto iter = std::find_if(
+                g_client_refs.cbegin(), 
+                g_client_refs.cend(), 
+                [id](auto client_ref) { return client_ref.lock()->m_id == id; }); 
+            iter != g_client_refs.cend())
+        {
+            return iter->lock();
+        }
+
+        return std::shared_ptr<client>();
+    }
+
     client::client() :
         m_connection_id             { 0 },
         m_app_id                    { 0 },
@@ -47,7 +88,8 @@ namespace hub::ble
         m_event_group               { xEventGroupCreate() },
         m_services_cache            {  },
         m_characteristic_data_cache {  },
-        m_descriptor_data_cache     {  }
+        m_descriptor_data_cache     {  },
+        m_notify_event_handler      {  }
     {
         if (!m_event_group)
         {
@@ -101,6 +143,10 @@ namespace hub::ble
         switch (event)
         {
         case ESP_GATTC_NOTIFY_EVT:
+            client_ptr->m_notify_event_handler.invoke({
+                param->notify.handle,
+                std::vector<uint8_t>(param->notify.value, param->notify.value + static_cast<size_t>(param->notify.value_len)) 
+            });
             break;
         case ESP_GATTC_CONNECT_EVT:
             client_ptr->m_connection_id     = param->connect.conn_id;
