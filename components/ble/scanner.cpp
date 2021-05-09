@@ -1,5 +1,4 @@
 #include "scanner.hpp"
-#include "error.hpp"
 #include "timing.hpp"
 
 #include "freertos/FreeRTOS.h"
@@ -13,12 +12,15 @@
 #include "esp_err.h"
 #include "esp_log.h"
 
+#include <stdexcept>
 #include <list>
 #include <new>
 
 namespace hub::ble::scanner
 {
     using namespace timing::literals;
+
+    static constexpr const char* TAG{ "BLE SCANNER" };
 
     static constexpr auto           BLE_TIMEOUT     { 10_s };
 
@@ -41,6 +43,8 @@ namespace hub::ble::scanner
 
     static void gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (event == ESP_GAP_BLE_SCAN_START_COMPLETE_EVT)
         {
             if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
@@ -85,9 +89,11 @@ namespace hub::ble::scanner
 
     void init()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gap_register_callback(&gap_callback); result != ESP_OK)
         {
-            throw esp_exception(result);
+            throw std::runtime_error("Could not register GAP callback.");
         }
 
         s_scan_event_group = xEventGroupCreate();
@@ -99,14 +105,17 @@ namespace hub::ble::scanner
 
     void deinit()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         vEventGroupDelete(s_scan_event_group);
     }
 
     void start(uint16_t duration)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gap_start_scanning(duration); result != ESP_OK)
         {
-            throw esp_exception(result);
+            throw std::runtime_error("BLE scan start failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(s_scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -117,19 +126,21 @@ namespace hub::ble::scanner
         }
         else if (bits & FAIL_BIT)
         {
-            throw esp_exception(ESP_FAIL, "Scan start failed.");
+            throw std::runtime_error("Scan start failed.");
         }
         else
         {
-            throw esp_exception(ESP_ERR_TIMEOUT, "Scan start timed out.");
+            throw std::runtime_error("Scan start timed out.");
         }
     }
 
     void stop()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gap_stop_scanning(); result != ESP_OK)
         {
-            throw esp_exception(result);
+            throw std::runtime_error("BLE scan stop failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(s_scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -140,16 +151,17 @@ namespace hub::ble::scanner
         }
         else if (bits & FAIL_BIT)
         {
-            throw esp_exception(ESP_FAIL, "Scan stop failed.");
+            throw std::runtime_error("Scan stop failed.");
         }
         else
         {
-            throw esp_exception(ESP_ERR_TIMEOUT, "Scan stop timed out.");
+            throw std::runtime_error("Scan stop timed out.");
         }
     }
 
     void set_scan_results_event_handler(event::scan_results_event_handler_t::function_type scan_callback)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         s_scan_results_event_handler += scan_callback;
     }
 }

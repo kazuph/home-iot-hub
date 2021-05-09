@@ -8,6 +8,8 @@
 #include <string_view>
 #include <functional>
 
+#include "esp_log.h"
+
 namespace hub::service
 {
     /**
@@ -49,17 +51,18 @@ namespace hub::service
         template<typename MessageHandlerT>
         void set_message_handler(MessageHandlerT message_handler)
         {
-            m_message_handler = message_handler;
+            ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            m_client.set_data_event_handler([this](auto args) {
-                std::invoke(m_message_handler, out_message_t{ args.topic, args.data });
+            m_client.set_data_event_handler([message_handler{ std::move(message_handler) }](auto args) {
+                std::invoke(message_handler, out_message_t{ args.topic, args.data });
             });
         }
 
     private:
 
+        static constexpr const char* TAG{ "MQTT SERVICE" };
+
         mutable mqtt::client    m_client;
-        message_handler_t       m_message_handler;
     };
 
     static_assert(is_valid_two_way_service_v<mqtt_service>, "mqtt_service is not a valid two way service.");

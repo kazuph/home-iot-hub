@@ -6,6 +6,8 @@
 #include "json.hpp"
 #include "mac.hpp"
 
+#include "esp_log.h"
+
 #include <cstdint>
 #include <variant>
 
@@ -66,10 +68,14 @@ namespace hub::service
         template<typename MessageHandlerT>
         void set_message_handler(MessageHandlerT message_handler)
         {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
+
             m_message_handler = message_handler;
         }
 
     private:
+
+        static constexpr const char* TAG{ "BLE SERVICE" };
 
         message_handler_t m_message_handler;
 

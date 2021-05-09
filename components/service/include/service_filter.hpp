@@ -3,6 +3,8 @@
 
 #include "service_traits.hpp"
 
+#include "esp_log.h"
+
 #include <type_traits>
 #include <functional>
 
@@ -29,12 +31,14 @@ namespace hub::service
                 m_sender(std::move(sender)),
                 m_predicate(predicate)
             {
-                
+                ESP_LOGD(TAG, "Function: %s.", __func__);
             }
 
             template<typename MessageHandlerT>
             void set_message_handler(MessageHandlerT message_handler)
             {
+                ESP_LOGD(TAG, "Function: %s.", __func__);
+
                 m_message_handler = message_handler;
 
                 m_sender.set_message_handler([this](in_message_t&& message) {
@@ -44,6 +48,8 @@ namespace hub::service
 
             void process_message(in_message_t&& message) const
             {
+                ESP_LOGD(TAG, "Function: %s.", __func__);
+
                 if (m_message_handler && std::invoke(m_predicate, message))
                 {
                     m_message_handler(std::move(message));
@@ -51,6 +57,8 @@ namespace hub::service
             }
 
         private:
+
+            static constexpr const char* TAG{ "FILTER" };
 
             SenderT         m_sender;
             PredT           m_predicate;

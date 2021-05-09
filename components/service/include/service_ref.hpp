@@ -3,6 +3,8 @@
 
 #include "service_traits.hpp"
 
+#include "esp_log.h"
+
 #include <type_traits>
 #include <functional>
 
@@ -36,7 +38,7 @@ namespace hub::service
         service_ref(ServiceT& service) :
             m_service{ std::ref(service) }
         {
-
+            ESP_LOGD(TAG, "Function: %s.", __func__);
         }
 
         /**
@@ -48,6 +50,7 @@ namespace hub::service
         template<typename = std::enable_if_t<has_sink_service_tag_v<ServiceT> || has_two_way_service_tag_v<ServiceT>, void>>
         void process_message(in_message_t&& message) const
         {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
             m_service.get().process_message(std::move(message));
         }
 
@@ -61,10 +64,13 @@ namespace hub::service
         template<typename MessageHandlerT, typename = std::enable_if_t<has_source_service_tag_v<ServiceT> || has_two_way_service_tag_v<ServiceT>, void>>
         void set_message_handler(MessageHandlerT message_handler)
         {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
             m_service.get().set_message_handler(message_handler);
         }
 
     private:
+
+        static constexpr const char* TAG{ "SERVICE REF" };
 
         std::reference_wrapper<ServiceT> m_service;
     };

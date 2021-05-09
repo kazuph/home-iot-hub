@@ -5,6 +5,7 @@ idf_component_register(
     INCLUDE_DIRS 
         "include"
     REQUIRES
+        "log"
         "ble"
         "mqtt_client"
         "utils")

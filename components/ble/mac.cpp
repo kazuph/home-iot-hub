@@ -9,7 +9,7 @@ namespace hub::ble
         m_address{ m_address[0], m_address[1], m_address[2], m_address[3], m_address[4], m_address[5] },
         m_type{ m_type } 
     {
-
+        
     }
 
     mac::mac(std::string_view m_address, esp_ble_addr_type_t m_type) : 

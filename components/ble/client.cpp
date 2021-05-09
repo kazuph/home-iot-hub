@@ -1,5 +1,4 @@
 #include "client.hpp"
-#include "error.hpp"
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -7,7 +6,9 @@
 #include "esp_gatt_common_api.h"
 #include "esp_gap_ble_api.h"
 #include "esp_err.h"
+#include "esp_log.h"
 
+#include <stdexcept>
 #include <array>
 #include <algorithm>
 
@@ -17,6 +18,8 @@ namespace hub::ble
 
     std::shared_ptr<client> client::make_client(std::string_view id)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
         {
             return std::shared_ptr<client>();
@@ -54,6 +57,8 @@ namespace hub::ble
 
     std::shared_ptr<client> client::get_client_by_mac(const mac& address) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (auto iter = std::find_if(
                 g_client_refs.cbegin(), 
                 g_client_refs.cend(), 
@@ -68,6 +73,8 @@ namespace hub::ble
 
     std::shared_ptr<client> client::get_client_by_id(std::string_view id) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (auto iter = std::find_if(
                 g_client_refs.cbegin(), 
                 g_client_refs.cend(), 
@@ -91,6 +98,8 @@ namespace hub::ble
         m_descriptor_data_cache     {  },
         m_notify_event_handler      {  }
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (!m_event_group)
         {
             throw std::bad_alloc();
@@ -99,6 +108,8 @@ namespace hub::ble
 
     client::~client()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         g_client_refs[m_app_id].reset();
         esp_ble_gattc_app_unregister(m_gattc_interface);
         vEventGroupDelete(m_event_group);
@@ -106,6 +117,8 @@ namespace hub::ble
 
     void client::gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         auto get_shared_client = [](esp_gatt_if_t gattc_interface) {
             if (auto iter = std::find_if(
                     g_client_refs.cbegin(), 
@@ -209,6 +222,8 @@ namespace hub::ble
 
     void client::connect(mac address)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_open(
                 m_gattc_interface, 
                 address.to_address(), 
@@ -216,7 +231,7 @@ namespace hub::ble
                 true); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(result, "GATTC open failed.");
+            throw std::runtime_error("GATTC open failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -227,19 +242,21 @@ namespace hub::ble
         }
         else if (bits & FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Connecton failed.");
+            throw std::runtime_error("Connecton failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Connecton timed out.");
+            throw std::runtime_error("Connecton timed out.");
         }
     }
 
     void client::disconnect()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_close(m_gattc_interface, m_connection_id); result != ESP_OK)
         {
-            throw hub::esp_exception(result, "GATTC disconnect failed.");
+            throw std::runtime_error("GATTC disconnect failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -250,19 +267,21 @@ namespace hub::ble
         }
         else if (bits & FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Disconnection failed.");
+            throw std::runtime_error("Disconnection failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Disconnection timed out.");
+            throw std::runtime_error("Disconnection timed out.");
         }
     }
 
     std::vector<service> client::get_services() const
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        
         if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, nullptr); result != ESP_OK)
         {
-            throw hub::esp_exception(result, "Get services failed.");
+            throw std::runtime_error("Get services failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -273,11 +292,11 @@ namespace hub::ble
         }
         else if (bits & FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Get services failed.");
+            throw std::runtime_error("Get services failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Get services timed out.");
+            throw std::runtime_error("Get services timed out.");
         }
 
         return std::move(m_services_cache);

@@ -1,7 +1,8 @@
 #include "service.hpp"
 #include "client.hpp"
 #include "characteristic.hpp"
-#include "error.hpp"
+
+#include <stdexcept>
 
 #include "esp_bt_defs.h"
 #include "esp_gattc_api.h"
@@ -32,7 +33,7 @@ namespace hub::ble
 
         if (result != ESP_GATT_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Could not get characteristics count.");
+            throw std::runtime_error("Could not get characteristics count.");
         }
 
         characteristics.resize(characteristic_count);
@@ -48,7 +49,7 @@ namespace hub::ble
 
         if (result != ESP_GATT_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Could not retrieve characteristics.");
+            throw std::runtime_error("Could not retrieve characteristics.");
         }
 
         {

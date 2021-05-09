@@ -72,7 +72,7 @@ namespace hub::ble
 
     private:
 
-        static constexpr const char* TAG{ "CHARACTERISTIC" };
+        static constexpr const char* TAG{ "BLE CHARACTERISTIC" };
 
         esp_gattc_char_elem_t   m_characteristic;
         std::shared_ptr<client> m_client_ptr;

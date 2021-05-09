@@ -1,10 +1,12 @@
 #include "descriptor.hpp"
 #include "client.hpp"
-#include "error.hpp"
 
 #include "esp_bt_defs.h"
 #include "esp_gattc_api.h"
 #include "esp_err.h"
+#include "esp_log.h"
+
+#include <stdexcept>
 
 namespace hub::ble
 {
@@ -12,11 +14,13 @@ namespace hub::ble
         m_descriptor(descriptor),
         m_client_ptr(client_ptr)
     {
-
+        ESP_LOGD(TAG, "Function: %s.", __func__);
     }
 
     void descriptor::write(std::vector<uint8_t> data)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_write_char_descr(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_connection_id,
@@ -27,7 +31,7 @@ namespace hub::ble
                 ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Write descriptor failed.");
+            throw std::runtime_error("Write descriptor failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -43,16 +47,18 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Write descriptor failed.");
+            throw std::runtime_error("Write descriptor failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Write descriptor timed out.");
+            throw std::runtime_error("Write descriptor timed out.");
         }
     }
 
     std::vector<uint8_t> descriptor::read() const
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        
         if (esp_err_t result = esp_ble_gattc_read_char_descr(
             m_client_ptr->m_gattc_interface, 
             m_client_ptr->m_connection_id,
@@ -60,7 +66,7 @@ namespace hub::ble
             ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Read descriptor failed.");
+            throw std::runtime_error("Read descriptor failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -76,11 +82,11 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Read descriptor failed.");
+            throw std::runtime_error("Read descriptor failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Read descriptor timed out.");
+            throw std::runtime_error("Read descriptor timed out.");
         }
 
         return std::move(m_client_ptr->m_descriptor_data_cache);

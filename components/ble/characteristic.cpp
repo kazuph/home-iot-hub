@@ -1,9 +1,9 @@
 #include "characteristic.hpp"
 #include "client.hpp"
 #include "descriptor.hpp"
-#include "error.hpp"
 #include "timing.hpp"
 
+#include "esp_log.h"
 #include "esp_err.h"
 #include "esp_bt_defs.h"
 #include "esp_gattc_api.h"
@@ -11,17 +11,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
+#include <stdexcept>
+
 namespace hub::ble
 {
     characteristic::characteristic(std::shared_ptr<client> client_ptr, esp_gattc_char_elem_t characteristic) :
         m_characteristic(characteristic),
         m_client_ptr(client_ptr)
     {
-
+        ESP_LOGD(TAG, "Function: %s.", __func__);
     }
 
     void characteristic::write(std::vector<uint8_t> data)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_write_char(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_connection_id,
@@ -32,7 +36,7 @@ namespace hub::ble
                 ESP_GATT_AUTH_REQ_NONE);
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Write characteristic failed.");
+            throw std::runtime_error("Write characteristic failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -48,16 +52,18 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Write characteristic failed.");
+            throw std::runtime_error("Write characteristic failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Write characteristic timed out.");
+            throw std::runtime_error("Write characteristic timed out.");
         }
     }
 
     std::vector<uint8_t> characteristic::read() const
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_read_char(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_connection_id,
@@ -65,7 +71,7 @@ namespace hub::ble
                 ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Read characteristic failed.");
+            throw std::runtime_error("Read characteristic failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -81,11 +87,11 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Read characteristic failed.");
+            throw std::runtime_error("Read characteristic failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Read characteristic timed out.");
+            throw std::runtime_error("Read characteristic timed out.");
         }
 
         return std::move(m_client_ptr->m_characteristic_data_cache);
@@ -93,11 +99,14 @@ namespace hub::ble
 
     uint16_t characteristic::get_handle() const noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return m_characteristic.char_handle;
     }
 
     std::vector<descriptor> characteristic::get_descriptors() const
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         esp_gatt_status_t result = ESP_GATT_OK;
         uint16_t descriptor_count = 0U;
         std::vector<esp_gattc_descr_elem_t> descriptors;
@@ -113,7 +122,7 @@ namespace hub::ble
 
         if (result != ESP_GATT_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Could not get desriptor count.");
+            throw std::runtime_error("Could not get desriptor count.");
         }
 
         descriptors.resize(descriptor_count);
@@ -128,7 +137,7 @@ namespace hub::ble
 
         if (result != ESP_GATT_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Could not retrieve desriptors.");
+            throw std::runtime_error("Could not retrieve desriptors.");
         }
 
         {
@@ -141,13 +150,15 @@ namespace hub::ble
 
     void characteristic::subscribe()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         if (esp_err_t result = esp_ble_gattc_register_for_notify(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_address.to_address(), 
                 m_characteristic.char_handle); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Subscribe to characteristic failed.");
+            throw std::runtime_error("Subscribe to characteristic failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -163,23 +174,25 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Subscribe to characteristic failed.");
+            throw std::runtime_error("Subscribe to characteristic failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Subscribe to characteristic timed out.");
+            throw std::runtime_error("Subscribe to characteristic timed out.");
         }
     }
 
     void characteristic::unsubscribe()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        
         if (esp_err_t result = esp_ble_gattc_unregister_for_notify(
                 m_client_ptr->m_gattc_interface, 
                 m_client_ptr->m_address.to_address(), 
                 m_characteristic.char_handle); 
             result != ESP_OK)
         {
-            throw hub::esp_exception(ESP_FAIL, "Unsubscribe from characteristic failed.");
+            throw std::runtime_error("Unsubscribe from characteristic failed.");
         }
 
         EventBits_t bits = xEventGroupWaitBits(
@@ -195,11 +208,11 @@ namespace hub::ble
         }
         else if (bits & client::FAIL_BIT)
         {
-            throw hub::esp_exception(ESP_FAIL, "Unsubscribe from characteristic failed.");
+            throw std::runtime_error("Unsubscribe from characteristic failed.");
         }
         else
         {
-            throw hub::esp_exception(ESP_ERR_TIMEOUT, "Unsubscribe from characteristic timed out.");
+            throw std::runtime_error("Unsubscribe from characteristic timed out.");
         }
     }
 }

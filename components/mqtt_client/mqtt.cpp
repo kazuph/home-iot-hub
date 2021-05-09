@@ -10,8 +10,6 @@
 
 namespace hub::mqtt
 {
-    static constexpr const char *TAG{ "HUB MQTT" };
-
     void client::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) 
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -52,13 +50,15 @@ namespace hub::mqtt
         client_handle{ nullptr },
         data_event_handler{  }
     {
-
+        ESP_LOGD(TAG, "Function: %s.", __func__);
     }
 
     client::client(std::string_view uri) :
         client_handle{ nullptr },
         data_event_handler{  }
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         {
             esp_mqtt_client_config_t mqtt_client_config{};
             mqtt_client_config.uri = uri.data();
@@ -126,6 +126,8 @@ namespace hub::mqtt
 
     esp_err_t client::connect(std::string_view uri)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         {
             esp_mqtt_client_config_t mqtt_client_config{};
             mqtt_client_config.uri = uri.data();
@@ -192,6 +194,7 @@ namespace hub::mqtt
 
     void client::set_data_event_handler(event::data_event_handler_fun_t event_handler)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         data_event_handler += event_handler;
     }
 
