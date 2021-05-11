@@ -31,24 +31,24 @@ namespace hub::utils
         using variant_type = std::variant<value_helper, error_helper>;
 
         template<typename... ArgsT>
-        static result success(ArgsT&&... args) noexcept
+        constexpr static result success(ArgsT&&... args) noexcept
         {
             return result(variant_type(value_helper{ value_type(std::forward<ArgsT>(args)...) }));
         }
 
         template<typename... ArgsT>
-        static result failure(ArgsT&&... args) noexcept
+        constexpr static result failure(ArgsT&&... args) noexcept
         {
             return result(variant_type(error_helper{ error_type(std::forward<ArgsT>(args)...) }));
         }
 
-        result(const result& other) :
+        constexpr result(const result& other) :
             m_result{ other.m_result }
         {
 
         }
 
-        result(result&& other) :
+        constexpr result(result&& other) :
             m_result{ std::move(other.m_result) }
         {
 
@@ -56,13 +56,13 @@ namespace hub::utils
 
         ~result() = default;
 
-        result& operator=(const result& other)
+        constexpr result& operator=(const result& other) noexcept 
         {
             m_result = other.m_result;
             return *this;
         }
 
-        result& operator=(result&& other)
+        constexpr result& operator=(result&& other) noexcept
         {
             if (this == &other)
             {
@@ -73,37 +73,37 @@ namespace hub::utils
             return *this;
         }
 
-        value_type* operator->()
+        constexpr value_type* operator->()
         {
             return &get();
         }
 
-        const value_type* operator->() const
+        constexpr const value_type* operator->() const
         {
             return &get();
         }
 
-        operator bool() const noexcept
+        constexpr operator bool() const noexcept
         {
             return is_valid();
         }
 
-        operator std::optional<value_type>() noexcept
+        constexpr operator std::optional<value_type>() noexcept
         {
             return is_valid() ? std::optional<value_type>(get_unchecked()) : std::nullopt;
         }
 
-        operator std::optional<value_type>() const noexcept
+        constexpr operator std::optional<value_type>() const noexcept
         {
             return is_valid() ? std::optional<value_type>(get_unchecked()) : std::nullopt;
         }
 
-        bool is_valid() const noexcept
+        constexpr bool is_valid() const noexcept
         {
             return std::holds_alternative<value_helper>(m_result);
         }
 
-        ResultT& get()
+        constexpr ResultT& get()
         {
             if (!is_valid())
             {
@@ -117,7 +117,7 @@ namespace hub::utils
             return get_unchecked();
         }
 
-        const ResultT& get() const
+        constexpr const ResultT& get() const
         {
             if (!is_valid())
             {
@@ -131,7 +131,7 @@ namespace hub::utils
             return get_unchecked();
         }
 
-        error_type& error()
+        constexpr error_type& error()
         {
             if (is_valid())
             {
@@ -145,7 +145,7 @@ namespace hub::utils
             return error_unchecked();
         }
 
-        const error_type& error() const
+        constexpr const error_type& error() const
         {
             if (is_valid())
             {
@@ -195,36 +195,36 @@ namespace hub::utils
 
         variant_type m_result;
 
-        result() = default;
+        constexpr result() = delete;
 
-        result(const variant_type& var) :
+        constexpr result(const variant_type& var) noexcept :
             m_result{ var }
         {
 
         }
 
-        result(variant_type&& var) :
+        constexpr result(variant_type&& var) noexcept :
             m_result{ std::move(var) }
         {
 
         }
 
-        value_type& get_unchecked() noexcept
+        constexpr value_type& get_unchecked() noexcept
         {
             return std::get<value_helper>(m_result).m_value;
         }
 
-        const value_type& get_unchecked() const noexcept
+        constexpr const value_type& get_unchecked() const noexcept
         {
             return std::get<value_helper>(m_result).m_value;
         }
 
-        error_type& error_unchecked() noexcept
+        constexpr error_type& error_unchecked() noexcept
         {
             return std::get<error_helper>(m_result).m_error;
         }
 
-        const error_type& error_unchecked() const noexcept
+        constexpr const error_type& error_unchecked() const noexcept
         {
             return std::get<error_helper>(m_result).m_error;
         }
@@ -236,7 +236,7 @@ namespace hub::utils
     using result_throwing = result<ResultT, std::exception_ptr>;
 
     template<typename FunT, typename ResultT, typename ErrorT>
-    decltype(auto) bind(result<ResultT, ErrorT> value, FunT fun) noexcept
+    auto bind(result<ResultT, ErrorT> value, FunT fun) noexcept
     {
         using result_type = std::invoke_result_t<FunT, ResultT>;
 
@@ -249,7 +249,7 @@ namespace hub::utils
     }
 
     template<typename FunT>
-    decltype(auto) catch_as_result(FunT fun) noexcept
+    auto catch_as_result(FunT fun) noexcept
     {
         using result_type = result_throwing<std::invoke_result_t<FunT>>;
 
