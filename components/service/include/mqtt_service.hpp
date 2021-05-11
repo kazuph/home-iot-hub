@@ -38,7 +38,7 @@ namespace hub::service
         using out_message_t     = message_t;
         using message_handler_t = std::function<void(out_message_t&&)>;
 
-        mqtt_service() = delete;
+        mqtt_service();
 
         mqtt_service(mqtt_service&&) = default;
 
@@ -60,7 +60,7 @@ namespace hub::service
 
     private:
 
-        static constexpr const char* TAG{ "MQTT SERVICE" };
+        static constexpr const char* TAG{ "hub::service::mqtt_service" };
 
         mutable mqtt::client    m_client;
     };
