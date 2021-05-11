@@ -25,8 +25,6 @@ namespace hub::mqtt
         using data_event_handler_fun_t  = data_event_handler_t::function_type;
     }
 
-    namespace hub::event = hub::mqtt::event;
-
     /**
      * @brief Class representing MQTT client.
      */
@@ -106,6 +104,11 @@ namespace hub::mqtt
 
         event::data_event_handler_t m_data_event_handler;
     };
+}
+
+namespace hub::event
+{
+    using namespace hub::mqtt::event;
 }
 
 #endif

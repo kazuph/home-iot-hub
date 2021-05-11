@@ -23,7 +23,7 @@ namespace hub::mqtt
             if (mqtt_client == nullptr)
             {
                 ESP_LOGE(TAG, "Client not recognized.");
-                break;
+                return;
             }
 
             if (mqtt_client->m_data_event_handler)
@@ -53,8 +53,8 @@ namespace hub::mqtt
     }
 
     client::client(client&& other) :
-        m_client_handle{ nullptr },
-        m_data_event_handler{  }
+        m_client_handle       { nullptr },
+        m_data_event_handler  {  }
     {
         ESP_LOGD(TAG, "Function: %s. (move constructor)", __func__);
 
@@ -65,7 +65,7 @@ namespace hub::mqtt
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (disconnect() != ESP_OK)
+        if (esp_err_t result = disconnect(); result != ESP_OK)
         {
             ESP_LOGW(TAG, "Client disconnect failed with error code %x [%s].", result, esp_err_to_name(result));
         }
@@ -129,7 +129,7 @@ namespace hub::mqtt
         }
 
         esp_mqtt_client_stop(m_client_handle);
-        esp_mqtt_client_destroy(m_client_handle)
+        esp_mqtt_client_destroy(m_client_handle);
 
         m_client_handle = nullptr;
         return result;
@@ -189,17 +189,11 @@ namespace hub::mqtt
 
         assert(m_client_handle);
 
-        esp_err_t result = esp_mqtt_client_register_event(
+        esp_mqtt_client_register_event(
             m_client_handle, 
             static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
             &mqtt_event_handler,
             this);
-            
-        if (result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Event registration failed with error code %x [%s].", result, esp_err_to_name(result));
-            return result;
-        }
 
         m_data_event_handler += event_handler;
     }
