@@ -13,5 +13,5 @@ idf_component_register(
         "bt" 
         "log"
         "event"
-        "error"
+        "utils"
         "timing")
