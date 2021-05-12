@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "ble.cpp"
+        "scanner.cpp"
+        "client.cpp"
+        "service.cpp"
+        "characteristic.cpp"
+        "descriptor.cpp"
+        "mac.cpp"     
+    INCLUDE_DIRS
+        "include"
+    REQUIRES 
+        "bt" 
+        "log"
+        "hub-event"
+        "hub-utils"
+        "hub-timing")

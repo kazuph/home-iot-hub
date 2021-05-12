@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "mqtt.cpp"
+        "ble.cpp"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES
+        "log"
+        "hub-ble"
+        "hub-mqtt"
+        "hub-utils")

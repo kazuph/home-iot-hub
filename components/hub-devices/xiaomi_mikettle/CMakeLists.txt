@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS 
+        "xiaomi_mikettle.cpp"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES
+        "log"
+        "hub-ble"
+        "hub-timing"
+        "hub-utils")
