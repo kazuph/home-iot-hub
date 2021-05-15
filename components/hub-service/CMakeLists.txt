@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "mqtt.cpp"
         "ble.cpp"
+        "scanner.cpp"
     INCLUDE_DIRS 
         "include"
     REQUIRES

@@ -5,11 +5,11 @@
 
 #include "mqtt/client.hpp"
 
+#include "esp_log.h"
+
 #include <string>
 #include <string_view>
 #include <functional>
-
-#include "esp_log.h"
 
 namespace hub::service
 {

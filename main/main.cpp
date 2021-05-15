@@ -8,22 +8,27 @@
 #include "service/operators.hpp"
 #include "service/mqtt.hpp"
 #include "service/ble.hpp"
-#include "service/ref.hpp"
+#include "service/scanner.hpp"
 
 #include "esp_log.h"
 
 #include <utility>
 #include <variant>
 #include <fstream>
+#include <cstdint>
 
 namespace hub
 {
+    static constexpr const char* TAG{ "hub::app_main" };
+
     template<typename T>
     inline bool is_result_valid(const utils::result_throwing<T>& result) noexcept
     {
-        bool is_valid = result.is_valid();
-        
-        if (!is_valid)
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        bool valid = result.is_valid();
+
+        if (!valid)
         {
             try
             {
@@ -31,61 +36,69 @@ namespace hub
             }
             catch (const std::exception& err)
             {
-                ESP_LOGE("hub::is_result_valid", "%s", err.what());
+                ESP_LOGE(TAG, "%s", err.what());
             }
         }
 
-        return is_valid;
+        return valid;
     }
 
     template<typename T>
-    inline T unwrap_result(const utils::result_throwing<T>& result) noexcept
+    inline T unwrap_result(utils::result_throwing<T>&& result) noexcept
     {
-        return result.get();
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return std::move(result.get());
     }
 
     inline bool is_scan_topic(const service::mqtt::out_message_t& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return message.m_topic == service::mqtt::MQTT_BLE_SCAN_ENABLE_TOPIC;
     }
 
     inline bool is_device_connect_topic(const service::mqtt::out_message_t& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return message.m_topic == service::mqtt::MQTT_BLE_CONNECT_TOPIC;
     }
 
     inline bool is_device_disconnect_topic(const service::mqtt::out_message_t& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return message.m_topic == service::mqtt::MQTT_BLE_DISCONNECT_TOPIC;
     }
 
     inline bool is_device_write_topic(const service::mqtt::out_message_t& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return message.m_topic == service::mqtt::MQTT_BLE_DEVICE_WRITE_TOPIC;
     }
 
-    inline utils::result_throwing<utils::json> mqtt_message_to_json(const service::mqtt::out_message_t& message) noexcept
+    inline utils::result_throwing<utils::json> mqtt_message_to_json(service::mqtt::out_message_t&& message) noexcept
     {
-        return utils::catch_as_result([&]() -> utils::json { return utils::json::parse(message.m_data); });
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return utils::catch_as_result([message{ std::move(message) }]() -> utils::json { return utils::json::parse(std::move(message.m_data)); });
     }
 
-    inline utils::result_throwing<service::ble::in_message_t> make_ble_scan_control_message(const utils::result_throwing<utils::json>& message) noexcept
+    inline utils::result_throwing<service::scanner::in_message_t> make_scanner_message(utils::result_throwing<utils::json>&& message) noexcept
     {
-        return utils::bind(message, [](const utils::json& message) -> utils::result_throwing<service::ble::in_message_t> {
-            return utils::catch_as_result([&]() -> service::ble::in_message_t {
-                return service::ble::scan_control_t{ message["enable"].get<bool>() };
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return utils::bind(std::move(message), [](utils::json&& message) -> utils::result_throwing<service::scanner::in_message_t> {
+            return utils::catch_as_result([message{ std::move(message) }]() -> service::scanner::in_message_t {
+                return { message[0]["enable"].get<bool>() };
             });
         });
     }
 
     inline utils::result_throwing<service::ble::in_message_t> make_ble_device_connect_message(const utils::result_throwing<utils::json>& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return utils::bind(message, [](const utils::json& message) -> utils::result_throwing<service::ble::in_message_t> {
             return utils::catch_as_result([&]() -> service::ble::in_message_t {
                 return service::ble::device_connect_t{ 
-                    ble::mac(message["address"].get<std::string>()),
-                    message["id"].get<std::string>(),
-                    message["name"].get<std::string>()
+                    ble::mac(std::move(message["address"].get<std::string>())),
+                    std::move(message["id"].get<std::string>()),
+                    std::move(message["name"].get<std::string>())
                 };
             });
         });
@@ -93,10 +106,11 @@ namespace hub
 
     inline utils::result_throwing<service::ble::in_message_t> make_ble_device_disconnect_message(const utils::result_throwing<utils::json>& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return utils::bind(message, [](const utils::json& message) -> utils::result_throwing<service::ble::in_message_t> {
             return utils::catch_as_result([&]() -> service::ble::in_message_t {
                 return service::ble::device_disconnect_t{ 
-                    message["id"].get<std::string>() 
+                    std::move(message["id"].get<std::string>())
                 };
             });
         });
@@ -104,22 +118,35 @@ namespace hub
 
     inline utils::result_throwing<service::ble::in_message_t> make_ble_device_update_message(const utils::result_throwing<utils::json>& message) noexcept
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
         return utils::bind(message, [](const utils::json& message) -> utils::result_throwing<service::ble::in_message_t> {
             return utils::catch_as_result([&]() -> service::ble::in_message_t {
                 return service::ble::device_update_t{ 
-                    message["id"].get<std::string>(),
-                    message["data"]
+                    std::move(message["id"].get<std::string>()),
+                    std::move(message["data"])
                 };
             });
         });
+    }
+
+    inline utils::result_throwing<utils::json> scan_result_to_json(service::scanner::out_message_t&& message) noexcept
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return utils::catch_as_result([message{ std::move(message) }]() -> utils::json {
+            return utils::json::object({ { "name", std::move(message.m_device_name) }, { "address", std::move(message.m_device_address) } });
+        });
+    }
+
+    inline service::mqtt::in_message_t make_mqtt_scan_result_message(utils::result_throwing<utils::json>&& message) noexcept
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+        return { std::string(service::mqtt::MQTT_BLE_SCAN_RESULTS_TOPIC), message.get().dump() };
     }
 
     extern "C" void app_main()
     {
         using namespace timing::literals;
         using namespace service::operators;
-
-        static constexpr const char* TAG{ "hub::app_main" };
 
         filesystem::init();
 
@@ -137,48 +164,56 @@ namespace hub
             ifs >> config;
         }
 
-        wifi::connect(config["WIFI_SSID"].get<std::string>(), config["WIFI_PASSWORD"].get<std::string>());
+        wifi::connect(
+            config["WIFI_SSID"].get<std::string>(), 
+            config["WIFI_PASSWORD"].get<std::string>());
+
         wifi::wait_for_connection(10_s);
 
-        auto mqtt_service   = service::mqtt(config["MQTT_URI"].get<std::string>());
-        auto ble_service    = service::ble();
+        auto mqtt_service       = service::mqtt(config["MQTT_URI"].get<std::string>());
+        auto ble_service        = service::ble();
+        auto scanner_service    = service::scanner();
 
         config.clear();
 
-        const auto mqtt_to_ble_scan_pipeline = 
-            service::ref(mqtt_service)                                               |
-            filter(is_scan_topic)                                                          |
-            transform(mqtt_message_to_json)                                                |
-            transform(make_ble_scan_control_message)                                       |
-            filter(is_result_valid<service::ble::in_message_t>)                    |
-            transform(unwrap_result<service::ble::in_message_t>)                   |
-            service::ref(ble_service);
+        const auto ble_scan_pipeline = 
+            service::ref(mqtt_service)                                  |
+            filter(is_scan_topic)                                       |
+            transform(mqtt_message_to_json)                             |
+            transform(make_scanner_message)                             |
+            filter(is_result_valid<service::scanner::in_message_t>)     |
+            transform(unwrap_result<service::scanner::in_message_t>)    |
+            service::ref(scanner_service)                               |
+            transform(scan_result_to_json)                              |
+            filter(is_result_valid<utils::json>)                        |
+            transform(make_mqtt_scan_result_message)                    |
+            service::ref(mqtt_service);
 
         const auto mqtt_to_ble_device_connect_pipeline =
-            service::ref(mqtt_service)                                               |
-            filter(is_device_connect_topic)                                                |
-            transform(mqtt_message_to_json)                                                |
-            transform(make_ble_device_connect_message)                                     |
-            filter(is_result_valid<service::ble::in_message_t>)                    |
-            transform(unwrap_result<service::ble::in_message_t>)                   |
+            service::ref(mqtt_service)                              |
+            filter(is_device_connect_topic)                         |
+            transform(mqtt_message_to_json)                         |
+            transform(make_ble_device_connect_message)              |
+            filter(is_result_valid<service::ble::in_message_t>)     |
+            transform(unwrap_result<service::ble::in_message_t>)    |
             service::ref(ble_service);
 
         const auto mqtt_to_ble_device_disconnect_pipeline =
-            service::ref(mqtt_service)                                               |
-            filter(is_device_disconnect_topic)                                             |
-            transform(mqtt_message_to_json)                                                |
-            transform(make_ble_device_disconnect_message)                                  |
-            filter(is_result_valid<service::ble::in_message_t>)                    |
-            transform(unwrap_result<service::ble::in_message_t>)                   |
+            service::ref(mqtt_service)                              |
+            filter(is_device_disconnect_topic)                      |
+            transform(mqtt_message_to_json)                         |
+            transform(make_ble_device_disconnect_message)           |
+            filter(is_result_valid<service::ble::in_message_t>)     |
+            transform(unwrap_result<service::ble::in_message_t>)    |
             service::ref(ble_service);
 
         const auto mqtt_to_ble_device_update_pipeline =
-            service::ref(mqtt_service)                                               |
-            filter(is_device_write_topic)                                                  |
-            transform(mqtt_message_to_json)                                                |
-            transform(make_ble_device_update_message)                                      |
-            filter(is_result_valid<service::ble::in_message_t>)                    |
-            transform(unwrap_result<service::ble::in_message_t>)                   |
+            service::ref(mqtt_service)                              |
+            filter(is_device_write_topic)                           |
+            transform(mqtt_message_to_json)                         |
+            transform(make_ble_device_update_message)               |
+            filter(is_result_valid<service::ble::in_message_t>)     |
+            transform(unwrap_result<service::ble::in_message_t>)    |
             service::ref(ble_service);
         
         timing::sleep_for(timing::MAX_DELAY);

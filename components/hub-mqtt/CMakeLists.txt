@@ -5,4 +5,5 @@ idf_component_register(
         "include"
     REQUIRES
         "mqtt"
-        "hub-event")
+        "hub-event"
+        "hub-utils")

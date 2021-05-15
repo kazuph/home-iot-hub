@@ -20,7 +20,7 @@ namespace hub::ble::scanner
 {
     using namespace timing::literals;
 
-    static constexpr const char* TAG{ "BLE SCANNER" };
+    static constexpr const char*    TAG             { "hub::ble::scanner" };
 
     static constexpr auto           BLE_TIMEOUT     { 10_s };
 
@@ -71,8 +71,8 @@ namespace hub::ble::scanner
             }
 
             s_scan_results_event_handler.invoke({
-                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)),
-                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type)
+                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type),
+                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len))
             });
         }
         else if (event == ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT)

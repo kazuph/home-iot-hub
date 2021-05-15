@@ -4,12 +4,15 @@
 #include "traits.hpp"
 
 #include "ble/mac.hpp"
+#include "ble/client.hpp"
 #include "utils/json.hpp"
 
 #include "esp_log.h"
 
 #include <cstdint>
 #include <variant>
+#include <list>
+#include <memory>
 
 namespace hub::service
 {
@@ -34,7 +37,7 @@ namespace hub::service
 
         struct device_connect_t
         {
-            hub::ble::mac    m_address;
+            hub::ble::mac   m_address;
             std::string     m_id;
             std::string     m_name;
         };
@@ -77,7 +80,9 @@ namespace hub::service
 
         static constexpr const char* TAG{ "hub::service::ble" };
 
-        message_handler_t m_message_handler;
+        message_handler_t                                       m_message_handler;
+
+        mutable std::list<std::shared_ptr<hub::ble::client>>    m_client_list;
 
         void scan_control_handler(scan_control_t&& scan_start_args) const;
 

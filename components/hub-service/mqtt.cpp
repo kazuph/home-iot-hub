@@ -5,7 +5,7 @@
 namespace hub::service
 {
     mqtt::mqtt(std::string_view uri) :
-        m_client{  }
+        m_client    {  }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 

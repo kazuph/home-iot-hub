@@ -230,32 +230,41 @@ namespace hub::utils
         }
     };
 
+    template<typename FunT, typename ResultT, typename ErrorT>
+    std::invoke_result_t<FunT, ResultT> bind(result<ResultT, ErrorT>&& value, FunT&& fun) noexcept
+    {
+        if (!value.is_valid())
+        {
+            return std::invoke_result_t<FunT, ResultT>::failure(std::move(value.error()));
+        }
+
+        return std::invoke(std::forward<FunT>(fun), std::move(value.get()));
+    }
+
+    template<typename FunT, typename ResultT, typename ErrorT>
+    std::invoke_result_t<FunT, ResultT> bind(const result<ResultT, ErrorT>& value, FunT&& fun) noexcept
+    {
+        if (!value.is_valid())
+        {
+            return std::invoke_result_t<FunT, ResultT>::failure(value.error());
+        }
+
+        return std::invoke(std::forward<FunT>(fun), value.get());
+    }
+
 #ifndef NO_EXCEPTIONS
 
     template<typename ResultT>
     using result_throwing = result<ResultT, std::exception_ptr>;
 
-    template<typename FunT, typename ResultT, typename ErrorT>
-    auto bind(result<ResultT, ErrorT> value, FunT fun) noexcept
-    {
-        using result_type = std::invoke_result_t<FunT, ResultT>;
-
-        if (!value.is_valid())
-        {
-            return result_type::failure(value.error());
-        }
-
-        return std::invoke(fun, value.get());
-    }
-
     template<typename FunT>
-    auto catch_as_result(FunT fun) noexcept
+    auto catch_as_result(FunT&& fun) noexcept
     {
         using result_type = result_throwing<std::invoke_result_t<FunT>>;
 
         try
         {
-            return result_type::success(std::invoke(fun));
+            return result_type::success(std::invoke(std::forward<FunT>(fun)));
         }
         catch (...)
         {

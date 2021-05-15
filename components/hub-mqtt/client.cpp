@@ -92,6 +92,8 @@ namespace hub::mqtt
 
         esp_err_t result = ESP_OK;
 
+        assert(!m_client_handle);
+
         {
             esp_mqtt_client_config_t mqtt_client_config{};
 
@@ -122,7 +124,7 @@ namespace hub::mqtt
 
         esp_err_t result = ESP_OK;
 
-        if (m_client_handle == nullptr)
+        if (!m_client_handle)
         {
             ESP_LOGW(TAG, "Client handle was nullptr.");
             return ESP_FAIL;
@@ -189,11 +191,14 @@ namespace hub::mqtt
 
         assert(m_client_handle);
 
-        esp_mqtt_client_register_event(
-            m_client_handle, 
-            static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
-            &mqtt_event_handler,
-            this);
+        if (!m_data_event_handler)
+        {
+            esp_mqtt_client_register_event(
+                m_client_handle, 
+                static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
+                &mqtt_event_handler,
+                this);
+        }
 
         m_data_event_handler += event_handler;
     }

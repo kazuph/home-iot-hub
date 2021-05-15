@@ -15,8 +15,8 @@ namespace hub::ble::scanner
     {
         struct scan_results_event_args
         {
-            std::string m_name;
             mac         m_address;
+            std::string m_name;
         };
 
         using scan_results_event_handler_t  = hub::event::event_handler<scan_results_event_args>;

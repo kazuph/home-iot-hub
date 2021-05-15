@@ -11,6 +11,15 @@ namespace hub::service
 
         hub::ble::init();
         hub::ble::scanner::init();
+
+        hub::ble::scanner::set_scan_results_event_handler([this](const hub::ble::scanner::event::scan_results_event_args& message) -> void {
+            if (!m_message_handler)
+            {
+                return;
+            }
+
+            m_message_handler(out_message_t(scan_result_t{ message.m_address, message.m_name }));
+        });
     }
 
     ble::~ble()
@@ -60,7 +69,16 @@ namespace hub::service
     void ble::device_connect_handler(device_connect_t&& device_connect_args) const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        //ble::client::make_client(device_connect_args.m_id)->connect(device_connect_args.m_address);
+
+        auto client = hub::ble::client::make_client(device_connect_args.m_id);
+
+        client->connect(device_connect_args.m_address);
+
+        client->set_notify_event_handler([this](const hub::ble::event::notify_event_args_t& message) -> void {
+            return;
+        });
+
+        m_client_list.push_back(client);
     }
 
     void ble::device_disconnect_handler(device_disconnect_t&& device_disconnect_args) const

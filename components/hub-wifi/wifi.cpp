@@ -19,7 +19,7 @@
 
 namespace hub::wifi
 {
-    constexpr const char* TAG                   { "HUB WIFI" };
+    constexpr const char* TAG                   { "hub::wifi" };
 
     constexpr EventBits_t WIFI_CONNECTED_BIT    { BIT0 };
 #ifndef CONFIG_WIFI_RETRY_INFINITE
