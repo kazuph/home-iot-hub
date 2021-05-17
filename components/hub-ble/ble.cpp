@@ -1,5 +1,4 @@
 #include "ble/ble.hpp"
-#include "ble/scanner.hpp"
 
 #include <stdexcept>
 

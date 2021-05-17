@@ -12,13 +12,13 @@ namespace hub::service
         hub::ble::init();
         hub::ble::scanner::init();
 
-        hub::ble::scanner::set_scan_results_event_handler([this](const hub::ble::scanner::event::scan_results_event_args& message) -> void {
+        hub::ble::scanner::set_scan_results_event_handler([this](const hub::ble::scanner::event::scan_result_event_args& message) -> void {
             if (!m_message_handler)
             {
                 return;
             }
 
-            m_message_handler(out_message_t(scan_result_t{ message.m_address, message.m_name }));
+            m_message_handler(out_message_t(scan_result_t{ message.m_name, message.m_address }));
         });
     }
 

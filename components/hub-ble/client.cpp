@@ -20,35 +20,36 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
-        {
-            return std::shared_ptr<client>();
-        }
-
-        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
-        {
-            return std::shared_ptr<client>();
-        }
-
-    
         auto iter = std::find_if(g_client_refs.cbegin(), g_client_refs.cend(), [](const auto& client_ref) {
-            return !(client_ref.expired());
+            return client_ref.expired();
         });
 
         if (iter == g_client_refs.cend())
         {
-            return std::shared_ptr<client>();
+            throw std::runtime_error("Maximum number of clients already connected.");
+        }
+
+        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
+        {
+            throw std::runtime_error("Could not register GATTC callback.");
+        }
+
+        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
+        {
+            throw std::runtime_error("Could set local MTU size.");
         }
 
         {
-            std::shared_ptr<client> client_ptr = iter->lock();
+            auto client_ptr         = std::make_shared<client>();
 
             client_ptr->m_app_id    = std::distance(g_client_refs.cbegin(), iter);
             client_ptr->m_id        = std::string(id);
 
+            g_client_refs[client_ptr->m_app_id] = client_ptr;
+
             if (esp_ble_gattc_app_register(client_ptr->m_app_id) != ESP_OK)
             {
-                return std::make_shared<client>();
+                throw std::runtime_error("Could not register GATTC app.");
             }
 
             return client_ptr;
@@ -90,7 +91,7 @@ namespace hub::ble
     client::client() :
         m_connection_id             { 0 },
         m_app_id                    { 0 },
-        m_gattc_interface           { 0 },
+        m_gattc_interface           { ESP_GATT_IF_NONE },
         m_address                   {  },
         m_event_group               { xEventGroupCreate() },
         m_services_cache            {  },
@@ -111,19 +112,25 @@ namespace hub::ble
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
         g_client_refs[m_app_id].reset();
-        esp_ble_gattc_app_unregister(m_gattc_interface);
+
+        if (m_gattc_interface != ESP_GATT_IF_NONE)
+        {
+            esp_ble_gattc_app_unregister(m_gattc_interface);
+        }
+
         vEventGroupDelete(m_event_group);
     }
 
     void client::gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+        ESP_LOGI(TAG, "Event: %x.", event);
 
         auto get_shared_client = [](esp_gatt_if_t gattc_interface) {
             if (auto iter = std::find_if(
                     g_client_refs.cbegin(), 
                     g_client_refs.cend(), 
-                    [gattc_interface](auto client_ref) { return client_ref.lock()->m_gattc_interface == gattc_interface; }); 
+                    [gattc_interface](auto client_ref) { return !client_ref.expired() && client_ref.lock()->m_gattc_interface == gattc_interface; }); 
                 iter != g_client_refs.cend())
             {
                 return iter->lock();
@@ -141,11 +148,22 @@ namespace hub::ble
             {
                 if (param->reg.status != ESP_GATT_OK)
                 {
+                    ESP_LOGE(TAG, "GATTC register failed with error code: %04x.", param->reg.status);
                     return;
                 }
 
+                ESP_LOGI(TAG, "Registered GATTC app ID: %04x.", param->reg.app_id);
+
                 {
                     std::shared_ptr<client> client_ptr = g_client_refs[param->reg.app_id].lock();
+
+                    if (!client_ptr)
+                    {
+                        ESP_LOGW(TAG, "Client not found.");
+                        return;
+                    }
+
+                    ESP_LOGI(TAG, "GATTC interface is: %x", gattc_if);
                     client_ptr->m_gattc_interface = gattc_if;
                 }
             }
@@ -164,6 +182,7 @@ namespace hub::ble
         case ESP_GATTC_CONNECT_EVT:
             client_ptr->m_connection_id     = param->connect.conn_id;
             client_ptr->m_address           = mac(param->connect.remote_bda);
+            client_ptr->m_self_ref          = client_ptr->get_shared_client();
 
             if (esp_ble_gattc_send_mtu_req(gattc_if, client_ptr->m_connection_id) != ESP_OK)
             {
@@ -213,6 +232,7 @@ namespace hub::ble
             xEventGroupSetBits(client_ptr->m_event_group, READ_DESCR_BIT);
             break;
         case ESP_GATTC_DISCONNECT_EVT:
+            client_ptr->m_self_ref.reset();
             xEventGroupSetBits(client_ptr->m_event_group, DISCONNECT_BIT);
             break;
         default:

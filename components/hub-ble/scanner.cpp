@@ -37,9 +37,9 @@ namespace hub::ble::scanner
         BLE_SCAN_DUPLICATE_DISABLE      // Advertise duplicates filter policy
     };
 
-    static EventGroupHandle_t                       s_scan_event_group              { nullptr };
+    static EventGroupHandle_t s_scan_event_group{ nullptr };
 
-    static event::scan_results_event_handler_t      s_scan_results_event_handler    {  };
+    static event::scan_result_event_handler_t s_scan_results_event_handler{  };
 
     static void gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
     {
@@ -65,14 +65,9 @@ namespace hub::ble::scanner
                 return;
             }
 
-            if (!s_scan_results_event_handler)
-            {
-                return;
-            }
-
             s_scan_results_event_handler.invoke({
-                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type),
-                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len))
+                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)),
+                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type).to_string()
             });
         }
         else if (event == ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT)
@@ -91,9 +86,14 @@ namespace hub::ble::scanner
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (esp_err_t result = esp_ble_gap_register_callback(&gap_callback); result != ESP_OK)
+        if (esp_ble_gap_register_callback(&gap_callback) != ESP_OK)
         {
             throw std::runtime_error("Could not register GAP callback.");
+        }
+
+        if (esp_ble_gap_set_scan_params(const_cast<esp_ble_scan_params_t*>(&BLE_SCAN_PARAMS)) != ESP_OK)
+        {
+            throw std::runtime_error("Set GAP scan params failed..");
         }
 
         s_scan_event_group = xEventGroupCreate();
@@ -159,7 +159,7 @@ namespace hub::ble::scanner
         }
     }
 
-    void set_scan_results_event_handler(event::scan_results_event_handler_t::function_type scan_callback)
+    void set_scan_results_event_handler(event::scan_result_event_handler_fun_t scan_callback)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
         s_scan_results_event_handler += scan_callback;

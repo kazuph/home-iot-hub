@@ -26,10 +26,7 @@ namespace hub::mqtt
                 return;
             }
 
-            if (mqtt_client->m_data_event_handler)
-            {
-                mqtt_client->m_data_event_handler.invoke({ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });   
-            }
+            mqtt_client->m_data_event_handler.invoke({ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });
         }
         else if (event->event_id == MQTT_EVENT_CONNECTED)
         {
@@ -113,6 +110,12 @@ namespace hub::mqtt
             return result;
         }
 
+        esp_mqtt_client_register_event(
+            m_client_handle,
+            static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
+            &mqtt_event_handler,
+            this);
+
         ESP_LOGI(TAG, "Client start success.");
 
         return result;
@@ -188,18 +191,6 @@ namespace hub::mqtt
     void client::set_data_event_handler(event::data_event_handler_fun_t event_handler)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        assert(m_client_handle);
-
-        if (!m_data_event_handler)
-        {
-            esp_mqtt_client_register_event(
-                m_client_handle, 
-                static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
-                &mqtt_event_handler,
-                this);
-        }
-
         m_data_event_handler += event_handler;
     }
 }

@@ -1,22 +1,10 @@
 #include "service/scanner.hpp"
 
-#include "ble/scanner.hpp"
-
 namespace hub::service
 {
-    scanner::scanner() :
-        m_message_handler{}
+    scanner::scanner()
     {
         ble::scanner::init();
-
-        ble::scanner::set_scan_results_event_handler([this](const ble::scanner::event::scan_results_event_args& message) {
-            if (!m_message_handler)
-            {
-                return;
-            }
-
-            m_message_handler({ message.m_address.to_string(), message.m_name });
-        });
     }
 
     scanner::~scanner()

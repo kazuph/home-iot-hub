@@ -3,7 +3,7 @@
 
 #include "transform.hpp"
 #include "filter.hpp"
-#include "sink_operator.hpp"
+#include "sink.hpp"
 #include "ref.hpp"
 
 #endif

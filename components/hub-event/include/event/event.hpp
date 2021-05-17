@@ -60,7 +60,6 @@ namespace hub::event
 
         using argument_type         = std::remove_cv_t<std::remove_reference_t<std::remove_pointer_t<EventArgsT>>>;
         using function_type         = std::function<void(const argument_type&)>;
-        using function_list_type    = std::list<function_type>;
 
         event_handler()                                 = default;
 
@@ -74,26 +73,46 @@ namespace hub::event
 
         ~event_handler()                                = default;
 
-        void invoke(argument_type&& args) const
+        bool empty() const noexcept
         {
-            std::for_each(m_callback_list.cbegin(), m_callback_list.cend(), [this, args{ std::forward<argument_type>(args) }](const auto& fun) {
-                dispatch(fun, args);
-            });
+            return m_callback_list.empty();
         }
 
-        void operator+=(function_type fun)
+        void clear() noexcept
+        {
+            m_callback_list.clear();
+        }
+
+        void add_callback(function_type fun) noexcept
         {
             m_callback_list.push_back(fun);
         }
 
-        operator bool() const
+        void invoke(argument_type&& args) const noexcept
         {
-            return !m_callback_list.empty();
+            if (empty())
+            {
+                return;
+            }
+
+            std::for_each(m_callback_list.cbegin(), m_callback_list.cend(), [this, args{ std::forward<argument_type>(args) }](const function_type& fun) {
+                dispatch(fun, args);
+            });
+        }
+
+        void operator+=(function_type fun) noexcept
+        {
+            add_callback(fun);
+        }
+
+        operator bool() const noexcept
+        {
+            return empty();
         }
 
     private:
 
-        function_list_type m_callback_list;
+        std::list<function_type> m_callback_list;
     };
 }
 

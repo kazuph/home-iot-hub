@@ -13,13 +13,14 @@ namespace hub::ble::scanner
 {
     namespace event
     {
-        struct scan_results_event_args
+        struct scan_result_event_args
         {
-            mac         m_address;
             std::string m_name;
+            std::string m_address;
         };
 
-        using scan_results_event_handler_t  = hub::event::event_handler<scan_results_event_args>;
+        using scan_result_event_handler_t       = hub::event::event_handler<scan_result_event_args>;
+        using scan_result_event_handler_fun_t   = scan_result_event_handler_t::function_type;
     }
 
     void init();
@@ -30,7 +31,12 @@ namespace hub::ble::scanner
 
     void stop();
 
-    void set_scan_results_event_handler(event::scan_results_event_handler_t::function_type scan_callback);
+    void set_scan_results_event_handler(event::scan_result_event_handler_fun_t scan_callback);
+}
+
+namespace hub::event
+{
+    using namespace hub::ble::scanner::event;
 }
 
 #endif

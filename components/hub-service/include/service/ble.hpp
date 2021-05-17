@@ -31,8 +31,8 @@ namespace hub::service
 
         struct scan_result_t
         {
-            hub::ble::mac   m_address;
-            std::string     m_name;
+            std::string m_name;
+            std::string m_address;
         };
 
         struct device_connect_t
@@ -69,11 +69,11 @@ namespace hub::service
         void process_message(in_message_t&& message) const;
 
         template<typename MessageHandlerT>
-        void set_message_handler(MessageHandlerT message_handler)
+        void set_message_handler(MessageHandlerT&& message_handler)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            m_message_handler = message_handler;
+            m_message_handler = std::forward<MessageHandlerT>(message_handler);
         }
 
     private:

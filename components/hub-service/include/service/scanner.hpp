@@ -3,6 +3,7 @@
 
 #include "service/traits.hpp"
 #include "ble/mac.hpp"
+#include "ble/scanner.hpp"
 
 #include "esp_log.h"
 
@@ -20,12 +21,7 @@ namespace hub::service
             bool m_enable;
         };
 
-        struct out_message_t
-        {
-            std::string m_device_name;
-            std::string m_device_address;
-        };
-
+        using out_message_t     = hub::event::scan_result_event_args;
         using service_tag       = service_tag::two_way_service_tag;
         using message_handler_t = std::function<void(out_message_t&&)>;
 
@@ -48,14 +44,15 @@ namespace hub::service
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            m_message_handler = message_handler;
+            hub::ble::scanner::set_scan_results_event_handler([message_handler](const event::scan_result_event_args& message) {
+                ESP_LOGD(TAG, "Function: scan_results_event_handler.");
+                message_handler({ message.m_name, message.m_address });
+            });
         }
 
     private:
 
         static constexpr const char* TAG{ "hub::service::scanner" };
-
-        message_handler_t m_message_handler;
     };
 
     static_assert(is_valid_two_way_service_v<scanner>, "scanner is not a valid two way service.");

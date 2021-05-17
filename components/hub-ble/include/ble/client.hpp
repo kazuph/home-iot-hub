@@ -114,9 +114,14 @@ namespace hub::ble
             m_notify_event_handler += fun;
         }
 
+        std::string_view get_id() const noexcept
+        {
+            return m_id;
+        }
+
     private:
 
-        static constexpr const char* TAG{ "CLIENT" };
+        static constexpr const char* TAG{ "hub::ble::client" };
 
         static constexpr EventBits_t CONNECT_BIT            { BIT0 };
         static constexpr EventBits_t SEARCH_SERVICE_BIT     { BIT1 };
@@ -143,6 +148,8 @@ namespace hub::ble
         mutable std::vector<uint8_t>            m_descriptor_data_cache;
 
         event::notify_event_handler_t           m_notify_event_handler;
+
+        std::shared_ptr<client>                 m_self_ref;
     };
 }
 
