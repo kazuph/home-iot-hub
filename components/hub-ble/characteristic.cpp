@@ -15,8 +15,9 @@
 
 namespace hub::ble
 {
-    characteristic::characteristic(std::shared_ptr<client> client_ptr, esp_gattc_char_elem_t characteristic) :
+    characteristic::characteristic(std::shared_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic) :
         m_characteristic(characteristic),
+        m_service_handle_range(service_handle_range),
         m_client_ptr(client_ptr)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -97,12 +98,6 @@ namespace hub::ble
         return std::move(m_client_ptr->m_characteristic_data_cache);
     }
 
-    uint16_t characteristic::get_handle() const noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        return m_characteristic.char_handle;
-    }
-
     std::vector<descriptor> characteristic::get_descriptors() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -145,6 +140,50 @@ namespace hub::ble
             result.reserve(descriptors.size());
             std::transform(descriptors.cbegin(), descriptors.cend(), std::back_inserter(result), [this](auto elem) { return descriptor(m_client_ptr, elem); });
             return result;
+        }
+    }
+
+    descriptor characteristic::get_descriptor_by_uuid(esp_bt_uuid_t* uuid) const
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        esp_gatt_status_t result = ESP_GATT_OK;
+        uint16_t descriptor_count = 0U;
+        std::vector<esp_gattc_descr_elem_t> descriptors;
+
+        result = esp_ble_gattc_get_attr_count(
+            m_client_ptr->m_gattc_interface, 
+            m_client_ptr->m_connection_id,
+            ESP_GATT_DB_DESCRIPTOR,
+            0,
+            0,
+            m_characteristic.char_handle,
+            &descriptor_count);
+
+        if (result != ESP_GATT_OK)
+        {
+            throw std::runtime_error("Could not get desriptor count.");
+        }
+
+        descriptors.resize(descriptor_count);
+
+        result = esp_ble_gattc_get_descr_by_uuid(
+            m_client_ptr->m_gattc_interface, 
+            m_client_ptr->m_connection_id,
+            m_service_handle_range.first,
+            m_service_handle_range.second,
+            m_characteristic.uuid,
+            *uuid,
+            descriptors.data(),
+            &descriptor_count);
+
+        if (result != ESP_GATT_OK)
+        {
+            throw std::runtime_error("Could not retrieve desriptors.");
+        }
+
+        {
+            return descriptor(m_client_ptr, descriptors.front());
         }
     }
 

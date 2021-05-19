@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <memory>
+#include <utility>
 
 namespace hub::ble
 {
@@ -32,15 +33,67 @@ namespace hub::ble
         service(std::shared_ptr<client> client_ptr, esp_gattc_service_elem_t service);
 
         /**
+         * @brief Check if service is a primary service.
+         * 
+         * @return bool 
+         */
+        bool is_primary() const noexcept
+        {
+            return m_service.is_primary;
+        }
+
+        /**
+         * @brief Get a pair of handles: start service handler and end service handle.
+         * 
+         * @return std::pair<uint16_t, uint16_t> Pair of handles.
+         */
+        std::pair<uint16_t, uint16_t> get_handle_range() const noexcept
+        {
+            return std::make_pair(m_service.start_handle, m_service.end_handle);
+        }
+
+        /**
+         * @brief Get the start service handle.
+         * 
+         * @return uint16_t service start handle
+         */
+        uint16_t get_start_handle() const noexcept
+        {
+            return m_service.start_handle;
+        }
+
+        /**
+         * @brief Get the end service handle.
+         * 
+         * @return uint16_t service end handle
+         */
+        uint16_t get_end_handle() const noexcept
+        {
+            return m_service.end_handle;
+        }
+
+        /**
+         * @brief Get service uuid.
+         * 
+         * @return esp_bt_uuid_t 
+         */
+        esp_bt_uuid_t get_uuid() const noexcept
+        {
+            return m_service.uuid;
+        }
+
+        /**
          * @brief Get all the characteristics for the given service.
          * 
          * @return std::vector<characteristic> 
          */
         std::vector<characteristic> get_characteristics() const;
 
+        characteristic get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const;
+
     private:
 
-        static constexpr const char* TAG{ "SERVICE" };
+        static constexpr const char* TAG{ "hub::ble::service" };
 
         esp_gattc_service_elem_t    m_service;
         std::shared_ptr<client>     m_client_ptr;

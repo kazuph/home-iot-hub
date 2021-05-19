@@ -55,8 +55,49 @@ namespace hub::ble
         {
             std::vector<characteristic> result;
             result.reserve(characteristics.size());
-            std::transform(characteristics.cbegin(), characteristics.cend(), std::back_inserter(result), [this](auto elem) { return characteristic(m_client_ptr, elem); });
+            std::transform(characteristics.cbegin(), characteristics.cend(), std::back_inserter(result), [this](auto elem) { 
+                return characteristic(m_client_ptr, get_handle_range(), elem); 
+            });
             return result;
         }
+    }
+    
+    characteristic service::get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const
+    {
+        esp_gatt_status_t result = ESP_GATT_OK;
+        uint16_t characteristic_count = 0U;
+        std::vector<esp_gattc_char_elem_t> characteristics;
+
+        result = esp_ble_gattc_get_attr_count(
+            m_client_ptr->m_gattc_interface, 
+            m_client_ptr->m_connection_id,
+            ESP_GATT_DB_CHARACTERISTIC,
+            m_service.start_handle,
+            m_service.end_handle,
+            ESP_GATT_ILLEGAL_HANDLE,
+            &characteristic_count);
+
+        if (result != ESP_GATT_OK)
+        {
+            throw std::runtime_error("Could not get characteristics count.");
+        }
+
+        characteristics.resize(characteristic_count);
+
+        result = esp_ble_gattc_get_char_by_uuid(
+            m_client_ptr->m_gattc_interface, 
+            m_client_ptr->m_connection_id,
+            m_service.start_handle,
+            m_service.end_handle,
+            *uuid,
+            characteristics.data(),
+            &characteristic_count);
+
+        if (result != ESP_GATT_OK)
+        {
+            throw std::runtime_error("Could not retrieve characteristics.");
+        }
+
+        return characteristic(m_client_ptr, get_handle_range(), characteristics.front());
     }
 }

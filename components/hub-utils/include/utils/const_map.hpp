@@ -264,6 +264,12 @@ namespace hub::utils
             return (find(key) != cend());
         }
     };
+
+    template<typename KeyT, typename ValueT, typename... ArgsT>
+    inline constexpr const_map<KeyT, ValueT, sizeof...(ArgsT)> make_const_map(ArgsT&&... args)
+    {
+        return { { std::forward<ArgsT>(args)... } };
+    }
 }
 
 #endif

@@ -3,6 +3,7 @@
 
 #include "transform.hpp"
 #include "filter.hpp"
+#include "join.hpp"
 #include "sink.hpp"
 #include "ref.hpp"
 

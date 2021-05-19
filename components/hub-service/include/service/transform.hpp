@@ -34,11 +34,11 @@ namespace hub::service
             }
 
             template<typename MessageHandlerT>
-            void set_message_handler(MessageHandlerT&& message_handler)
+            void set_message_handler(MessageHandlerT message_handler)
             {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
 
-                m_message_handler = std::forward<MessageHandlerT>(message_handler);
+                m_message_handler = message_handler;
 
                 m_sender.set_message_handler([this](in_message_t&& message) {
                     process_message(std::move(message));

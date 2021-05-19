@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include <utility>
 
 namespace hub::ble
 {
@@ -30,7 +31,7 @@ namespace hub::ble
          * 
          * @see service
          */
-        characteristic(std::shared_ptr<client> client_ptr, esp_gattc_char_elem_t characteristic);
+        characteristic(std::shared_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic);
 
         /**
          * @brief Write data to the characteristic.
@@ -51,7 +52,20 @@ namespace hub::ble
          * 
          * @return uint16_t 
          */
-        uint16_t get_handle() const noexcept;
+        uint16_t get_handle() const noexcept
+        {
+            return m_characteristic.char_handle;
+        }
+
+        /**
+         * @brief Get characteristic uuid.
+         * 
+         * @return esp_bt_uuid_t 
+         */
+        esp_bt_uuid_t get_uuid() const noexcept
+        {
+            return m_characteristic.uuid;
+        }
 
         /**
          * @brief Get all the descriptors for the given characteristic.
@@ -59,6 +73,13 @@ namespace hub::ble
          * @return std::vector<descriptor> 
          */
         std::vector<descriptor> get_descriptors() const;
+
+        /**
+         * @brief Get the descriptor by by uuid.
+         * 
+         * @return descriptor 
+         */
+        descriptor get_descriptor_by_uuid(esp_bt_uuid_t* uuid) const;
 
         /**
          * @brief Subscribe to characteristic notifications.
@@ -72,10 +93,11 @@ namespace hub::ble
 
     private:
 
-        static constexpr const char* TAG{ "BLE CHARACTERISTIC" };
+        static constexpr const char* TAG{ "hub::ble::characteristic" };
 
-        esp_gattc_char_elem_t   m_characteristic;
-        std::shared_ptr<client> m_client_ptr;
+        esp_gattc_char_elem_t           m_characteristic;
+        std::pair<uint16_t, uint16_t>   m_service_handle_range;
+        std::shared_ptr<client>         m_client_ptr;
     };
 }
 

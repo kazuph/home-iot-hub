@@ -56,38 +56,6 @@ namespace hub::ble
         }
     }
 
-    std::shared_ptr<client> client::get_client_by_mac(const mac& address) noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (auto iter = std::find_if(
-                g_client_refs.cbegin(), 
-                g_client_refs.cend(), 
-                [address](auto client_ref) { return client_ref.lock()->m_address == address; }); 
-            iter != g_client_refs.cend())
-        {
-            return iter->lock();
-        }
-
-        return std::shared_ptr<client>();
-    }
-
-    std::shared_ptr<client> client::get_client_by_id(std::string_view id) noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (auto iter = std::find_if(
-                g_client_refs.cbegin(), 
-                g_client_refs.cend(), 
-                [id](auto client_ref) { return client_ref.lock()->m_id == id; }); 
-            iter != g_client_refs.cend())
-        {
-            return iter->lock();
-        }
-
-        return std::shared_ptr<client>();
-    }
-
     client::client() :
         m_connection_id             { 0 },
         m_app_id                    { 0 },
@@ -298,6 +266,11 @@ namespace hub::ble
     std::vector<service> client::get_services() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        if (!m_services_cache.empty())
+        {
+            m_services_cache.clear();
+        }
         
         if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, nullptr); result != ESP_OK)
         {
@@ -320,5 +293,37 @@ namespace hub::ble
         }
 
         return std::move(m_services_cache);
+    }
+
+    service client::get_service_by_uuid(const esp_bt_uuid_t* uuid) const
+    {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        if (!m_services_cache.empty())
+        {
+            m_services_cache.clear();
+        }
+        
+        if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, const_cast<esp_bt_uuid_t*>(uuid)); result != ESP_OK)
+        {
+            throw std::runtime_error("Get services failed.");
+        }
+
+        EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
+
+        if (bits & SEARCH_SERVICE_BIT)
+        {
+            ESP_LOGI(TAG, "Get service success.");
+        }
+        else if (bits & FAIL_BIT)
+        {
+            throw std::runtime_error("Get services failed.");
+        }
+        else
+        {
+            throw std::runtime_error("Get services timed out.");
+        }
+
+        return std::move(m_services_cache.front());
     }
 }

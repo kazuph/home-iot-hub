@@ -65,7 +65,7 @@ namespace hub::ble
          * 
          * @return std::shared_ptr<client> 
          */
-        static std::shared_ptr<client> make_client(std::string_view id);
+        static std::shared_ptr<client> make_client(std::string_view id = "");
 
         static std::shared_ptr<client> get_client_by_mac(const mac& address) noexcept;
 
@@ -105,6 +105,14 @@ namespace hub::ble
         std::vector<service> get_services() const;
 
         /**
+         * @brief Get the service by uuid.
+         * 
+         * @param uuid 
+         * @return service 
+         */
+        service get_service_by_uuid(const esp_bt_uuid_t* uuid) const;
+
+        /**
          * @brief Subscribe to the BLE characteristic being represented by the current characteristic object.
          * 
          * @param fun Callback function handling event.
@@ -112,11 +120,6 @@ namespace hub::ble
         void set_notify_event_handler(event::notify_function_t fun)
         {
             m_notify_event_handler += fun;
-        }
-
-        std::string_view get_id() const noexcept
-        {
-            return m_id;
         }
 
     private:

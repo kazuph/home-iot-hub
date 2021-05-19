@@ -17,83 +17,60 @@
 namespace hub::service
 {
     /**
-     * @brief BLE actor class. Represents BLE endpoint. Operates both as source and sink.
-     * Handles BLE scan, device connection, disconnection and updates from both directions.
+     * @brief Service adaptor for ble::client class. Serves as message source.
      */
-    class ble
+    class ble_message_source
     {
     public:
 
-        struct scan_control_t
-        {
-            bool m_enable;
-        };
-
-        struct scan_result_t
-        {
-            std::string m_name;
-            std::string m_address;
-        };
-
-        struct device_connect_t
-        {
-            hub::ble::mac   m_address;
-            std::string     m_id;
-            std::string     m_name;
-        };
-
-        struct device_disconnect_t
-        {
-            std::string m_id;
-        }; 
-    
-        struct device_update_t
-        {
-            std::string m_id;
-            utils::json m_data;
-        };
-
-        using service_tag       = service_tag::two_way_service_tag;
-        using in_message_t      = std::variant<scan_control_t, device_connect_t, device_disconnect_t, device_update_t>;
-        using out_message_t     = std::variant<scan_result_t, device_update_t>;
+        using service_tag       = service_tag::source_service_tag;
+        using out_message_t     = ble::event::notify_event_args_t;
         using message_handler_t = std::function<void(out_message_t&&)>;
 
-        ble();
+        ble_message_source()                                        = delete;
 
-        ble(const ble&) = delete;
+        explicit ble_message_source(std::weak_ptr<ble::client> client);
 
-        ble(ble&&) = default;
+        ble_message_source(const ble_message_source&)               = delete;
 
-        ~ble();
+        ble_message_source(ble_message_source&&)                    = default;
 
-        void process_message(in_message_t&& message) const;
+        ~ble_message_source()                                       = default;
+
+        ble_message_source& operator=(const ble_message_source&)    = delete;
+
+        ble_message_source& operator=(ble_message_source&&)         = default;
 
         template<typename MessageHandlerT>
-        void set_message_handler(MessageHandlerT&& message_handler)
+        void set_message_handler(MessageHandlerT message_handler)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            m_message_handler = std::forward<MessageHandlerT>(message_handler);
+            m_message_handler = message_handler;
+
+            auto client = m_client.lock();
+
+            if (!client)
+            {
+                ESP_LOGE(TAG, "Client expired.");
+                return;
+            }
+
+            client->set_notify_event_handler([this](const out_message_t& message) {
+                m_message_handler(out_message_t(message));
+            });
         }
 
     private:
 
         static constexpr const char* TAG{ "hub::service::ble" };
 
-        message_handler_t                                       m_message_handler;
+        message_handler_t               m_message_handler;
 
-        mutable std::list<std::shared_ptr<hub::ble::client>>    m_client_list;
-
-        void scan_control_handler(scan_control_t&& scan_start_args) const;
-
-        void device_connect_handler(device_connect_t&& device_connect_args) const;
-
-        void device_disconnect_handler(device_disconnect_t&& device_disconnect_args) const;
-
-        void device_update_handler(device_update_t&& device_update_args) const;
+        std::weak_ptr<hub::ble::client> m_client;
     };
 
-    static_assert(is_valid_two_way_service_v<ble>, "ble is not a valid two way service.");
+    static_assert(is_valid_source_service_v<ble_message_source>, "ble is not a valid source service.");
 }
 
 #endif

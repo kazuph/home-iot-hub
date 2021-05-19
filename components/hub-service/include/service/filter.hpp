@@ -35,7 +35,7 @@ namespace hub::service
             }
 
             template<typename MessageHandlerT>
-            void set_message_handler(MessageHandlerT&& message_handler)
+            void set_message_handler(MessageHandlerT message_handler)
             {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
 
