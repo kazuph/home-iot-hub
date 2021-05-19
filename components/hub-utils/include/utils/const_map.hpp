@@ -5,6 +5,10 @@
 #include <cstdint>
 #include <algorithm>
 
+#ifndef NO_EXCEPTIONS
+#include <stdexcept>
+#endif
+
 namespace hub::utils
 {
     template<typename T>
@@ -229,7 +233,11 @@ namespace hub::utils
 
             if (iter == end())
             {
+#ifdef NO_EXCEPTIONS
                 std::abort();
+#else
+                throw std::out_of_range("Key not found.");
+#endif
             }
 
             return iter->second;
@@ -241,7 +249,11 @@ namespace hub::utils
 
             if (iter == cend())
             {
+#ifdef NO_EXCEPTIONS
                 std::abort();
+#else
+                throw std::out_of_range("Key not found.");
+#endif
             }
 
             return iter->second;
