@@ -1,7 +1,7 @@
 #ifndef HUB_SERVICE_SCANNER
 #define HUB_SERVICE_SCANNER
 
-#include "service/traits.hpp"
+#include "async/rx/traits.hpp"
 #include "ble/mac.hpp"
 #include "ble/scanner.hpp"
 
@@ -20,12 +20,12 @@ namespace hub::service
         {
         public:
 
+            static_assert(async::rx::is_valid_source_v<SenderT>, "Sender is not a valid message source.");
+
+            using tag               = async::rx::tag::two_way_tag;
             using in_message_t      = typename SenderT::out_message_t;
             using out_message_t     = hub::event::scan_result_event_args;
-            using service_tag       = service_tag::two_way_service_tag;
             using message_handler_t = std::function<void(out_message_t&&)>;
-
-            static_assert(has_output_message_type_v<SenderT>, "Sender is not a valid message source.");
 
             ble_scanner()                               = delete;
 
@@ -50,7 +50,7 @@ namespace hub::service
             {
                 ESP_LOGD(TAG, "Function: %s.", __func__);
 
-                hub::ble::scanner::set_scan_results_event_handler([message_handler](const event::scan_result_event_args& message) {
+                hub::ble::scanner::set_scan_results_event_handler([message_handler](event::scan_result_event_args&& message) {
                     ESP_LOGD(TAG, "Function: scan_results_event_handler.");
                     message_handler({ message.m_name, message.m_address });
                 });
@@ -92,7 +92,7 @@ namespace hub::service
             };
 
             using out_message_t     = hub::event::scan_result_event_args;
-            using service_tag       = service_tag::two_way_service_tag;
+            using tag               = async::rx::tag::two_way_tag;
             using message_handler_t = std::function<void(out_message_t&&)>;
 
             ble_scanner()                               = default;
@@ -137,7 +137,7 @@ namespace hub::service
             static constexpr const char* TAG{ "hub::service::ble_scanner" };
         };
 
-        static_assert(is_valid_two_way_service_v<ble_scanner<>>, "ble_scanner is not a valid two way service.");
+        static_assert(async::rx::is_valid_two_way_v<ble_scanner<>>, "ble_scanner is not a valid two way service.");
 
         struct ble_scanner_helper
         {

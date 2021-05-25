@@ -23,6 +23,6 @@ namespace hub::service
     void mqtt::process_message(in_message_t&& message) const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);     
-        m_client.publish(message.m_topic, message.m_data);
+        m_client.publish(message.topic, message.data);
     }
 }

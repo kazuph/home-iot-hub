@@ -1,7 +1,7 @@
 #ifndef HUB_SERVICE_MQTT_HPP
 #define HUB_SERVICE_MQTT_HPP
 
-#include "traits.hpp"
+#include "async/rx/traits.hpp"
 
 #include "mqtt/client.hpp"
 
@@ -28,15 +28,9 @@ namespace hub::service
         static constexpr std::string_view MQTT_BLE_DEVICE_READ_TOPIC        { "/device/read" };
         static constexpr std::string_view MQTT_BLE_DEVICE_WRITE_TOPIC       { "/device/write" };
 
-        struct message_t
-        {
-            std::string m_topic;
-            std::string m_data;
-        };
-
-        using service_tag       = service_tag::two_way_service_tag;
-        using in_message_t      = message_t;
-        using out_message_t     = message_t;
+        using tag               = async::rx::tag::two_way_tag;
+        using in_message_t      = hub::event::data_event_args;
+        using out_message_t     = hub::event::data_event_args;
         using message_handler_t = std::function<void(out_message_t&&)>;
 
         mqtt() = delete;
@@ -50,13 +44,11 @@ namespace hub::service
         void process_message(in_message_t&& message) const;
 
         template<typename MessageHandlerT>
-        void set_message_handler(MessageHandlerT&& message_handler)
+        void set_message_handler(MessageHandlerT message_handler)
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
 
-            m_client.set_data_event_handler([message_handler{ std::forward<MessageHandlerT>(message_handler) }](auto args) {
-                std::invoke(message_handler, out_message_t{ args.topic, args.data });
-            });
+            m_client.set_data_event_handler(message_handler);
         }
 
     private:
@@ -66,7 +58,7 @@ namespace hub::service
         mutable hub::mqtt::client m_client;
     };
 
-    static_assert(is_valid_two_way_service_v<mqtt>, "mqtt is not a valid two way service.");
+    static_assert(async::rx::is_valid_two_way_v<mqtt>, "mqtt is not a valid two way service.");
 }
 
 #endif

@@ -97,9 +97,29 @@ namespace hub::ble
             return m_address.cbegin();
         }
 
+        constexpr auto rbegin() noexcept
+        {
+            return m_address.rbegin();
+        }
+
+        constexpr auto rbegin() const noexcept
+        {
+            return m_address.rbegin();
+        }
+
         constexpr auto cbegin() const noexcept
         {
             return m_address.cbegin();
+        }
+
+        constexpr auto rend() noexcept
+        {
+            return m_address.rend();
+        }
+
+        constexpr auto rend() const noexcept
+        {
+            return m_address.rend();
         }
 
         constexpr auto end() noexcept

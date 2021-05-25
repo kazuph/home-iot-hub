@@ -29,7 +29,7 @@ namespace hub::ble
          * 
          * @see characteristic
          */
-        descriptor(std::shared_ptr<client> client_ptr, esp_gattc_descr_elem_t descriptor);
+        descriptor(std::weak_ptr<client> client_ptr, esp_gattc_descr_elem_t descriptor);
 
         /**
          * @brief Write data to the descriptor.
@@ -45,12 +45,17 @@ namespace hub::ble
          */
         std::vector<uint8_t> read() const;
 
+        uint16_t get_handle() const
+        {
+            return m_descriptor.handle;
+        }
+
     private:
 
         static constexpr const char* TAG{ "DESCRIPTOR" };
 
         esp_gattc_descr_elem_t  m_descriptor;
-        std::shared_ptr<client> m_client_ptr;
+        std::weak_ptr<client> m_client_ptr;
     };
 }
 

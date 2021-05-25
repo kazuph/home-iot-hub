@@ -1,5 +1,5 @@
-#ifndef HUB_SERVICE_JOIN_HPP
-#define HUB_SERVICE_JOIN_HPP
+#ifndef HUB_ASYNC_RX_JOIN_HPP
+#define HUB_ASYNC_RX_JOIN_HPP
 
 #include "traits.hpp"
 
@@ -7,7 +7,7 @@
 #include <functional>
 #include <type_traits>
 
-namespace hub::service
+namespace hub::async::rx
 {
     namespace impl
     {
@@ -16,12 +16,13 @@ namespace hub::service
         {
         public:
 
-            using in_message_t  = typename SenderT::out_message_t;
-            using out_message_t = typename in_message_t::out_message_t;
-            using function_type = std::function<void(out_message_t&&)>;
+            static_assert(is_valid_source_v<SenderT>, "SenderT is not a valid message source.");
+            static_assert(is_valid_source_v<typename SenderT::out_message_t>, "SenderT::out_message_t is not a valid message source.");
 
-            static_assert(has_output_message_type_v<SenderT>, "SenderT is not a valid message source.");
-            static_assert(has_output_message_type_v<in_message_t>, "in_message_t is not a valid message source.");
+            using tag               = tag::two_way_tag;
+            using in_message_t      = typename SenderT::out_message_t;
+            using out_message_t     = typename in_message_t::out_message_t;
+            using message_handler_t = std::function<void(out_message_t&&)>;
 
             join(SenderT&& sender) :
                 m_sender(std::move(sender))
@@ -30,7 +31,7 @@ namespace hub::service
             }
 
             template<typename MessageHandlerT>
-            void set_message_handler(MessageHandlerT&& message_handler)
+            void set_message_handler(MessageHandlerT message_handler)
             {
                 m_message_handler = message_handler;
 
@@ -48,7 +49,7 @@ namespace hub::service
         private:
 
             SenderT                 m_sender;
-            function_type           m_message_handler;
+            message_handler_t       m_message_handler;
             std::list<in_message_t> m_source_list;
         };
 

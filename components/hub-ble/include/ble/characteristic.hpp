@@ -1,6 +1,8 @@
 #ifndef HUB_BLE_CHARACTERISTIC_H
 #define HUB_BLE_CHARACTERISTIC_H
 
+#include "event.hpp"
+
 #include "esp_gatt_defs.h"
 
 #include <cstdint>
@@ -31,7 +33,7 @@ namespace hub::ble
          * 
          * @see service
          */
-        characteristic(std::shared_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic);
+        characteristic(std::weak_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic);
 
         /**
          * @brief Write data to the characteristic.
@@ -79,12 +81,12 @@ namespace hub::ble
          * 
          * @return descriptor 
          */
-        descriptor get_descriptor_by_uuid(esp_bt_uuid_t* uuid) const;
+        descriptor get_descriptor_by_uuid(const esp_bt_uuid_t* uuid) const;
 
         /**
          * @brief Subscribe to characteristic notifications.
          */
-        void subscribe();
+        void subscribe(event::notify_function_t callback);
 
         /**
          * @brief Unsubscribe from characteristic notifications.
@@ -97,7 +99,7 @@ namespace hub::ble
 
         esp_gattc_char_elem_t           m_characteristic;
         std::pair<uint16_t, uint16_t>   m_service_handle_range;
-        std::shared_ptr<client>         m_client_ptr;
+        std::weak_ptr<client>           m_client_ptr;
     };
 }
 

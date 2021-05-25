@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <functional>
 
-namespace hub::service
+namespace hub::async::rx
 {
     namespace impl
     {
@@ -17,13 +17,14 @@ namespace hub::service
         {
         public:
 
-            using in_message_t  = typename SenderT::out_message_t;
-            using out_message_t = in_message_t;
-            using function_type = std::function<void(out_message_t&&)>;
+            static_assert(is_valid_source_v<SenderT>, "Sender is not a valid message source.");
+            static_assert(std::is_invocable_v<PredT, typename SenderT::out_message_t>, "Specified callable is not invocable with sender output message type.");
+            static_assert(std::is_same_v<std::invoke_result_t<PredT, typename SenderT::out_message_t>, bool>, "Not a valid predicate.");
 
-            static_assert(has_output_message_type_v<SenderT>, "Sender is not a valid message source.");
-            static_assert(std::is_invocable_v<PredT, in_message_t>, "Specified callable is not invocable with sender message type.");
-            static_assert(std::is_same_v<std::invoke_result_t<PredT, in_message_t>, bool>, "Not a valid predicate.");
+            using tag               = tag::two_way_tag;
+            using in_message_t      = typename SenderT::out_message_t;
+            using out_message_t     = in_message_t;
+            using message_handler_t = std::function<void(out_message_t&&)>;
 
             filter() = delete;
 
@@ -60,9 +61,9 @@ namespace hub::service
 
             static constexpr const char* TAG{ "hub::service::impl::filter" };
 
-            SenderT         m_sender;
-            PredT           m_predicate;
-            function_type   m_message_handler;
+            SenderT             m_sender;
+            PredT               m_predicate;
+            message_handler_t   m_message_handler;
         };
 
         template<typename FunctionT>

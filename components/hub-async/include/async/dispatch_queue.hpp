@@ -80,8 +80,8 @@ namespace hub::async
                     [
                         fun     { std::forward<FunT>(fun) }, 
                         args    { std::make_tuple(std::forward<ArgsT>(args)...) }
-                    ]() { 
-                        std::apply(fun, args);
+                    ]() mutable { 
+                        std::apply(std::forward<FunT>(fun), std::move(args));
                     });
             }
 

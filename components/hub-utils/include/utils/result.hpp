@@ -178,9 +178,8 @@ namespace hub::utils
         }
 
 #ifndef NO_EXCEPTIONS
-        std::enable_if_t<
-            std::is_same_v<error_type, std::exception_ptr>,
-            value_type> get_or_throw() const
+        template<typename = std::enable_if_t<std::is_same_v<error_type, std::exception_ptr>, void>>
+        auto get_or_throw() const
         {
             if (is_valid())
             {
@@ -258,7 +257,7 @@ namespace hub::utils
     using result_throwing = result<ResultT, std::exception_ptr>;
 
     template<typename FunT>
-    auto catch_as_result(FunT&& fun) noexcept
+    auto invoke(FunT&& fun) noexcept
     {
         using result_type = result_throwing<std::invoke_result_t<FunT>>;
 

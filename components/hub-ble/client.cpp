@@ -16,7 +16,7 @@ namespace hub::ble
 {
     static std::array<std::weak_ptr<client>, MAX_CLIENTS> g_client_refs;
 
-    std::shared_ptr<client> client::make_client(std::string_view id)
+    std::shared_ptr<client> client::make_client()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -43,7 +43,6 @@ namespace hub::ble
             auto client_ptr         = std::make_shared<client>();
 
             client_ptr->m_app_id    = std::distance(g_client_refs.cbegin(), iter);
-            client_ptr->m_id        = std::string(id);
 
             g_client_refs[client_ptr->m_app_id] = client_ptr;
 
@@ -65,7 +64,7 @@ namespace hub::ble
         m_services_cache            {  },
         m_characteristic_data_cache {  },
         m_descriptor_data_cache     {  },
-        m_notify_event_handler      {  }
+        m_characteristics_callbacks {  }
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -142,15 +141,15 @@ namespace hub::ble
         switch (event)
         {
         case ESP_GATTC_NOTIFY_EVT:
-            client_ptr->m_notify_event_handler.invoke({
-                param->notify.handle,
-                std::vector<uint8_t>(param->notify.value, param->notify.value + static_cast<size_t>(param->notify.value_len)) 
-            });
+            if (auto characteristic_iter = client_ptr->m_characteristics_callbacks.find(param->notify.handle); 
+                characteristic_iter != client_ptr->m_characteristics_callbacks.end())
+            {
+                characteristic_iter->second.invoke(std::vector<uint8_t>(param->notify.value, param->notify.value + static_cast<size_t>(param->notify.value_len)));
+            }
             break;
         case ESP_GATTC_CONNECT_EVT:
             client_ptr->m_connection_id     = param->connect.conn_id;
             client_ptr->m_address           = mac(param->connect.remote_bda);
-            client_ptr->m_self_ref          = client_ptr->get_shared_client();
 
             if (esp_ble_gattc_send_mtu_req(gattc_if, client_ptr->m_connection_id) != ESP_OK)
             {
@@ -159,6 +158,7 @@ namespace hub::ble
 
             break;
         case ESP_GATTC_CFG_MTU_EVT:
+            client_ptr->m_self_ref = client_ptr;
             xEventGroupSetBits(client_ptr->m_event_group, CONNECT_BIT);
             break;
         case ESP_GATTC_SEARCH_RES_EVT:
@@ -200,8 +200,10 @@ namespace hub::ble
             xEventGroupSetBits(client_ptr->m_event_group, READ_DESCR_BIT);
             break;
         case ESP_GATTC_DISCONNECT_EVT:
-            client_ptr->m_self_ref.reset();
             xEventGroupSetBits(client_ptr->m_event_group, DISCONNECT_BIT);
+            break;
+        case ESP_GATTC_CLOSE_EVT:
+            client_ptr->m_self_ref.reset();
             break;
         default:
             break;
@@ -263,18 +265,17 @@ namespace hub::ble
         }
     }
 
-    std::vector<service> client::get_services() const
+    utils::result<std::vector<service>, esp_err_t> client::get_services() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (!m_services_cache.empty())
-        {
-            m_services_cache.clear();
-        }
+        using result_type = utils::result<std::vector<service>, esp_err_t>;
+
+        m_services_cache = std::move(std::vector<service>());
         
         if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, nullptr); result != ESP_OK)
         {
-            throw std::runtime_error("Get services failed.");
+            return result_type::failure(result);
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -285,28 +286,32 @@ namespace hub::ble
         }
         else if (bits & FAIL_BIT)
         {
-            throw std::runtime_error("Get services failed.");
+            return result_type::failure(ESP_FAIL);
         }
         else
         {
-            throw std::runtime_error("Get services timed out.");
+            result_type::failure(ESP_ERR_TIMEOUT);
         }
 
-        return std::move(m_services_cache);
+        if (m_services_cache.empty())
+        {
+            return result_type::failure(ESP_FAIL);
+        }
+
+        return result_type::success(std::move(m_services_cache));
     }
 
-    service client::get_service_by_uuid(const esp_bt_uuid_t* uuid) const
+    utils::result<service, esp_err_t> client::get_service_by_uuid(const esp_bt_uuid_t* uuid) const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        if (!m_services_cache.empty())
-        {
-            m_services_cache.clear();
-        }
+        using result_type = utils::result<service, esp_err_t>;
+
+        m_services_cache = std::move(std::vector<service>());
         
         if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, const_cast<esp_bt_uuid_t*>(uuid)); result != ESP_OK)
         {
-            throw std::runtime_error("Get services failed.");
+            return result_type::failure(result);
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -317,13 +322,18 @@ namespace hub::ble
         }
         else if (bits & FAIL_BIT)
         {
-            throw std::runtime_error("Get services failed.");
+            return result_type::failure(ESP_FAIL);
         }
         else
         {
-            throw std::runtime_error("Get services timed out.");
+            return result_type::failure(ESP_ERR_TIMEOUT);
         }
 
-        return std::move(m_services_cache.front());
+        if (m_services_cache.empty())
+        {
+            return result_type::failure(ESP_FAIL);
+        }
+
+        return result_type::success(std::move(m_services_cache.front()));
     }
 }

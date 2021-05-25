@@ -1,9 +1,9 @@
-#ifndef HUB_SERVICE_SINK_HPP
-#define HUB_SERVICE_SINK_HPP
+#ifndef HUB_ASYNC_RX__SINK_HPP
+#define HUB_ASYNC_RX__SINK_HPP
 
 #include "traits.hpp"
 
-namespace hub::service
+namespace hub::async::rx
 {
     namespace impl
     {
@@ -12,10 +12,11 @@ namespace hub::service
         {
         public:
 
-            using service_tag = service_tag::sink_service_tag;
-            using in_message_t = typename SenderT::out_message_t;
+            static_assert(is_valid_source_v<SenderT>, "Sender is not a valid message source.");
+            static_assert(std::is_invocable_v<SinkT, typename SenderT::out_message_t>, "Provided sink is not invocable with the given sender message type.");
 
-            static_assert(std::is_invocable_v<SinkT, in_message_t>, "Provided sink is not invocable with the given sender message type.");
+            using tag          = tag::two_way_tag;
+            using in_message_t = typename SenderT::out_message_t;
 
             sink() = delete;
 
@@ -30,7 +31,7 @@ namespace hub::service
 
             void process_message(in_message_t&& message) const
             {
-                std::invoke(m_sink, std::move(message));
+                m_sink(std::move(message));
             }
 
         private:

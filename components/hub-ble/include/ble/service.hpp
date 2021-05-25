@@ -3,6 +3,8 @@
 
 #include "esp_gatt_defs.h"
 
+#include "esp_log.h"
+
 #include <vector>
 #include <memory>
 #include <utility>
@@ -30,7 +32,7 @@ namespace hub::ble
          * 
          * @see client
          */
-        service(std::shared_ptr<client> client_ptr, esp_gattc_service_elem_t service);
+        service(std::weak_ptr<client> client_ptr, esp_gattc_service_elem_t service);
 
         /**
          * @brief Check if service is a primary service.
@@ -96,7 +98,7 @@ namespace hub::ble
         static constexpr const char* TAG{ "hub::ble::service" };
 
         esp_gattc_service_elem_t    m_service;
-        std::shared_ptr<client>     m_client_ptr;
+        std::weak_ptr<client>       m_client_ptr;
     };
 }
 

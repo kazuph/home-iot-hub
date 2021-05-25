@@ -10,7 +10,7 @@
 
 namespace hub::ble
 {
-    descriptor::descriptor(std::shared_ptr<client> client_ptr, esp_gattc_descr_elem_t descriptor) :
+    descriptor::descriptor(std::weak_ptr<client> client_ptr, esp_gattc_descr_elem_t descriptor) :
         m_descriptor(descriptor),
         m_client_ptr(client_ptr)
     {
@@ -21,9 +21,16 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         if (esp_err_t result = esp_ble_gattc_write_char_descr(
-                m_client_ptr->m_gattc_interface, 
-                m_client_ptr->m_connection_id,
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
                 m_descriptor.handle,
                 data.size(),
                 data.data(),
@@ -35,7 +42,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::WRITE_DESCR_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -58,10 +65,17 @@ namespace hub::ble
     std::vector<uint8_t> descriptor::read() const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
         
         if (esp_err_t result = esp_ble_gattc_read_char_descr(
-            m_client_ptr->m_gattc_interface, 
-            m_client_ptr->m_connection_id,
+            shared_client->m_gattc_interface, 
+            shared_client->m_connection_id,
             m_descriptor.handle,
             ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
@@ -70,7 +84,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::READ_DESCR_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -89,6 +103,6 @@ namespace hub::ble
             throw std::runtime_error("Read descriptor timed out.");
         }
 
-        return std::move(m_client_ptr->m_descriptor_data_cache);
+        return std::move(shared_client->m_descriptor_data_cache);
     }
 }

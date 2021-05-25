@@ -58,8 +58,9 @@ namespace hub::event
     {
     public:
 
-        using argument_type         = std::remove_cv_t<std::remove_reference_t<std::remove_pointer_t<EventArgsT>>>;
-        using function_type         = std::function<void(const argument_type&)>;
+        static_assert(std::is_copy_constructible_v<EventArgsT>, "Event args must be copy constructible.");
+
+        using function_type = std::function<void(EventArgsT&&)>;
 
         event_handler()                                 = default;
 
@@ -83,24 +84,36 @@ namespace hub::event
             m_callback_list.clear();
         }
 
-        void add_callback(function_type fun) noexcept
+        template<typename FunT>
+        void add_callback(FunT fun) noexcept
         {
             m_callback_list.push_back(fun);
         }
 
-        void invoke(argument_type&& args) const noexcept
+        void invoke(EventArgsT&& args) const noexcept
         {
             if (empty())
             {
                 return;
             }
 
-            std::for_each(m_callback_list.cbegin(), m_callback_list.cend(), [this, args{ std::forward<argument_type>(args) }](const function_type& fun) {
-                dispatch(fun, args);
-            });
+            if (m_callback_list.size() == 1)
+            {
+                dispatch(m_callback_list.back(), std::forward<EventArgsT>(args));
+                return;
+            }
+
+            std::for_each(
+                m_callback_list.cbegin(), 
+                m_callback_list.cend(), 
+                [this, args{ std::forward<EventArgsT>(args) }](const function_type& fun) {
+                    dispatch(fun, args);
+                }
+            );
         }
 
-        void operator+=(function_type fun) noexcept
+        template<typename FunT>
+        void operator+=(FunT fun) noexcept
         {
             add_callback(fun);
         }

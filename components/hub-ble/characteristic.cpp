@@ -15,7 +15,7 @@
 
 namespace hub::ble
 {
-    characteristic::characteristic(std::shared_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic) :
+    characteristic::characteristic(std::weak_ptr<client> client_ptr, std::pair<uint16_t, uint16_t> service_handle_range, esp_gattc_char_elem_t characteristic) :
         m_characteristic(characteristic),
         m_service_handle_range(service_handle_range),
         m_client_ptr(client_ptr)
@@ -27,9 +27,16 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         if (esp_err_t result = esp_ble_gattc_write_char(
-                m_client_ptr->m_gattc_interface, 
-                m_client_ptr->m_connection_id,
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
                 m_characteristic.char_handle,
                 data.size(),
                 data.data(),
@@ -41,7 +48,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::WRITE_CHAR_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -65,9 +72,16 @@ namespace hub::ble
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         if (esp_err_t result = esp_ble_gattc_read_char(
-                m_client_ptr->m_gattc_interface, 
-                m_client_ptr->m_connection_id,
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
                 m_characteristic.char_handle,
                 ESP_GATT_AUTH_REQ_NONE); 
             result != ESP_OK)
@@ -76,7 +90,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::READ_CHAR_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -95,7 +109,7 @@ namespace hub::ble
             throw std::runtime_error("Read characteristic timed out.");
         }
 
-        return std::move(m_client_ptr->m_characteristic_data_cache);
+        return std::move(shared_client->m_characteristic_data_cache);
     }
 
     std::vector<descriptor> characteristic::get_descriptors() const
@@ -106,9 +120,16 @@ namespace hub::ble
         uint16_t descriptor_count = 0U;
         std::vector<esp_gattc_descr_elem_t> descriptors;
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         result = esp_ble_gattc_get_attr_count(
-            m_client_ptr->m_gattc_interface, 
-            m_client_ptr->m_connection_id,
+            shared_client->m_gattc_interface, 
+            shared_client->m_connection_id,
             ESP_GATT_DB_DESCRIPTOR,
             0,
             0,
@@ -123,8 +144,8 @@ namespace hub::ble
         descriptors.resize(descriptor_count);
 
         result = esp_ble_gattc_get_all_descr(
-            m_client_ptr->m_gattc_interface, 
-            m_client_ptr->m_connection_id,
+            shared_client->m_gattc_interface, 
+            shared_client->m_connection_id,
             m_characteristic.char_handle,
             descriptors.data(),
             &descriptor_count,
@@ -143,7 +164,7 @@ namespace hub::ble
         }
     }
 
-    descriptor characteristic::get_descriptor_by_uuid(esp_bt_uuid_t* uuid) const
+    descriptor characteristic::get_descriptor_by_uuid(const esp_bt_uuid_t* uuid) const
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
@@ -151,9 +172,16 @@ namespace hub::ble
         uint16_t descriptor_count = 0U;
         std::vector<esp_gattc_descr_elem_t> descriptors;
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         result = esp_ble_gattc_get_attr_count(
-            m_client_ptr->m_gattc_interface, 
-            m_client_ptr->m_connection_id,
+            shared_client->m_gattc_interface, 
+            shared_client->m_connection_id,
             ESP_GATT_DB_DESCRIPTOR,
             0,
             0,
@@ -168,8 +196,8 @@ namespace hub::ble
         descriptors.resize(descriptor_count);
 
         result = esp_ble_gattc_get_descr_by_uuid(
-            m_client_ptr->m_gattc_interface, 
-            m_client_ptr->m_connection_id,
+            shared_client->m_gattc_interface, 
+            shared_client->m_connection_id,
             m_service_handle_range.first,
             m_service_handle_range.second,
             m_characteristic.uuid,
@@ -187,13 +215,20 @@ namespace hub::ble
         }
     }
 
-    void characteristic::subscribe()
+    void characteristic::subscribe(event::notify_function_t callback)
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
+
         if (esp_err_t result = esp_ble_gattc_register_for_notify(
-                m_client_ptr->m_gattc_interface, 
-                m_client_ptr->m_address.to_address(), 
+                shared_client->m_gattc_interface, 
+                shared_client->m_address.to_address(), 
                 m_characteristic.char_handle); 
             result != ESP_OK)
         {
@@ -201,7 +236,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::REG_FOR_NOTIFY_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -209,6 +244,7 @@ namespace hub::ble
 
         if (bits & client::REG_FOR_NOTIFY_BIT)
         {
+            shared_client->m_characteristics_callbacks[m_characteristic.char_handle] += callback;
             ESP_LOGI(TAG, "Subscribe to characteristic success.");
         }
         else if (bits & client::FAIL_BIT)
@@ -224,10 +260,17 @@ namespace hub::ble
     void characteristic::unsubscribe()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        auto shared_client = m_client_ptr.lock();
+
+        if (!shared_client)
+        {
+            throw std::runtime_error("Client is not connected..");
+        }
         
         if (esp_err_t result = esp_ble_gattc_unregister_for_notify(
-                m_client_ptr->m_gattc_interface, 
-                m_client_ptr->m_address.to_address(), 
+                shared_client->m_gattc_interface, 
+                shared_client->m_address.to_address(), 
                 m_characteristic.char_handle); 
             result != ESP_OK)
         {
@@ -235,7 +278,7 @@ namespace hub::ble
         }
 
         EventBits_t bits = xEventGroupWaitBits(
-            m_client_ptr->m_event_group, 
+            shared_client->m_event_group, 
             client::UNREG_FOR_NOTIFY_BIT | client::FAIL_BIT, 
             pdTRUE, 
             pdFALSE, 
@@ -243,6 +286,7 @@ namespace hub::ble
 
         if (bits & client::UNREG_FOR_NOTIFY_BIT)
         {
+            shared_client->m_characteristics_callbacks.erase(m_characteristic.char_handle);
             ESP_LOGI(TAG, "Unsubscribe from characteristic success.");
         }
         else if (bits & client::FAIL_BIT)
