@@ -1,7 +1,5 @@
 #include "ble/ble.hpp"
 
-#include <stdexcept>
-
 #include "esp_log.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -10,11 +8,13 @@
 
 namespace hub::ble
 {
-    static constexpr const char* TAG{ "BLE" };
+    static constexpr const char* TAG{ "hub::ble" };
 
-    void init()
+    result<void> init() noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<void>;
 
         esp_err_t result = ESP_OK;
 
@@ -43,7 +43,9 @@ namespace hub::ble
             goto cleanup_bluedroid_init;
         }
 
-        return;
+        ESP_LOGI(TAG, "BLE module initialized.");
+
+        return result_type::success();
 
     cleanup_bluedroid_init:
         esp_bluedroid_deinit();
@@ -53,16 +55,23 @@ namespace hub::ble
         esp_bt_controller_deinit();
     error:
 
-        throw std::runtime_error("BLE initialization failed.");
+        ESP_LOGE(TAG, "BLE module initialization failed.");
+        return result_type::failure(errc::initialization_failed);
     }
 
-    void deinit()
+    result<void> deinit() noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<void>;
         
         esp_bluedroid_disable();
         esp_bluedroid_deinit();
         esp_bt_controller_disable();
         esp_bt_controller_deinit();
+
+        ESP_LOGI(TAG, "BLE module deinitialized.");
+
+        return result_type::success();
     }
 }

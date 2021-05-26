@@ -1,6 +1,7 @@
 #ifndef HUB_BLE_SCANNER_HPP
 #define HUB_BLE_SCANNER_HPP
 
+#include "errc.hpp"
 #include "mac.hpp"
 
 #include "event/event.hpp"
@@ -23,15 +24,15 @@ namespace hub::ble::scanner
         using scan_result_event_handler_fun_t   = scan_result_event_handler_t::function_type;
     }
 
-    void init();
+    result<void> init() noexcept;
 
-    void deinit();
+    result<void> deinit() noexcept;
 
-    void start(uint16_t duration = 3);
+    result<void> start(uint16_t duration = 3) noexcept;
 
-    void stop();
+    result<void> stop() noexcept;
 
-    void set_scan_results_event_handler(event::scan_result_event_handler_fun_t scan_callback);
+    result<void> set_scan_results_event_handler(event::scan_result_event_handler_fun_t scan_callback) noexcept;
 }
 
 namespace hub::event

@@ -1,11 +1,13 @@
 #ifndef HUB_BLE_HPP
 #define HUB_BLE_HPP
 
+#include "errc.hpp"
+
 namespace hub::ble
 {
-    void init();
+    result<void> init() noexcept;
 
-    void deinit();
+    result<void> deinit() noexcept;
 }
 
 #endif

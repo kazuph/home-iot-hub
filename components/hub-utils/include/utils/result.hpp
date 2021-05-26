@@ -159,36 +159,10 @@ namespace hub::utils
             return error_unchecked();
         }
 
-        template<typename FunT>
-        void visit(FunT fun)
-        {
-            if (is_valid())
-            {
-                std::invoke(fun, get_unchecked());
-            }
-            else
-            {
-                std::invoke(fun, error_unchecked());
-            }
-        }
-
         void swap(result& other) noexcept
         {
             std::swap(m_result, other.m_result);
         }
-
-#ifndef NO_EXCEPTIONS
-        template<typename = std::enable_if_t<std::is_same_v<error_type, std::exception_ptr>, void>>
-        auto get_or_throw() const
-        {
-            if (is_valid())
-            {
-                return get_unchecked();
-            }
-
-            std::rethrow_exception(error_unchecked());
-        }
-#endif
 
     private:
 
@@ -328,19 +302,6 @@ namespace hub::utils
         {
             std::swap(m_result, other.m_result);
         }
-
-#ifndef NO_EXCEPTIONS
-        template<typename = std::enable_if_t<std::is_same_v<error_type, std::exception_ptr>, void>>
-        auto get_or_throw() const
-        {
-            if (is_valid())
-            {
-                return get_unchecked();
-            }
-
-            std::rethrow_exception(error_unchecked());
-        }
-#endif
 
     private:
 

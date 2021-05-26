@@ -281,18 +281,19 @@ namespace hub::ble
         if (bits & DISCONNECT_BIT)
         {
             ESP_LOGI(TAG, "Disconnect success.");
-            return result_type::success();
         }
         else if (bits & FAIL_BIT)
         {
-            throw std::runtime_error("Disconnection failed.");
+            ESP_LOGE(TAG, "GATTC disconnect failed.");
             result_type::failure(errc::error);
         }
         else
         {
-            throw std::runtime_error("Disconnection timed out.");
+            ESP_LOGE(TAG, "GATTC disconnect timeout.");
             return result_type::failure(errc::timeout);
         }
+
+        return result_type::success();
     }
 
     result<std::vector<service>> client::get_services() const noexcept

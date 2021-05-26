@@ -11,7 +11,8 @@ namespace hub::ble
         error,
         timeout,
         no_resources,
-        not_connected
+        not_connected,
+        initialization_failed
     };
 
     template<typename T>

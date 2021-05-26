@@ -21,7 +21,7 @@ namespace hub::device
         using message_handler_t = std::function<void(out_message_t&&)>;
 
         device_base() :
-            m_client            { ble::client::make_client() },
+            m_client            { ble::client::make_client().get() },
             m_message_handler   {  }
         {
 

@@ -50,7 +50,7 @@ namespace hub::ble
 
         ~client();
 
-        std::shared_ptr<client> get_shared_client() const noexcept
+        std::shared_ptr<client> get_shared_client() noexcept
         {
             return shared_client::shared_from_this();
         }

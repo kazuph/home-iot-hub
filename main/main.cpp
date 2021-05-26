@@ -175,8 +175,8 @@ namespace hub
         rapidjson::Document config;
 
         {
-            std::ifstream config_file("/spiffs/config.json");
-            rapidjson::IStreamWrapper config_ifstream(config_file);
+            std::ifstream               config_file("/spiffs/config.json");
+            rapidjson::IStreamWrapper   config_ifstream(config_file);
 
             if (!config_file)
             {
@@ -197,8 +197,15 @@ namespace hub
 
         wifi::wait_for_connection(10_s);
 
-        ble::init();
-        ble::scanner::init();
+        if (!ble::init().is_valid())
+        {
+            abort();
+        }
+
+        if (!ble::scanner::init().is_valid())
+        {
+            abort();
+        }
 
         auto mqtt_service = service::mqtt(config["MQTT_URI"].GetString());
 
