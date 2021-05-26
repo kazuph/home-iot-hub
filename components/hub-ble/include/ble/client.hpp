@@ -6,9 +6,11 @@
 #include "characteristic.hpp"
 #include "descriptor.hpp"
 #include "event.hpp"
+#include "errc.hpp"
 
 #include "timing/timing.hpp"
-#include "utils/result.hpp"
+#include "async/mutex.hpp"
+#include "async/lock.hpp"
 
 #include "esp_gatt_defs.h"
 #include "esp_gattc_api.h"
@@ -32,9 +34,6 @@ namespace hub::ble
     inline constexpr uint16_t   MAX_CLIENTS{ CONFIG_BTDM_CTRL_BLE_MAX_CONN };
     inline constexpr auto       BLE_TIMEOUT{ 5_s };
 
-    /**
-     * @brief Class client represents a BLE peripheral.
-     */
     class client : public std::enable_shared_from_this<client>
     {
     public:
@@ -45,57 +44,24 @@ namespace hub::ble
 
         using shared_client = std::enable_shared_from_this<client>;
 
-        /**
-         * @brief Create client object. Constructor of class client does not initialize all the neccessary data
-         * and should not be called directly. This function checks whether a new client can be created, assigns application
-         * ID and, indirectly, GATT interface ID.
-         * 
-         * @param id ID of the client.
-         * 
-         * @return std::shared_ptr<client> 
-         */
-        static std::shared_ptr<client> make_client();
+        static result<std::shared_ptr<client>> make_client() noexcept;
 
         client();
 
         ~client();
 
-        /**
-         * @brief Get the shared client object.
-         * 
-         * @return std::shared_ptr<client> 
-         */
-        std::shared_ptr<client> get_shared_client()
+        std::shared_ptr<client> get_shared_client() const noexcept
         {
             return shared_client::shared_from_this();
         }
 
-        /**
-         * @brief Connect with the client with the given MAC address.
-         * 
-         * @param address Address of the client.
-         */
-        void connect(mac address);
+        result<void> connect(mac address) noexcept;
 
-        /**
-         * @brief Disconnecy with the client.
-         */
-        void disconnect();
+        result<void> disconnect() noexcept;
 
-        /**
-         * @brief Get the client services.
-         * 
-         * @return std::vector<service> 
-         */
-        utils::result<std::vector<service>, esp_err_t> get_services() const;
+        result<std::vector<service>> get_services() const noexcept;
 
-        /**
-         * @brief Get the service by uuid.
-         * 
-         * @param uuid 
-         * @return service 
-         */
-        utils::result<service, esp_err_t> get_service_by_uuid(const esp_bt_uuid_t* uuid) const;
+        result<service> get_service_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
 
         mac get_address() const noexcept
         {
@@ -117,7 +83,7 @@ namespace hub::ble
         static constexpr EventBits_t DISCONNECT_BIT         { BIT8 };
         static constexpr EventBits_t FAIL_BIT               { BIT15 };
 
-        static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param);
+        static void gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param) noexcept;
 
         uint16_t                                                    m_connection_id;
         uint16_t                                                    m_app_id;
@@ -132,6 +98,8 @@ namespace hub::ble
         mutable std::map<uint16_t, event::notify_event_handler_t>   m_characteristics_callbacks;
 
         mutable std::shared_ptr<client>                             m_self_ref;
+
+        mutable async::mutex                                        m_mutex;
     };
 }
 

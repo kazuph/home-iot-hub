@@ -1,6 +1,8 @@
 #ifndef HUB_BLE_SERVICE_HPP
 #define HUB_BLE_SERVICE_HPP
 
+#include "errc.hpp"
+
 #include "esp_gatt_defs.h"
 
 #include "esp_log.h"
@@ -89,9 +91,9 @@ namespace hub::ble
          * 
          * @return std::vector<characteristic> 
          */
-        std::vector<characteristic> get_characteristics() const;
+        result<std::vector<characteristic>> get_characteristics() const noexcept;
 
-        characteristic get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const;
+        result<characteristic> get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
 
     private:
 

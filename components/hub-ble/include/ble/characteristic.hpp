@@ -1,6 +1,7 @@
 #ifndef HUB_BLE_CHARACTERISTIC_H
 #define HUB_BLE_CHARACTERISTIC_H
 
+#include "errc.hpp"
 #include "event.hpp"
 
 #include "esp_gatt_defs.h"
@@ -40,14 +41,14 @@ namespace hub::ble
          * 
          * @param data 
          */
-        void write(std::vector<uint8_t> data);
+        result<void> write(std::vector<uint8_t> data) noexcept;
 
         /**
          * @brief Read data from the characteristic.
          * 
          * @return std::vector<uint8_t> 
          */
-        std::vector<uint8_t> read() const;
+        result<std::vector<uint8_t>> read() const noexcept;
 
         /**
          * @brief Get the characteristic handle.
@@ -74,24 +75,24 @@ namespace hub::ble
          * 
          * @return std::vector<descriptor> 
          */
-        std::vector<descriptor> get_descriptors() const;
+        result<std::vector<descriptor>> get_descriptors() const noexcept;
 
         /**
          * @brief Get the descriptor by by uuid.
          * 
          * @return descriptor 
          */
-        descriptor get_descriptor_by_uuid(const esp_bt_uuid_t* uuid) const;
+        result<descriptor> get_descriptor_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
 
         /**
          * @brief Subscribe to characteristic notifications.
          */
-        void subscribe(event::notify_function_t callback);
+        result<void> subscribe(event::notify_function_t callback) noexcept;
 
         /**
          * @brief Unsubscribe from characteristic notifications.
          */
-        void unsubscribe();
+        result<void> unsubscribe() noexcept;
 
     private:
 

@@ -1,6 +1,8 @@
 #ifndef HUB_BLE_DESCRIPTOR_HPP
 #define HUB_BLE_DESCRIPTOR_HPP
 
+#include "errc.hpp"
+
 #include "esp_gatt_defs.h"
 
 #include <cstdint>
@@ -36,14 +38,14 @@ namespace hub::ble
          * 
          * @param data 
          */
-        void write(std::vector<uint8_t> data);
+        result<void> write(std::vector<uint8_t> data) noexcept;
 
         /**
          * @brief Read data from the descriptor.
          * 
          * @return std::vector<uint8_t> 
          */
-        std::vector<uint8_t> read() const;
+        result<std::vector<uint8_t>> read() const noexcept;
 
         uint16_t get_handle() const
         {
@@ -52,10 +54,10 @@ namespace hub::ble
 
     private:
 
-        static constexpr const char* TAG{ "DESCRIPTOR" };
+        static constexpr const char* TAG{ "hub::ble::descriptor" };
 
         esp_gattc_descr_elem_t  m_descriptor;
-        std::weak_ptr<client> m_client_ptr;
+        std::weak_ptr<client>   m_client_ptr;
     };
 }
 

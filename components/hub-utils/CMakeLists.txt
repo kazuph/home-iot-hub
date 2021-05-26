@@ -14,3 +14,4 @@ if(NOT rapidjson_POPULATED)
 endif()
 
 target_include_directories(${COMPONENT_LIB} INTERFACE ${rapidjson_SOURCE_DIR}/include)
+target_compile_definitions(${COMPONENT_LIB} INTERFACE RAPIDJSON_HAS_STDSTRING=1 RAPIDJSON_ALLOCATOR_DEFAULT_CHUNK_CAPACITY=1024)

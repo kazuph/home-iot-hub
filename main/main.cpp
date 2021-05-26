@@ -83,9 +83,10 @@ namespace hub
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        return utils::invoke([message{ std::move(message) }]() {
+        return utils::invoke([message{ std::move(message.data) }]() -> rapidjson::Document {
             rapidjson::Document result;
-            result.Parse(message.data.c_str());
+
+            result.Parse(std::move(message));
 
             if (result.HasParseError())
             {
@@ -120,9 +121,8 @@ namespace hub
         rapidjson::Document result;
 
         result.SetObject();
-
-        result.AddMember("name", rapidjson::StringRef(message.m_name.c_str(), message.m_address.length()), result.GetAllocator());
-        result.AddMember("address", rapidjson::StringRef(message.m_address.c_str(), message.m_address.length()), result.GetAllocator());
+        result.AddMember("name", rapidjson::StringRef(message.m_name), result.GetAllocator());
+        result.AddMember("address", rapidjson::StringRef(message.m_address), result.GetAllocator());
 
         return result_type::success(std::move(result));
     }

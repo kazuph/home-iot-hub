@@ -17,92 +17,112 @@ namespace hub::ble
         ESP_LOGD(TAG, "Function: %s.", __func__);
     }
 
-    void descriptor::write(std::vector<uint8_t> data)
+    result<void> descriptor::write(std::vector<uint8_t> data) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<void>;
 
         auto shared_client = m_client_ptr.lock();
 
         if (!shared_client)
         {
-            throw std::runtime_error("Client is not connected..");
+            ESP_LOGE(TAG, "Client is not connected.");
+            return result_type::failure(errc::not_connected);
         }
 
-        if (esp_err_t result = esp_ble_gattc_write_char_descr(
-                shared_client->m_gattc_interface, 
-                shared_client->m_connection_id,
-                m_descriptor.handle,
-                data.size(),
-                data.data(),
-                ESP_GATT_WRITE_TYPE_RSP,
-                ESP_GATT_AUTH_REQ_NONE); 
-            result != ESP_OK)
         {
-            throw std::runtime_error("Write descriptor failed.");
-        }
+            async::lock lock{ shared_client->m_mutex };
 
-        EventBits_t bits = xEventGroupWaitBits(
-            shared_client->m_event_group, 
-            client::WRITE_DESCR_BIT | client::FAIL_BIT, 
-            pdTRUE, 
-            pdFALSE, 
-            static_cast<TickType_t>(BLE_TIMEOUT));
+            if (esp_err_t result = esp_ble_gattc_write_char_descr(
+                    shared_client->m_gattc_interface, 
+                    shared_client->m_connection_id,
+                    m_descriptor.handle,
+                    data.size(),
+                    data.data(),
+                    ESP_GATT_WRITE_TYPE_RSP,
+                    ESP_GATT_AUTH_REQ_NONE); 
+                result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Write descriptor failed.");
+                return result_type::failure(errc::error);
+            }
 
-        if (bits & client::WRITE_DESCR_BIT)
-        {
-            ESP_LOGI(TAG, "Write descriptor success.");
-        }
-        else if (bits & client::FAIL_BIT)
-        {
-            throw std::runtime_error("Write descriptor failed.");
-        }
-        else
-        {
-            throw std::runtime_error("Write descriptor timed out.");
+            EventBits_t bits = xEventGroupWaitBits(
+                shared_client->m_event_group, 
+                client::WRITE_DESCR_BIT | client::FAIL_BIT, 
+                pdTRUE, 
+                pdFALSE, 
+                static_cast<TickType_t>(BLE_TIMEOUT));
+
+            if (bits & client::WRITE_DESCR_BIT)
+            {
+                ESP_LOGI(TAG, "Write descriptor success.");
+                return result_type::success();
+            }
+            else if (bits & client::FAIL_BIT)
+            {
+                ESP_LOGE(TAG, "Write descriptor failed.");
+                return result_type::failure(errc::error);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Write descriptor timeout.");
+                return result_type::failure(errc::timeout);
+            }
         }
     }
 
-    std::vector<uint8_t> descriptor::read() const
+    result<std::vector<uint8_t>> descriptor::read() const noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<std::vector<uint8_t>>;
 
         auto shared_client = m_client_ptr.lock();
 
         if (!shared_client)
         {
-            throw std::runtime_error("Client is not connected..");
-        }
-        
-        if (esp_err_t result = esp_ble_gattc_read_char_descr(
-            shared_client->m_gattc_interface, 
-            shared_client->m_connection_id,
-            m_descriptor.handle,
-            ESP_GATT_AUTH_REQ_NONE); 
-            result != ESP_OK)
-        {
-            throw std::runtime_error("Read descriptor failed.");
+            ESP_LOGE(TAG, "Client is not connected.");
+            return result_type::failure(errc::not_connected);
         }
 
-        EventBits_t bits = xEventGroupWaitBits(
-            shared_client->m_event_group, 
-            client::READ_DESCR_BIT | client::FAIL_BIT, 
-            pdTRUE, 
-            pdFALSE, 
-            static_cast<TickType_t>(BLE_TIMEOUT));
+        {
+            async::lock lock{ shared_client->m_mutex };
+            
+            if (esp_err_t result = esp_ble_gattc_read_char_descr(
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
+                m_descriptor.handle,
+                ESP_GATT_AUTH_REQ_NONE); 
+                result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Read descriptor failed.");
+                return result_type::failure(errc::error);
+            }
 
-        if (bits & client::READ_DESCR_BIT)
-        {
-            ESP_LOGI(TAG, "Read descriptor success.");
-        }
-        else if (bits & client::FAIL_BIT)
-        {
-            throw std::runtime_error("Read descriptor failed.");
-        }
-        else
-        {
-            throw std::runtime_error("Read descriptor timed out.");
-        }
+            EventBits_t bits = xEventGroupWaitBits(
+                shared_client->m_event_group, 
+                client::READ_DESCR_BIT | client::FAIL_BIT, 
+                pdTRUE, 
+                pdFALSE, 
+                static_cast<TickType_t>(BLE_TIMEOUT));
 
-        return std::move(shared_client->m_descriptor_data_cache);
+            if (bits & client::READ_DESCR_BIT)
+            {
+                ESP_LOGI(TAG, "Read descriptor success.");
+                return result_type::success(std::move(shared_client->m_descriptor_data_cache));
+            }
+            else if (bits & client::FAIL_BIT)
+            {
+                ESP_LOGE(TAG, "Read descriptor failed.");
+                return result_type::failure(errc::error);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Read descriptor timeout.");
+                return result_type::failure(errc::timeout);
+            }
+        }
     }
 }

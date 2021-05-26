@@ -16,9 +16,11 @@ namespace hub::ble
         
     }
 
-    std::vector<characteristic> service::get_characteristics() const
+    result<std::vector<characteristic>> service::get_characteristics() const noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<std::vector<characteristic>>;
         
         esp_gatt_status_t result = ESP_GATT_OK;
         uint16_t characteristic_count = 0U;
@@ -28,52 +30,63 @@ namespace hub::ble
 
         if (!shared_client)
         {
-            throw std::runtime_error("Client is not connected..");
-        }
-
-        result = esp_ble_gattc_get_attr_count(
-            shared_client->m_gattc_interface, 
-            shared_client->m_connection_id,
-            ESP_GATT_DB_CHARACTERISTIC,
-            m_service.start_handle,
-            m_service.end_handle,
-            ESP_GATT_ILLEGAL_HANDLE,
-            &characteristic_count);
-
-        if (result != ESP_GATT_OK)
-        {
-            throw std::runtime_error("Could not get characteristics count.");
-        }
-
-        characteristics.resize(characteristic_count);
-
-        result = esp_ble_gattc_get_all_char(
-            shared_client->m_gattc_interface, 
-            shared_client->m_connection_id,
-            m_service.start_handle,
-            m_service.end_handle,
-            characteristics.data(),
-            &characteristic_count,
-            0);
-
-        if (result != ESP_GATT_OK)
-        {
-            throw std::runtime_error("Could not retrieve characteristics.");
+            ESP_LOGE(TAG, "Client is not connected.");
+            return result_type::failure(errc::not_connected);
         }
 
         {
-            std::vector<characteristic> result;
-            result.reserve(characteristics.size());
-            std::transform(characteristics.cbegin(), characteristics.cend(), std::back_inserter(result), [this](auto elem) { 
-                return characteristic(m_client_ptr, get_handle_range(), elem); 
-            });
-            return result;
+            async::lock lock{ shared_client->m_mutex };
+            
+            result = esp_ble_gattc_get_attr_count(
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
+                ESP_GATT_DB_CHARACTERISTIC,
+                m_service.start_handle,
+                m_service.end_handle,
+                ESP_GATT_ILLEGAL_HANDLE,
+                &characteristic_count);
+
+            if (result != ESP_GATT_OK)
+            {
+                ESP_LOGE(TAG, "Could not get characteristics count.");
+                return result_type::failure(errc::error);
+            }
+
+            characteristics.resize(characteristic_count);
+
+            result = esp_ble_gattc_get_all_char(
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
+                m_service.start_handle,
+                m_service.end_handle,
+                characteristics.data(),
+                &characteristic_count,
+                0);
+
+            if (result != ESP_GATT_OK)
+            {
+                ESP_LOGE(TAG, "Could not retrieve characteristics.");
+                return result_type::failure(errc::error);
+            }
+
+            {
+                std::vector<characteristic> result;
+                result.reserve(characteristics.size());
+
+                std::transform(characteristics.cbegin(), characteristics.cend(), std::back_inserter(result), [this](auto elem) { 
+                    return characteristic(m_client_ptr, get_handle_range(), elem); 
+                });
+
+                return result_type::success(std::move(result));
+            }
         }
     }
     
-    characteristic service::get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const
+    result<characteristic> service::get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        using result_type = result<characteristic>;
 
         esp_gatt_status_t result = ESP_GATT_OK;
         uint16_t characteristic_count = 0U;
@@ -83,39 +96,46 @@ namespace hub::ble
 
         if (!shared_client)
         {
-            throw std::runtime_error("Client is not connected..");
+            ESP_LOGE(TAG, "Client is not connected.");
+            return result_type::failure(errc::not_connected);
         }
 
-        result = esp_ble_gattc_get_attr_count(
-            shared_client->m_gattc_interface, 
-            shared_client->m_connection_id,
-            ESP_GATT_DB_CHARACTERISTIC,
-            m_service.start_handle,
-            m_service.end_handle,
-            ESP_GATT_ILLEGAL_HANDLE,
-            &characteristic_count);
-
-        if (result != ESP_GATT_OK)
         {
-            throw std::runtime_error("Could not get characteristics count.");
+            async::lock lock{ shared_client->m_mutex };
+
+            result = esp_ble_gattc_get_attr_count(
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
+                ESP_GATT_DB_CHARACTERISTIC,
+                m_service.start_handle,
+                m_service.end_handle,
+                ESP_GATT_ILLEGAL_HANDLE,
+                &characteristic_count);
+
+            if (result != ESP_GATT_OK)
+            {
+                ESP_LOGE(TAG, "Could not get characteristics count.");
+                return result_type::failure(errc::error);
+            }
+
+            characteristics.resize(characteristic_count);
+
+            result = esp_ble_gattc_get_char_by_uuid(
+                shared_client->m_gattc_interface, 
+                shared_client->m_connection_id,
+                m_service.start_handle,
+                m_service.end_handle,
+                *uuid,
+                characteristics.data(),
+                &characteristic_count);
+
+            if (result != ESP_GATT_OK)
+            {
+                ESP_LOGE(TAG, "Could not retrieve characteristics.");
+                return result_type::failure(errc::error);
+            }
+
+            return result_type::success(characteristic(m_client_ptr, get_handle_range(), characteristics.front()));
         }
-
-        characteristics.resize(characteristic_count);
-
-        result = esp_ble_gattc_get_char_by_uuid(
-            shared_client->m_gattc_interface, 
-            shared_client->m_connection_id,
-            m_service.start_handle,
-            m_service.end_handle,
-            *uuid,
-            characteristics.data(),
-            &characteristic_count);
-
-        if (result != ESP_GATT_OK)
-        {
-            throw std::runtime_error("Could not retrieve characteristics.");
-        }
-
-        return characteristic(m_client_ptr, get_handle_range(), characteristics.front());
     }
 }

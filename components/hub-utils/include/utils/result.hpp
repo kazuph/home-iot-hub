@@ -229,6 +229,148 @@ namespace hub::utils
         }
     };
 
+    /**
+     * @brief Template specialization for void value type.
+     * 
+     * @tparam ErrorT Type of the error.
+     */
+    template<typename ErrorT>
+    class result<void, ErrorT>
+    {
+    public:
+
+        using error_type = ErrorT;
+
+        using optional_type = std::optional<ErrorT>;
+
+        template<typename... ArgsT>
+        constexpr static result success() noexcept
+        {
+            return result(std::nullopt);
+        }
+
+        template<typename... ArgsT>
+        constexpr static result failure(ArgsT&&... args) noexcept
+        {
+            return result(optional_type(error_type(std::forward<ArgsT>(args)...)));
+        }
+
+        constexpr result(const result& other) :
+            m_result{ other.m_result }
+        {
+
+        }
+
+        constexpr result(result&& other) :
+            m_result{ std::move(other.m_result) }
+        {
+
+        }
+
+        ~result() = default;
+
+        constexpr result& operator=(const result& other) noexcept 
+        {
+            m_result = other.m_result;
+            return *this;
+        }
+
+        constexpr result& operator=(result&& other) noexcept
+        {
+            if (this == &other)
+            {
+                return *this;
+            }
+
+            m_result = std::move(other.m_result);
+            return *this;
+        }
+
+        constexpr operator bool() const noexcept
+        {
+            return is_valid();
+        }
+
+        constexpr bool is_valid() const noexcept
+        {
+            return !m_result.has_value();
+        }
+
+        constexpr error_type& error()
+        {
+            if (is_valid())
+            {
+#ifdef NO_EXCEPTIONS
+                std::terminate();
+#else 
+                throw std::logic_error("Not an error.");
+#endif
+            }
+
+            return error_unchecked();
+        }
+
+        constexpr const error_type& error() const
+        {
+            if (is_valid())
+            {
+#ifdef NO_EXCEPTIONS
+                std::terminate();
+#else 
+                throw std::logic_error("Not an error.");
+#endif
+            }
+
+            return error_unchecked();
+        }
+
+        void swap(result& other) noexcept
+        {
+            std::swap(m_result, other.m_result);
+        }
+
+#ifndef NO_EXCEPTIONS
+        template<typename = std::enable_if_t<std::is_same_v<error_type, std::exception_ptr>, void>>
+        auto get_or_throw() const
+        {
+            if (is_valid())
+            {
+                return get_unchecked();
+            }
+
+            std::rethrow_exception(error_unchecked());
+        }
+#endif
+
+    private:
+
+        optional_type m_result;
+
+        constexpr result() = delete;
+
+        constexpr result(const optional_type& opt) noexcept :
+            m_result{ opt }
+        {
+
+        }
+
+        constexpr result(optional_type&& opt) noexcept :
+            m_result{ std::move(opt) }
+        {
+
+        }
+
+        constexpr error_type& error_unchecked() noexcept
+        {
+            return m_result.value();
+        }
+
+        constexpr const error_type& error_unchecked() const noexcept
+        {
+            return m_result.value();
+        }
+    };
+
     template<typename FunT, typename ResultT, typename ErrorT>
     std::invoke_result_t<FunT, ResultT> bind(result<ResultT, ErrorT>&& value, FunT&& fun) noexcept
     {
