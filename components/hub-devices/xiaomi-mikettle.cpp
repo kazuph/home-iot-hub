@@ -21,7 +21,7 @@ namespace hub::device::xiaomi
 
         client->connect(address);
 
-        auto kettle_service         = client->get_service_by_uuid(&GATT_UUID_KETTLE_SRV).get();
+        auto kettle_service = client->get_service_by_uuid(&GATT_UUID_KETTLE_SRV).get();
 
         auto auth_characteristic = kettle_service.get_characteristic_by_uuid(&GATT_UUID_AUTH);
 
@@ -64,18 +64,49 @@ namespace hub::device::xiaomi
 
             status_characteristic->get_descriptor_by_uuid(&GATT_UUID_CCCD)->write({ subscribe.cbegin(), subscribe.cend() });
             status_characteristic->subscribe([this](const ble::event::notify_event_args_t& data) {
-                invoke_message_handler(rapidjson::Document());
+                rapidjson::Document result;
+                
+                result.SetObject();
+                result.AddMember("action",  rapidjson::Value(data[0]), result.GetAllocator());
+                result.AddMember("mode",    rapidjson::Value(data[1]), result.GetAllocator());
+
+                {
+                    auto temperature = rapidjson::Value(rapidjson::kObjectType);
+
+                    temperature.AddMember("set",        rapidjson::Value(data[4]), result.GetAllocator());
+                    temperature.AddMember("current",    rapidjson::Value(data[5]), result.GetAllocator());
+
+                    result.AddMember("temperature", temperature, result.GetAllocator());
+                }
+
+                {
+                    auto keep_warm = rapidjson::Value(rapidjson::kObjectType);
+
+                    keep_warm.AddMember("type", rapidjson::Value(data[6]),                  result.GetAllocator());
+                    keep_warm.AddMember("time", rapidjson::Value((data[7] << 8) & data[8]), result.GetAllocator());
+
+                    result.AddMember("keep_warm", keep_warm, result.GetAllocator());
+                }
+
+                invoke_message_handler(std::move(result));
             });
         }
     }
 
     void mikettle::disconnect()
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        auto client = get_client();
+        client->disconnect();
+
         return;
     }
 
     void mikettle::process_message(in_message_t&& message)
     {
+        ESP_LOGD(TAG, "Function: %s.", __func__);
+
         return;
     }
 }

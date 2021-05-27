@@ -16,59 +16,6 @@ namespace hub::ble
 {
     static std::array<std::weak_ptr<client>, MAX_CLIENTS> g_client_refs;
 
-    result<std::shared_ptr<client>> client::make_client() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<std::shared_ptr<client>>;
-
-        auto iter = std::find_if(g_client_refs.cbegin(), g_client_refs.cend(), [](const auto& client_ref) {
-            return client_ref.expired();
-        });
-
-        if (iter == g_client_refs.cend())
-        {
-            ESP_LOGE(TAG, "Maximum number of clients already connected.");
-            return result_type::failure(errc::no_resources);
-        }
-
-        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not register GATTC callback.");
-            return result_type::failure(errc::error);
-        }
-
-        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could set local MTU size.");
-            return result_type::failure(errc::error);
-        }
-
-        {
-            auto client_ptr = std::shared_ptr<client>(nullptr);
-
-            try
-            {
-                client_ptr = std::make_shared<client>();
-            }
-            catch(const std::bad_alloc& err)
-            {
-                return result_type::failure(errc::no_resources);
-            }
-            
-            client_ptr->m_app_id    = std::distance(g_client_refs.cbegin(), iter);
-            g_client_refs[client_ptr->m_app_id] = client_ptr;
-
-            if (esp_ble_gattc_app_register(client_ptr->m_app_id) != ESP_OK)
-            {
-                ESP_LOGE(TAG, "Could not register GATTC app.");
-                return result_type::failure(errc::error);
-            }
-
-            return result_type::success(client_ptr);
-        }
-    }
-
     client::client() :
         m_connection_id             { 0 },
         m_app_id                    { 0 },
@@ -91,6 +38,8 @@ namespace hub::ble
     client::~client()
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
+
+        async::lock lock{ m_mutex };
 
         g_client_refs[m_app_id].reset();
 
@@ -147,6 +96,10 @@ namespace hub::ble
                     ESP_LOGI(TAG, "GATTC interface is: %x", gattc_if);
                     client_ptr->m_gattc_interface = gattc_if;
                 }
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Client not found.");
             }
 
             return;
@@ -230,35 +183,70 @@ namespace hub::ble
 
         using result_type = result<void>;
 
-        async::lock lock{ m_mutex };
+        auto iter = std::find_if(g_client_refs.cbegin(), g_client_refs.cend(), [](const auto& client_ref) {
+            return client_ref.expired();
+        });
 
-        if (esp_err_t result = esp_ble_gattc_open(
-                m_gattc_interface, 
-                address.to_address(), 
-                address.get_type(), 
-                true); 
-            result != ESP_OK)
+        if (iter == g_client_refs.cend())
         {
-            ESP_LOGE(TAG, "GATTC open failed.");
-            return result_type::failure(result);
+            ESP_LOGE(TAG, "Maximum number of clients already connected.");
+            result_type::failure(errc::error);
         }
 
-        EventBits_t bits = xEventGroupWaitBits(m_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
+        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not register GATTC callback.");
+            result_type::failure(errc::error);
+        }
 
-        if (bits & CONNECT_BIT)
+        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
         {
-            ESP_LOGI(TAG, "GATT client connected.");
-            return result_type::success();
+            ESP_LOGE(TAG, "Could set local MTU size.");
+            result_type::failure(errc::error);
         }
-        else if (bits & FAIL_BIT)
+
         {
-            ESP_LOGE(TAG, "GATT client connecton failed.");
-            return result_type::failure(errc::error);
+            m_app_id = std::distance(g_client_refs.cbegin(), iter);
+            g_client_refs[m_app_id] = shared_client::weak_from_this();
+
+            if (esp_ble_gattc_app_register(m_app_id) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Could not register GATTC app.");
+                result_type::failure(errc::error);
+            }
         }
-        else
+
         {
-            ESP_LOGE(TAG, "GATT client connecton timed out.");
-            return result_type::failure(errc::timeout);
+            async::lock lock{ m_mutex };
+
+            if (esp_err_t result = esp_ble_gattc_open(
+                    m_gattc_interface, 
+                    address.to_address(), 
+                    address.get_type(), 
+                    true); 
+                result != ESP_OK)
+            {
+                ESP_LOGE(TAG, "GATTC open failed.");
+                return result_type::failure(result);
+            }
+
+            EventBits_t bits = xEventGroupWaitBits(m_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
+
+            if (bits & CONNECT_BIT)
+            {
+                ESP_LOGI(TAG, "GATT client connected.");
+                return result_type::success();
+            }
+            else if (bits & FAIL_BIT)
+            {
+                ESP_LOGE(TAG, "GATT client connecton failed.");
+                return result_type::failure(errc::error);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "GATT client connecton timed out.");
+                return result_type::failure(errc::timeout);
+            }
         }
     }
 

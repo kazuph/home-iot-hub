@@ -24,7 +24,7 @@ namespace hub::device::mappers
     {
         static_assert(std::is_base_of_v<device_base, DeviceT>, "Provided device class does not derive from device_base.");
         return std::make_pair(
-            DeviceT::device_name, 
+            DeviceT::DEVICE_NAME, 
             []() -> std::shared_ptr<device_base> { 
                 return std::static_pointer_cast<device_base>(std::make_shared<DeviceT>()); 
             }
@@ -36,9 +36,14 @@ namespace hub::device::mappers
         map_device<xiaomi::mikettle>()
     );
 
-    inline auto get_device_factory(device_name_type device_name)
+    inline constexpr auto get_device_factory(device_name_type device_name)
     {
         return g_device_mapper.at(device_name);
+    }
+
+    inline constexpr bool is_device_supported(device_name_type device_name) noexcept
+    {
+        return g_device_mapper.contains(device_name);
     }
 
     inline auto make_device(device_name_type device_name)

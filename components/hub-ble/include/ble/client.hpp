@@ -44,11 +44,9 @@ namespace hub::ble
 
         using shared_client = std::enable_shared_from_this<client>;
 
-        static result<std::shared_ptr<client>> make_client() noexcept;
-
         client();
 
-        ~client();
+        virtual ~client();
 
         std::shared_ptr<client> get_shared_client() noexcept
         {

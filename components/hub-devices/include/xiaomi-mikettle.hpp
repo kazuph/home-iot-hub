@@ -20,7 +20,7 @@ namespace hub::device::xiaomi
     {
     public:
 
-        static constexpr std::string_view device_name   { "MiKettle" };
+        static constexpr std::string_view DEVICE_NAME{ "MiKettle" };
 
         void connect(ble::mac address)                  override;
 

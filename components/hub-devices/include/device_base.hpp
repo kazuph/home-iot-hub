@@ -6,12 +6,14 @@
 #include "ble/mac.hpp"
 #include "utils/json.hpp"
 
+#include "esp_log.h"
+
 #include <functional>
 #include <memory>
 
 namespace hub::device
 {
-    class device_base
+    class device_base : public ble::client
     {
     public:
 
@@ -21,15 +23,15 @@ namespace hub::device
         using message_handler_t = std::function<void(out_message_t&&)>;
 
         device_base() :
-            m_client            { ble::client::make_client().get() },
-            m_message_handler   {  }
+            m_message_handler{  }
         {
-
+            ESP_LOGD(TAG, "Function: %s.", __func__);
         }
 
         template<typename MessageHandlerT>
         void set_message_handler(MessageHandlerT message_handler)
         {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
             m_message_handler = message_handler;
         }
 
@@ -41,25 +43,24 @@ namespace hub::device
 
         virtual ~device_base()
         {
-
+            ESP_LOGD(TAG, "Function: %s.", __func__);
         }
 
     protected:
 
-        std::shared_ptr<ble::client> get_client()
+        std::shared_ptr<ble::client> get_client() noexcept
         {
-            return m_client;
-        }
-
-        const std::shared_ptr<ble::client> get_client() const
-        {
-            return m_client;
+            ESP_LOGD(TAG, "Function: %s.", __func__);
+            return get_shared_client();
         }
 
         void invoke_message_handler(out_message_t&& message) const
         {
+            ESP_LOGD(TAG, "Function: %s.", __func__);
+
             if (!m_message_handler)
             {
+                ESP_LOGW(TAG, "Invalid message handler.");
                 return;
             }
 
@@ -68,9 +69,9 @@ namespace hub::device
 
     private:
 
-        std::shared_ptr<ble::client>    m_client;
+        static constexpr const char* TAG{ "hub::device::device_base" };
 
-        message_handler_t               m_message_handler;
+        message_handler_t m_message_handler;
     };
 }
 

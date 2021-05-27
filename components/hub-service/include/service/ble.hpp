@@ -30,7 +30,7 @@ namespace hub::service
 
         ble_message_source()                                        = delete;
 
-        explicit ble_message_source(std::weak_ptr<device::device_base> client) :
+        explicit ble_message_source(std::shared_ptr<device::device_base> client) :
             m_client{ client }
         {
             ESP_LOGD(TAG, "Function: %s.", __func__);
@@ -55,6 +55,7 @@ namespace hub::service
 
             if (m_client.expired())
             {
+                ESP_LOGW(TAG, "Client disconnected.");
                 return;
             }
 
@@ -65,9 +66,9 @@ namespace hub::service
 
         static constexpr const char* TAG{ "hub::service::ble" };
 
-        message_handler_t                   m_message_handler;
+        message_handler_t                       m_message_handler;
 
-        std::weak_ptr<device::device_base>  m_client;
+        std::weak_ptr<device::device_base>      m_client;
     };
 
     static_assert(async::rx::is_valid_two_way_v<ble_message_source>, "ble is not a valid source service.");

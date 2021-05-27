@@ -22,9 +22,16 @@
 #include <cstdint>
 #include <list>
 
+/*
+
+*/
+
 namespace hub
 {
-    static constexpr const char* TAG{ "hub::app_main" };
+    using namespace std::literals;
+
+    static constexpr const char*        TAG         { "hub::app_main" };
+    static constexpr std::string_view   DEVICE_NAME { "HubBLE" };
 
     template<typename T>
     inline bool is_result_valid(const utils::result_throwing<T>& result) noexcept
@@ -121,8 +128,8 @@ namespace hub
         rapidjson::Document result;
 
         result.SetObject();
-        result.AddMember("name", rapidjson::StringRef(message.m_name), result.GetAllocator());
-        result.AddMember("address", rapidjson::StringRef(message.m_address), result.GetAllocator());
+        result.AddMember("name",    rapidjson::StringRef(message.m_name),       result.GetAllocator());
+        result.AddMember("address", rapidjson::StringRef(message.m_address),    result.GetAllocator());
 
         return result_type::success(std::move(result));
     }
@@ -136,11 +143,11 @@ namespace hub
         return { std::string(service::mqtt::MQTT_BLE_SCAN_RESULTS_TOPIC), buffer.GetString() };
     }
 
-    utils::result_throwing<std::weak_ptr<device::device_base>> connect_ble_client(utils::result_throwing<rapidjson::Document>&& message) noexcept
+    utils::result_throwing<std::shared_ptr<device::device_base>> connect_ble_client(utils::result_throwing<rapidjson::Document>&& message) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        return utils::bind(std::move(message), [](rapidjson::Document&& message) -> utils::result_throwing<std::weak_ptr<device::device_base>> {
-            return utils::invoke([message{ std::move(message) }]() -> std::weak_ptr<device::device_base> {
+        return utils::bind(std::move(message), [](rapidjson::Document&& message) -> utils::result_throwing<std::shared_ptr<device::device_base>> {
+            return utils::invoke([message{ std::move(message) }]() -> std::shared_ptr<device::device_base> {
 
                 if (!message.IsObject() || !message.HasMember("name") || !message.HasMember("address"))
                 {
@@ -154,10 +161,10 @@ namespace hub
         });
     }
 
-    inline utils::result_throwing<service::ble_message_source> make_ble_message_source(utils::result_throwing<std::weak_ptr<device::device_base>>&& client) noexcept
+    inline utils::result_throwing<service::ble_message_source> make_ble_message_source(utils::result_throwing<std::shared_ptr<device::device_base>>&& client) noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
-        return utils::bind(std::move(client), [](std::weak_ptr<device::device_base>&& client) {
+        return utils::bind(std::move(client), [](std::shared_ptr<device::device_base>&& client) {
             return utils::invoke([client{ std::move(client) }]() -> service::ble_message_source { 
                 return service::ble_message_source(client); 
             });
@@ -189,7 +196,7 @@ namespace hub
 
         if (!config.IsObject() || !config["WIFI_SSID"].IsString() || !config["WIFI_PASSWORD"].IsString() || !config["MQTT_URI"].IsString())
         {
-            ESP_LOGE(TAG, "Bad config JSON format, aborting...");
+            ESP_LOGE(TAG, "Bad config file format, aborting...");
             abort();
         }
 
@@ -199,11 +206,13 @@ namespace hub
 
         if (!ble::init().is_valid())
         {
+            ESP_LOGE(TAG, "Could not initialize BLE module, aborting...");
             abort();
         }
 
         if (!ble::scanner::init().is_valid())
         {
+            ESP_LOGE(TAG, "Could not initialize BLE scanner, aborting...");
             abort();
         }
 
@@ -233,7 +242,12 @@ namespace hub
             filter(is_result_valid<service::ble_message_source>)    |
             transform(unwrap_result<service::ble_message_source>)   |
             join()                                                  | 
-            sink([](auto&&) { return; });
+            sink([](auto&& message) { 
+                rapidjson::StringBuffer buffer;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+                message.Accept(writer);
+                ESP_LOGI(TAG, "%s", buffer.GetString());
+            });
         
         timing::sleep_for(timing::MAX_DELAY);
 
