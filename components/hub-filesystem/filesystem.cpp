@@ -2,9 +2,6 @@
 
 #include "esp_spiffs.h"
 
-#include <exception>
-#include <stdexcept>
-
 namespace hub::filesystem
 {
     static constexpr esp_vfs_spiffs_conf_t fs_config{
