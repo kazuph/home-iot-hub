@@ -1,7 +1,6 @@
 #ifndef HUB_SERVICE_DEVICE_INTERFACE_HPP
 #define HUB_SERVICE_DEVICE_INTERFACE_HPP
 
-#include "async/rx/traits.hpp"
 #include "ble/client.hpp"
 #include "ble/mac.hpp"
 #include "utils/json.hpp"
@@ -17,7 +16,6 @@ namespace hub::device
     {
     public:
 
-        using service_tag       = async::rx::tag::two_way_tag;
         using in_message_t      = rapidjson::Document;
         using out_message_t     = rapidjson::Document;
         using message_handler_t = std::function<void(out_message_t&&)>;
