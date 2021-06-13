@@ -5,8 +5,12 @@
 #include <memory>
 #include <stdexcept>
 #include <functional>
+#include <string_view>
 
 #include "rxcpp/rx.hpp"
+
+#include "rapidjson/rapidjson.h"
+#include "rapidjson/document.h"
 
 #include "mqtt/client.hpp"
 #include "timing/timing.hpp"
@@ -47,6 +51,8 @@ namespace hub
             namespace rx = rxcpp;
             using namespace rx::operators;
 
+            constexpr std::string_view CONNECT_TOPIC{ "home/connect" };
+
             constexpr auto topic_predicate = [](std::string_view topic) {
                 return [=](const event::data_event_args& message) {
                     return message.topic == topic;
@@ -56,27 +62,25 @@ namespace hub
             const auto parse_json = [](const event::data_event_args& message) {
                 std::shared_ptr<rapidjson::Document> result;
                 result->Parse(std::move(message.data));
-
-                if (result->HasParseError())
-                {
-                    throw std::runtime_error("Parsing failed.");
-                }
-
                 return result;
+            };
+
+            const auto has_parse_error = [](std::shared_ptr<rapidjson::Document> message_ptr) {
+                return !(message_ptr->HasParseError());
             };
 
             const auto is_connect_message = [this](std::shared_ptr<rapidjson::Document> message_ptr) {
                 const auto& message = *message_ptr;
                 return (
-                    message.IsObject()                                                      && 
-                    message.HasMember("device_name")                                        && 
-                    message.HasMember("device_address")                                     && 
-                    message.HasMember("device_id")                                          &&
-                    message["device_name"].IsString()                                       &&
-                    message["device_address"].IsString()                                    &&
-                    message["device_id"].IsString()                                         &&
-                    (std::string_view(message["device_name"].GetString()) == "HubBLE"sv)    &&
-                    (std::string_view(message["device_address"].GetString()) == m_config->wifi.mac.to_string()));
+                    message.IsObject()                                                                  && 
+                    message.HasMember("device_name")                                                    && 
+                    message.HasMember("device_address")                                                 && 
+                    message.HasMember("device_id")                                                      &&
+                    message["device_name"].IsString()                                                   &&
+                    message["device_address"].IsString()                                                &&
+                    message["device_id"].IsString()                                                     &&
+                    (std::string_view(message["device_name"].GetString()) == m_config.get().hub.device_name) &&
+                    (std::string_view(message["device_address"].GetString()) == m_config.get().wifi.mac.to_string()));
             };
 
             const auto retrieve_id([](std::shared_ptr<rapidjson::Document> message_ptr) {
@@ -85,9 +89,9 @@ namespace hub
             });
 
             auto mqtt_client = mqtt::client();
-            mqtt_client.connect(m_config->mqtt.uri);
+            mqtt_client.connect(m_config.get().mqtt.uri);
 
-            mqtt_client.subscribe("home/connect");
+            mqtt_client.subscribe(CONNECT_TOPIC);
 
             auto mqtt_observable = rx::observable<>::create<event::data_event_args>(
                 [&, this](rx::subscriber<event::data_event_args> subscriber) {
@@ -99,20 +103,15 @@ namespace hub
 
             auto connect_message = 
                 mqtt_observable                         |
-                filter(topic_predicate("home/connect")) | 
+                filter(topic_predicate(CONNECT_TOPIC))  | 
                 map(parse_json)                         | 
+                filter(has_parse_error)                 |
                 filter(is_connect_message)              |
-                first()                                 |
+                take(1)                                 |
                 map(retrieve_id)                        |
                 as_blocking();
 
-            {
-                std::string result;
-                connect_message.subscribe([&result](std::string msg) { 
-                    result = std::move(msg);
-                });
-                return result;
-            }
+            return connect_message.first();
         }
 
     private:

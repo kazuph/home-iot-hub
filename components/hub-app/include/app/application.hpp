@@ -35,11 +35,11 @@ namespace hub
                 auto& state = get_state<init_t>();
 
                 state.initialize_filesystem();
-                state.initialize_ble();
-
                 config = state.read_config("spiffs/config.json");
-
-                state.connect_to_wifi(config.wifi.ssid, config.wifi.password);
+                
+                state.initialize_ble();
+                state.connect_to_wifi(config);
+                state.publish_scan_message(config);
             }
 
             while (true)
@@ -48,15 +48,15 @@ namespace hub
 
                 {
                     auto& state = get_state<not_connected_t>();
-                    auto id = state.wait_for_id_assignment();
+                    config.hub.id = state.wait_for_id_assignment();
                 }
 
-                /*set_state<connected_t>(config);
+                set_state<connected_t>(config);
 
                 {
                     auto& state = get_state<connected_t>();
                     state.process_events();
-                }*/
+                }
             }
         }
     };

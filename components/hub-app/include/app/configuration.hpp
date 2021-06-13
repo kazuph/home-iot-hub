@@ -24,6 +24,7 @@ namespace hub
         struct
         {
             std::string id;
+            std::string device_name;
         } hub;
     };
 }
