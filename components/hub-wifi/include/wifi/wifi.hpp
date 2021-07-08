@@ -2,6 +2,7 @@
 #define HUB_WIFI_HPP
 
 #include "timing/timing.hpp"
+#include "tl/expected.hpp"
 
 #include "esp_err.h"
 #include "esp_wifi.h"
@@ -11,29 +12,21 @@
 namespace hub::wifi
 {
     /**
-     * @brief Initialize and connect to WiFi.
+     * @brief Connect to WiFi.
      * 
      * @param ssid 
      * @param password 
+     * @param timeout 
      * @return esp_err_t 
      */
-    esp_err_t connect(std::string_view ssid, std::string_view password) noexcept;
+    tl::expected<void, esp_err_t> connect(std::string_view ssid, std::string_view password, timing::duration_t timeout = timing::seconds(10)) noexcept;
 
     /**
     * @brief Disconnect and cleanup all resources.
     * 
     * @return esp_err_t 
     */
-    esp_err_t disconnect() noexcept;
-
-    /**
-    * @brief Wait for WiFi connection. Number of retries is specified with CONFIG_MAXIMUM_RETRY macro that can be set in sdkconfig.
-    * If set to -1, number of retries is infinite. On timeout ESP_ERR_TIMEOUT is returned.
-    * 
-    * @param timeout 
-    * @return esp_err_t 
-    */
-    esp_err_t wait_for_connection(timing::duration_t timeout) noexcept;
+    tl::expected<void, esp_err_t> disconnect() noexcept;
 }
 
 #endif
