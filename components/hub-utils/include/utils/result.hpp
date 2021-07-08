@@ -159,9 +159,87 @@ namespace hub::utils
             return error_unchecked();
         }
 
-        void swap(result& other) noexcept
+        constexpr void swap(result& other) noexcept
         {
             std::swap(m_result, other.m_result);
+        }
+
+        template<typename T, typename E, typename FunT>
+        constexpr result<T, E> then(FunT fun) noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, value_type>, "Function supplied is not invocable with the value type.");
+
+            if (is_valid())
+            {
+                return std::invoke(fun, get_unchecked());
+            }
+
+            return *this;
+        }
+
+        /*template<typename FunT>
+        constexpr result then(FunT fun) && noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, value_type>, "Function supplied is not invocable with the value type.");
+
+            if (is_valid())
+            {
+                return std::invoke(fun, std::move(get_unchecked()));
+            }
+
+            return std::move(*this);
+        }*/
+
+        template<typename FunT>
+        constexpr result& on_success(FunT on_success_cb) noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, value_type>, "Function supplied is not invocable with the value type.");
+
+            if (is_valid())
+            {
+                std::invoke(on_success_cb, get_unchecked());
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_success(FunT on_success_cb) const noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, value_type>, "Function supplied is not invocable with the value type.");
+
+            if (is_valid())
+            {
+                std::invoke(on_success_cb, get_unchecked());
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_error(FunT on_error_cb) noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, error_type>, "Function supplied is not invocable with the error type.");
+
+            if (!is_valid())
+            {
+                std::invoke(on_error_cb, error_unchecked());
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_error(FunT on_error_cb) const noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, error_type>, "Function supplied is not invocable with the error type.");
+
+            if (!is_valid())
+            {
+                std::invoke(on_error_cb, error_unchecked());
+            }
+
+            return *this;
         }
 
     private:
@@ -298,9 +376,87 @@ namespace hub::utils
             return error_unchecked();
         }
 
-        void swap(result& other) noexcept
+        constexpr void swap(result& other) noexcept
         {
             std::swap(m_result, other.m_result);
+        }
+
+        template<typename FunT>
+        constexpr result then(FunT fun) const noexcept
+        {
+            static_assert(std::is_invocable_v<FunT>, "Function supplied is not invocable.");
+
+            if (is_valid())
+            {
+                return std::invoke(fun);
+            }
+
+            return *this;
+        }
+
+        /*template<typename FunT>
+        constexpr result then(FunT fun) && noexcept
+        {
+            static_assert(std::is_invocable_v<FunT>, "Function supplied is not invocable.");
+
+            if (is_valid())
+            {
+                return std::invoke(fun);
+            }
+
+            return std::move(*this);
+        }*/
+
+        template<typename FunT>
+        constexpr result& on_success(FunT on_success_cb) noexcept
+        {
+            static_assert(std::is_invocable_v<FunT>, "Function supplied is not invocable.");
+
+            if (is_valid())
+            {
+                std::invoke(on_success_cb);
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_success(FunT on_success_cb) const noexcept
+        {
+            static_assert(std::is_invocable_v<FunT>, "Function supplied is not invocable.");
+
+            if (is_valid())
+            {
+                std::invoke(on_success_cb);
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_error(FunT on_error_cb) noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, error_type>, "Function supplied is not invocable with the error type.");
+
+            if (!is_valid())
+            {
+                std::invoke(on_error_cb, error_unchecked());
+            }
+
+            return *this;
+        }
+
+        template<typename FunT>
+        constexpr result& on_error(FunT on_error_cb) const noexcept
+        {
+            static_assert(std::is_invocable_v<FunT, error_type>, "Function supplied is not invocable with the error type.");
+
+            if (!is_valid())
+            {
+                std::invoke(on_error_cb, error_unchecked());
+            }
+
+            return *this;
         }
 
     private:
