@@ -1,6 +1,9 @@
 #ifndef HUB_FILESYSTEM_H
 #define HUB_FILESYSTEM_H
 
+#include "utils/result.hpp"
+#include "tl/expected.hpp"
+
 #include "esp_err.h"
 
 #include <cstdio>
@@ -14,14 +17,14 @@ namespace hub::filesystem
      * 
      * @return esp_err_t Initialization status.
      */
-    esp_err_t init();
+    tl::expected<void, esp_err_t> init();
 
     /**
      * @brief Deinitialize filesystem.
      * 
      * @return esp_err_t Deinitialization status.
      */
-    esp_err_t deinit();
+    tl::expected<void, esp_err_t> deinit();
 }
 
 #endif
