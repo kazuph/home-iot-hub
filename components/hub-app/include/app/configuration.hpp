@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "ble/mac.hpp"
+#include "utils/mac.hpp"
 
 namespace hub
 {
@@ -11,20 +11,20 @@ namespace hub
     {
         struct
         {
-            std::string ssid;
-            std::string password;
-            ble::mac    mac;
+            std::string     ssid;
+            std::string     password;
+            utils::mac      mac;
         } wifi;
         
         struct
         {
-            std::string uri;
+            std::string     uri;
         } mqtt;
 
         struct
         {
-            std::string id;
-            std::string device_name;
+            std::string     id;
+            std::string     device_name;
         } hub;
     };
 }

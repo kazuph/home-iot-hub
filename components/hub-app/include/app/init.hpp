@@ -9,10 +9,16 @@
 #include "ble/scanner.hpp"
 #include "ble/errc.hpp"
 #include "ble/mac.hpp"
-#include "mqtt/client.hpp"
+#include "service/mqtt_client.hpp"
+#include "timing/timing.hpp"
+#include "utils/esp_exception.hpp"
+#include "utils/json.hpp"
+
+#include "rxcpp/rx.hpp"
 
 #include "rapidjson/document.h"
-#include "rapidjson/istreamwrapper.h"
+
+#include "tl/expected.hpp"
 
 #include "esp_mac.h"
 #include "esp_log.h"
@@ -28,10 +34,7 @@ namespace hub
     {
     public:
 
-        init_t()
-        {
-
-        }
+        init_t()                            = default;
 
         init_t(const init_t&)               = delete;
 
@@ -43,105 +46,59 @@ namespace hub
 
         ~init_t()                           = default;
 
-        void initialize_filesystem() const
+        tl::expected<void, esp_err_t> initialize_filesystem() const noexcept
         {
-            if (filesystem::init() != ESP_OK)
-            {
-                ESP_LOGE(TAG, "Could not initialize filesystem.");
-                throw std::runtime_error("Could not initialize filesystem.");
-            }
+            return filesystem::init();
         }
 
-        void initialize_ble() const
+        tl::expected<void, esp_err_t> initialize_ble() const noexcept
         {
-            if (!ble::init().is_valid())
-            {
-                ESP_LOGE(TAG, "Could not initialize BLE module.");
-                throw std::runtime_error("Could not initialize BLE module.");
-            }
+            using result_type = tl::expected<void, esp_err_t>;
 
-            if (!ble::scanner::init().is_valid())
-            {
-                ESP_LOGE(TAG, "Could not initialize BLE scanner.");
-                ble::deinit();
-                throw std::runtime_error("Could not initialize BLE scanner.");
-            }
+            auto result =  ble::init()
+                .then([]() {
+                    return ble::scanner::init()
+                        .on_error([](ble::errc err) {
+                            ESP_LOGE(TAG, "BLE scanner initialization failed. Error code: %i [%s].", ESP_FAIL, esp_err_to_name(ESP_FAIL));
+                            ble::deinit();
+                        });
+                });
+
+            return (result.is_valid()) ? result_type() : result_type(tl::unexpect, ESP_FAIL);
         }
 
-        void connect_to_wifi(const configuration& config) const
+        tl::expected<void, esp_err_t> connect_to_wifi(const configuration& config) const noexcept
         {
-            if (wifi::connect(config.wifi.ssid, config.wifi.password) != ESP_OK)
-            {
-                ESP_LOGE(TAG, "Could not connect to WiFi.");
-                throw std::runtime_error("Could not connect to WiFi.");   
-            }
+            using namespace timing::literals;
+            return wifi::connect(config.wifi.ssid, config.wifi.password, 60_s);
         }
 
-        configuration read_config(std::string_view path) const
+        tl::expected<configuration, esp_err_t> read_config(std::string_view path) const
         {
+            using result_type = tl::expected<configuration, esp_err_t>;
+
             configuration config;
-            rapidjson::Document config_json;
-
-            {
-                std::ifstream config_file(path.data());
-                rapidjson::IStreamWrapper config_ifstream(config_file);
-
-                if (!config_file)
-                {
-                    ESP_LOGE(TAG, "Could not open config_json.json.");
-                    throw std::runtime_error("Could not open config_json.json");
-                }
-
-                config_json.ParseStream(config_ifstream);
-            }
+            rapidjson::Document config_json = utils::json::parse_file(path);
 
             if (
+                config_json.HasParseError() ||
                 !config_json.IsObject() || 
                 !config_json["WIFI_SSID"].IsString() || 
                 !config_json["WIFI_PASSWORD"].IsString() || 
                 !config_json["MQTT_URI"].IsString() ||
                 !config_json["DEVICE_NAME"].IsString())
             {
-                ESP_LOGE(TAG, "Bad config_json file format.");
-                throw std::runtime_error("Bad config_json file format.");
+                return result_type(tl::unexpect, ESP_ERR_INVALID_ARG);
             }
 
-            config.wifi.ssid = config_json["WIFI_SSID"].GetString();
-            config.wifi.password = config_json["WIFI_PASSWORD"].GetString();
-            esp_read_mac(config.wifi.mac.to_address(), ESP_MAC_WIFI_STA);
+            esp_read_mac(static_cast<uint8_t*>(config.wifi.mac), ESP_MAC_WIFI_STA);
 
-            config.mqtt.uri = config_json["MQTT_URI"].GetString();
-
-            config.hub.device_name = config_json["DEVICE_NAME"].GetString();
+            config.wifi.ssid        = config_json["WIFI_SSID"].GetString();
+            config.wifi.password    = config_json["WIFI_PASSWORD"].GetString();
+            config.mqtt.uri         = config_json["MQTT_URI"].GetString();
+            config.hub.device_name  = config_json["DEVICE_NAME"].GetString();
 
             return config;
-        }
-
-        void publish_scan_message(const configuration& config) const
-        {
-            constexpr std::string_view SCAN_TOPIC{ "home/scan" };
-
-            auto mqtt_client = mqtt::client();
-            
-            if (mqtt_client.connect(config.mqtt.uri) != ESP_OK)
-            {
-                ESP_LOGE(TAG, "Could not connect to the given URI.");
-                throw std::runtime_error("Could not connect to the given URI.");
-            }
-
-            {
-                rapidjson::Document json;
-                json.SetObject();
-
-                json.AddMember("device_name", rapidjson::StringRef(config.hub.device_name), json.GetAllocator());
-                json.AddMember("device_address", rapidjson::StringRef(config.wifi.mac.to_string()), json.GetAllocator());
-
-                if (mqtt_client.publish(SCAN_TOPIC, std::string_view(json.GetString(), json.GetStringLength())) != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Publish scan message failed..");
-                    throw std::runtime_error("Publish scan message failed..");
-                }
-            }
         }
 
     private:
