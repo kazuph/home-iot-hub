@@ -4,4 +4,7 @@ idf_component_register(
     INCLUDE_DIRS 
         "include"
     REQUIRES
-        "spiffs")
+        "spiffs"
+        "hub-utils")
+
+target_include_directories(${COMPONENT_LIB} PUBLIC ${expected_SOURCE_DIR}/include)
