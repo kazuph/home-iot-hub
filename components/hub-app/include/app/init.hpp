@@ -55,15 +55,7 @@ namespace hub
         {
             using result_type = tl::expected<void, esp_err_t>;
 
-            auto result =  ble::init()
-                .then([]() {
-                    return ble::scanner::init()
-                        .on_error([](ble::errc err) {
-                            ESP_LOGE(TAG, "BLE scanner initialization failed. Error code: %i [%s].", ESP_FAIL, esp_err_to_name(ESP_FAIL));
-                            ble::deinit();
-                        });
-                });
-
+            auto result =  ble::init();
             return (result.is_valid()) ? result_type() : result_type(tl::unexpect, ESP_FAIL);
         }
 

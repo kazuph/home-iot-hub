@@ -30,6 +30,13 @@ namespace hub::utils::json
         return std::string(buffer.GetString(), buffer.GetSize());
     }
 
+    inline rapidjson::Document parse(std::string_view str) noexcept
+    {
+        rapidjson::Document result;
+        result.Parse(str.data(), str.length());
+        return result;
+    }
+
     inline rapidjson::Document parse_file(std::string_view path) noexcept
     {
         rapidjson::Document file;

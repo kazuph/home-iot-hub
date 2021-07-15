@@ -1,190 +1,72 @@
+#include <string>
+#include <array>
+
 #include "ble/scanner.hpp"
-#include "timing/timing.hpp"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_gatt_common_api.h"
-#include "esp_gap_ble_api.h"
-
-#include "esp_err.h"
-#include "esp_log.h"
-
-#include <stdexcept>
-#include <list>
-#include <new>
-
-namespace hub::ble::scanner
+namespace hub::ble::scanner::impl
 {
-    using namespace timing::literals;
+    std::weak_ptr<state> state::s_scanner_state{};
 
-    static constexpr const char*    TAG             { "hub::ble::scanner" };
-
-    static constexpr auto           BLE_TIMEOUT     { 10_s };
-
-    static constexpr EventBits_t    SCAN_START_BIT  { BIT0 };
-    static constexpr EventBits_t    SCAN_STOP_BIT   { BIT1 };
-    static constexpr EventBits_t    FAIL_BIT        { BIT2 };
-
-    static constexpr esp_ble_scan_params_t BLE_SCAN_PARAMS{
-        BLE_SCAN_TYPE_ACTIVE,           // Scan type
-        BLE_ADDR_TYPE_PUBLIC,           // Address type
-        BLE_SCAN_FILTER_ALLOW_ALL,      // Filter policy
-        0x50,                           // Scan interval
-        0x30,                           // Scan window
-        BLE_SCAN_DUPLICATE_DISABLE      // Advertise duplicates filter policy
-    };
-
-    static EventGroupHandle_t s_scan_event_group{ nullptr };
-
-    static event::scan_result_event_handler_t s_scan_results_event_handler{  };
-
-    static void gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) noexcept
+    state::state() :
+        m_subject{  }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        esp_err_t result = ESP_OK;
 
-        if (event == ESP_GAP_BLE_SCAN_START_COMPLETE_EVT)
-        {
-            if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS)
+        result = esp_ble_gap_register_callback([](esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
+
+            ESP_LOGV(TAG, "GAP event: %i.", event);
+
+            if (s_scanner_state.expired())
             {
-                xEventGroupSetBits(s_scan_event_group, FAIL_BIT);
+                ESP_LOGD(TAG, "Global state expired.");
                 return;
             }
 
-            xEventGroupSetBits(s_scan_event_group, SCAN_START_BIT);
-        }
-        else if (event == ESP_GAP_BLE_SCAN_RESULT_EVT && param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_RES_EVT)
-        {
-            uint8_t adv_name_len    = 0;
-            uint8_t* adv_name       = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
-
-            if (adv_name == nullptr || adv_name_len == 0)
             {
-                return;
+                auto state = s_scanner_state.lock();
+
+                if (event == ESP_GAP_BLE_SCAN_RESULT_EVT)
+                {
+                    ESP_LOGV(TAG, "GAP search event: %i.", param->scan_rst.search_evt);
+
+                    if (param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_RES_EVT)
+                    {
+                        uint8_t adv_name_len    = 0;
+                        uint8_t* adv_name       = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
+
+                        if (adv_name == nullptr || adv_name_len == 0)
+                        {
+                            return;
+                        }
+
+                        ESP_LOGD(TAG, "Scan result received.");
+
+                        {
+                            static std::array<char, utils::mac::MAC_STR_SIZE> cache;
+                            utils::mac(param->scan_rst.bda, param->scan_rst.bda + utils::mac::MAC_SIZE).to_charbuff(cache.begin());
+
+                            state->get_subject().get_subscriber().on_next(message_type{
+                                std::string_view(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)),
+                                std::string_view(cache.begin(), cache.size())
+                            });
+                        }
+                    }
+                    else if (param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_CMPL_EVT)
+                    {
+                        state->get_subject().get_subscriber().on_completed();
+                    }
+                }
             }
+        });
 
-            s_scan_results_event_handler.invoke({
-                std::string(reinterpret_cast<const char*>(adv_name), static_cast<size_t>(adv_name_len)),
-                mac(param->scan_rst.bda, param->scan_rst.ble_addr_type).to_string()
-            });
-        }
-        else if (event == ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT)
+        if (result != ESP_OK)
         {
-            if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS)
-            {
-                xEventGroupSetBits(s_scan_event_group, FAIL_BIT);
-                return;
-            }
-
-            xEventGroupSetBits(s_scan_event_group, SCAN_STOP_BIT);
+            LOG_AND_THROW(TAG, utils::esp_exception("Register GAP callback failed.", result));
         }
-    }
 
-    result<void> init() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<void>;
-
-        if (esp_ble_gap_register_callback(&gap_callback) != ESP_OK)
+        if (result = esp_ble_gap_set_scan_params(const_cast<esp_ble_scan_params_t*>(&BLE_SCAN_PARAMS)); result != ESP_OK)
         {
-            ESP_LOGE(TAG, "Register GAP callback failed.");
-            return result_type::failure(errc::initialization_failed);
+            LOG_AND_THROW(TAG, utils::esp_exception("Set GAP scan params failed.", result));
         }
-
-        if (esp_ble_gap_set_scan_params(const_cast<esp_ble_scan_params_t*>(&BLE_SCAN_PARAMS)) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Set GAP scan params failed.");
-            return result_type::failure(errc::initialization_failed);
-        }
-
-        s_scan_event_group = xEventGroupCreate();
-        if (!s_scan_event_group)
-        {
-            ESP_LOGE(TAG, "Set GAP scan params failed.");
-            return result_type::failure(errc::no_resources);
-        }
-
-        return result_type::success();
-    }
-
-    result<void> deinit() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        using result_type = result<void>;
-        vEventGroupDelete(s_scan_event_group);    
-        return result_type::success();
-    }
-
-    result<void> start(uint16_t duration) noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<void>;
-
-        if (esp_err_t result = esp_ble_gap_start_scanning(duration); result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "BLE scan start failed.");
-            return result_type::failure(errc::error);
-        }
-
-        EventBits_t bits = xEventGroupWaitBits(s_scan_event_group, SCAN_START_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
-
-        if (bits & SCAN_START_BIT)
-        {
-            ESP_LOGE(TAG, "BLE scan start success.");
-            return result_type::success();
-        }
-        else if (bits & FAIL_BIT)
-        {
-            ESP_LOGE(TAG, "BLE scan start failed.");
-            return result_type::failure(errc::error);
-        }
-        else
-        {
-            ESP_LOGE(TAG, "BLE scan start timeout.");
-            return result_type::failure(errc::timeout);
-        }
-    }
-
-    result<void> stop() noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<void>;
-
-        if (esp_err_t result = esp_ble_gap_stop_scanning(); result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "BLE scan stop failed.");
-            return result_type::failure(errc::error);
-        }
-
-        EventBits_t bits = xEventGroupWaitBits(s_scan_event_group, SCAN_STOP_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
-
-        if (bits & SCAN_STOP_BIT)
-        {
-            ESP_LOGE(TAG, "BLE scan stop success.");
-            return result_type::success();
-        }
-        else if (bits & FAIL_BIT)
-        {
-            ESP_LOGE(TAG, "BLE scan stop failed.");
-            return result_type::failure(errc::error);
-        }
-        else
-        {
-            ESP_LOGE(TAG, "BLE scan stop timeout.");
-            return result_type::failure(errc::timeout);
-        }
-    }
-
-    result<void> set_scan_results_event_handler(event::scan_result_event_handler_fun_t scan_callback) noexcept
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        using result_type = result<void>;
-        s_scan_results_event_handler += scan_callback;
-        return result_type::success();
     }
 }

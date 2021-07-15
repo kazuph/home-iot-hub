@@ -15,7 +15,8 @@
 
 namespace hub
 {
-    class application final : public fsm<init_t, not_connected_t, connected_t, cleanup_t> {
+    class application final : public fsm<init_t, not_connected_t, connected_t, cleanup_t> 
+    {
     public:
         application()                                   = default;
 
@@ -71,7 +72,7 @@ namespace hub
                         ESP_LOGI(TAG, "Entering state: cleanup_t.");
                         set_state<cleanup_t>();
                     })
-                    .and_then([&, this](std::string &&id) {
+                    .and_then([&, this](std::string&& id) {
                         config.hub.id = std::move(id);
 
                         ESP_LOGI(TAG, "Entering state: connected_t.");

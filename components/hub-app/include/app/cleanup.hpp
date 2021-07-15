@@ -27,7 +27,6 @@ namespace hub
         void cleanup() const noexcept
         {
             wifi::disconnect();
-            ble::scanner::deinit();
             ble::deinit();
             filesystem::deinit();
         }

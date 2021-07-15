@@ -7,8 +7,12 @@
 #include <cstdint>
 #include <string>
 #include <charconv>
+#include <type_traits>
+#include <iterator>
 
 #include "fmt/core.h"
+
+#include "esp_log.h"
 
 namespace hub::utils
 {
@@ -16,22 +20,38 @@ namespace hub::utils
     {
     public:
 
-        explicit mac(std::initializer_list<uint8_t> init) :
-            m_address{  }
+        static constexpr std::size_t MAC_SIZE{ 6 };
+        static constexpr std::size_t MAC_STR_SIZE{ 17 }; // Size without null termination
+
+        template<typename OutIt>
+        inline void to_charbuff(OutIt first) const noexcept
         {
-            std::copy(init.begin(), init.end(), m_address.begin());
+            static_assert(std::is_same_v<typename std::iterator_traits<OutIt>::value_type, char>, "Iterator value type must be uint8_t.");
+            fmt::format_to(
+                first,
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                m_address[0],
+                m_address[1],
+                m_address[2],
+                m_address[3],
+                m_address[4],
+                m_address[5]
+            );
         }
 
         template<typename InIt>
-        explicit mac(InIt first, InIt last) :
+        mac(InIt first, InIt last) :
             m_address{  }
         {
+            static_assert(std::is_same_v<typename std::iterator_traits<InIt>::value_type, uint8_t>, "Iterator value type must be uint8_t.");
+            assert(std::distance(first, last) == MAC_SIZE);
             std::copy(first, last, m_address.begin());
         }
 
         explicit mac(std::string_view addr) :
             m_address{  }
         {
+            assert(addr.size() >= MAC_STR_SIZE);
             std::from_chars(std::next(addr.data(), 0), std::next(addr.data(), 2), m_address[0], 16);
             std::from_chars(std::next(addr.data(), 3), std::next(addr.data(), 5), m_address[1], 16);
             std::from_chars(std::next(addr.data(), 6), std::next(addr.data(), 8), m_address[2], 16);
@@ -58,8 +78,8 @@ namespace hub::utils
                 m_address[1],
                 m_address[2],
                 m_address[3],
-                m_address[5],
-                m_address[6]
+                m_address[4],
+                m_address[5]
             );
         }
 
@@ -75,7 +95,7 @@ namespace hub::utils
 
     private:
 
-        std::array<uint8_t, 6> m_address;
+        std::array<uint8_t, MAC_SIZE> m_address;
     };
 }
 

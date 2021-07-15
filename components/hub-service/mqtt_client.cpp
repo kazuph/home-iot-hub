@@ -46,6 +46,11 @@ namespace hub::service::mqtt
 
                         client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
 
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
+
                         auto topic = std::string_view(event_data->topic, event_data->topic_len);
                         auto data = std::string_view(event_data->data, event_data->data_len);
 
@@ -57,6 +62,11 @@ namespace hub::service::mqtt
 
                         client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
 
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
+
                         mqtt_client->m_subject.get_subscriber().on_completed();
                     }
                     else if (event_data->event_id == MQTT_EVENT_ERROR)
@@ -64,6 +74,11 @@ namespace hub::service::mqtt
                         ESP_LOGV(TAG, "MQTT event: MQTT_EVENT_ERROR.");
 
                         client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
+
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
 
                         mqtt_client->m_subject.get_subscriber().on_error(
                             std::make_exception_ptr(utils::esp_exception("MQTT error occured."))
@@ -117,13 +132,10 @@ namespace hub::service::mqtt
     {
         using namespace rxcpp::operators;
 
-        auto local_state = m_state;
-
-        esp_err_t result = esp_mqtt_client_subscribe(local_state->get_handle(), topic.data(), static_cast<int>(qos));
+        esp_err_t result = esp_mqtt_client_subscribe(m_state->get_handle(), topic.data(), static_cast<int>(qos));
         if (result == ESP_FAIL)
         {
             ESP_LOGE(TAG, "MQTT client topic subscribe failed with error code: 0x%04x.", result);
-
             return rxcpp::observable<>::error<message_t>(utils::esp_exception("Could not subscribe to MQTT topic."));
         }
 
@@ -131,8 +143,8 @@ namespace hub::service::mqtt
 
         return 
             m_state->get_observable() |
-            finally([=]() {
-                if (esp_err_t result = esp_mqtt_client_unsubscribe(local_state->get_handle(), topic.data()) == ESP_FAIL)
+            finally([topic, qos, handle{ m_state->get_handle() }]() {
+                if (esp_err_t result = esp_mqtt_client_unsubscribe(handle, topic.data()) == ESP_FAIL)
                 {
                     LOG_AND_THROW(TAG, utils::esp_exception("Unable to unsubscribe from topic.", result));
                 }
@@ -144,22 +156,18 @@ namespace hub::service::mqtt
             map([](impl::client_state::mqtt_message_t message) {
                 ESP_LOGV(TAG, "Received data: %.*s.", message.data.length(), message.data.data());
                 return message.data; 
-            }) |
-            publish() |
-            ref_count();
+            });
     }
 
     rxcpp::subscriber<client::message_t> client::get_subscriber(std::string_view topic, qos_t qos, bool retain)
     {
         using namespace rxcpp::operators;
 
-        auto local_state = m_state;
-
         return rxcpp::make_subscriber<message_t>(
-            [=](message_t message) {
+            [topic, qos, retain, handle{ m_state->get_handle() }](message_t message) {
                 ESP_LOGD(TAG, "Publishing on topic: %.*s.", topic.length(), topic.data());
                 esp_err_t result = esp_mqtt_client_publish(
-                    local_state->get_handle(), 
+                    handle, 
                     topic.data(), 
                     message.data(), 
                     message.length(), 

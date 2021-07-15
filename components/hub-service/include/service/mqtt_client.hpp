@@ -100,7 +100,7 @@ namespace hub::service::mqtt
          * @brief Mutable MQTT state.
          * 
          */
-        std::shared_ptr<impl::client_state> m_state;
+        std::unique_ptr<impl::client_state> m_state;
 
         [[nodiscard]] static inline constexpr auto topic_predicate(std::string_view topic) noexcept
         {
@@ -137,7 +137,7 @@ namespace hub::service::mqtt
      */
     [[nodiscard]] inline client make_client(std::string_view uri)
     {
-        return client{ std::make_shared<impl::client_state>(uri) };
+        return client{ std::make_unique<impl::client_state>(uri) };
     }
 }
 
