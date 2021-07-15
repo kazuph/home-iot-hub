@@ -8,6 +8,5 @@ idf_component_register(
         "hub-utils"
         "hub-timing")
 
-target_include_directories(${COMPONENT_LIB} INTERFACE ${rapidjson_SOURCE_DIR}/include)
-target_include_directories(${COMPONENT_LIB} INTERFACE ${expected_SOURCE_DIR}/include)
-target_include_directories(${COMPONENT_LIB} INTERFACE ${rxcpp_SOURCE_DIR}/Rx/v2/src)
+target_include_directories(${COMPONENT_LIB} INTERFACE ${rapidjson_SOURCE_DIR}/include ${expected_SOURCE_DIR}/include ${rxcpp_SOURCE_DIR}/Rx/v2/src)
+

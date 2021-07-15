@@ -6,7 +6,7 @@
 
 #include "esp_err.h"
 
-#include "fmt/core.h"
+#include "fmt/format.h"
 
 #define LOG_AND_THROW(tag, except) { auto __except = except; ESP_LOGE(tag, "%s", __except.what()); throw std::move(__except); }
 

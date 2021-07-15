@@ -16,5 +16,4 @@ idf_component_register(
         "hub-utils"
         "hub-timing")
 
-target_include_directories(${COMPONENT_LIB} PUBLIC ${rxcpp_SOURCE_DIR}/Rx/v2/src)
-target_include_directories(${COMPONENT_LIB} PUBLIC ${expected_SOURCE_DIR}/include)
+target_include_directories(${COMPONENT_LIB} PUBLIC ${rxcpp_SOURCE_DIR}/Rx/v2/src ${expected_SOURCE_DIR}/include)

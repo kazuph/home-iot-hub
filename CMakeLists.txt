@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
 
-include(FetchContent)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(SUPPORTED_TARGETS esp32)
 set(EXTRA_COMPONENT_DIRS ./components)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+include(FetchContent)
 
 FetchContent_Declare(
     rapidjson
@@ -17,12 +18,6 @@ FetchContent_Declare(
 FetchContent_Declare(
     rxcpp
     GIT_REPOSITORY  https://github.com/ReactiveX/RxCpp.git
-    GIT_TAG         master
-)
-
-FetchContent_Declare(
-    fmt
-    GIT_REPOSITORY  https://github.com/fmtlib/fmt.git
     GIT_TAG         master
 )
 
@@ -43,17 +38,9 @@ if(NOT rxcpp_POPULATED)
   FetchContent_Populate(rxcpp)
 endif()
 
-FetchContent_GetProperties(fmt)
-if(NOT fmt_POPULATED)
-  FetchContent_Populate(fmt)
-  add_subdirectory(${fmt_SOURCE_DIR} ${fmt_BINARY_DIR})
-endif()
-
 FetchContent_GetProperties(expected)
 if(NOT expected_POPULATED)
   FetchContent_Populate(expected)
 endif()
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 project(home-iot-hub)

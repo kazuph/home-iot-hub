@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <iterator>
 
-#include "fmt/core.h"
+#include "fmt/format.h"
 
 #include "esp_log.h"
 

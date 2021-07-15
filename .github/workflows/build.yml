@@ -19,7 +19,7 @@ jobs:
       - name: Build Latest Commit
         run: |
           . /home/pi/esp-idf/export.sh
-          idf.py fullclean app
+          idf.py app
         
       
       
