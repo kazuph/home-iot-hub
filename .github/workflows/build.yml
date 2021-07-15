@@ -10,11 +10,16 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-
+      - name: Update Pipeline
+        working-directory: /home/pi/esp-idf
+        run: |
+          git pull
+          git submodule update
+          /home/pi/esp-idf/install.sh
       - name: Build Latest Commit
         run: |
-          . ~/esp-idf/export.sh
-          idf.py app
+          . /home/pi/esp-idf/export.sh
+          idf.py fullclean app
         
       
       
