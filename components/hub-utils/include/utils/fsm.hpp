@@ -1,5 +1,5 @@
-#ifndef HUB_APP_FSM_HPP
-#define HUB_APP_FSM_HPP
+#ifndef HUB_UTILS_FSM_HPP
+#define HUB_UTILS_FSM_HPP
 
 #include <type_traits>
 #include <variant>
@@ -13,7 +13,7 @@
     #endif
 #endif
 
-namespace hub
+namespace hub::utils
 {
     struct state_check {};
 
