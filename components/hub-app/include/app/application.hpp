@@ -6,16 +6,17 @@
 #include <type_traits>
 #include <variant>
 
+#include "utils/fsm.hpp"
+
 #include "cleanup.hpp"
 #include "configuration.hpp"
 #include "connected.hpp"
-#include "fsm.hpp"
 #include "init.hpp"
 #include "not_connected.hpp"
 
 namespace hub
 {
-    class application final : public fsm<init_t, not_connected_t, connected_t, cleanup_t> 
+    class application final : public utils::fsm<init_t, not_connected_t, connected_t, cleanup_t> 
     {
     public:
         application()                                   = default;
@@ -39,14 +40,15 @@ namespace hub
             {
                 ESP_LOGI(TAG, "Entering state: init_t.");
                 ESP_LOGD(TAG, "Initializing filesystem.");
+                
                 auto exp_config = get_state<init_t>().initialize_filesystem()
                     .and_then([this]() {
                         ESP_LOGD(TAG, "Initializing BLE.");
-                        return get_state<init_t, no_state_check>().initialize_ble(); 
+                        return get_state<init_t, utils::no_state_check>().initialize_ble(); 
                     })
                     .and_then([=]() {
                         ESP_LOGD(TAG, "Reading configuration data from: %s.", CONFIG_FILE.data());
-                        return get_state<init_t, no_state_check>().read_config(CONFIG_FILE); 
+                        return get_state<init_t, utils::no_state_check>().read_config(CONFIG_FILE); 
                     })
                     .or_else([this](esp_err_t err) {
                         ESP_LOGE(TAG, "Initialization failed. Error code: %i [%s].", err, esp_err_to_name(err));

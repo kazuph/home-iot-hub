@@ -19,10 +19,12 @@
 
 #include "timing/timing.hpp"
 
-#include "configuration.hpp"
 #include "service/mqtt_client.hpp"
 #include "utils/esp_exception.hpp"
 #include "utils/json.hpp"
+
+#include "configuration.hpp"
+#include "operations.hpp"
 
 namespace hub
 {
@@ -53,107 +55,67 @@ namespace hub
 
             namespace mqtt = service::mqtt;
 
-            constexpr auto SCAN_ENABLE_TOPIC    = "home/scan_enable"sv;
-            constexpr auto SCAN_RESULTS_TOPIC   = "home/scan_results"sv;
-            constexpr auto CONNECT_TOPIC        = "home/connect"sv;
+            mqtt::client mqtt_client;
 
-            const auto is_connect_message = [this](std::shared_ptr<rapidjson::Document> message_ptr) {
-                const auto &message = *message_ptr;
-                const auto &config = m_config.get();
-
-                std::array<char, utils::mac::MAC_STR_SIZE> address_buff;
-                std::string_view address{ address_buff.begin(), address_buff.size() };
-
-                config.wifi.mac.to_charbuff(address_buff.begin());
-
-                return (
-                    message.IsObject() &&
-                    message.HasMember("name") &&
-                    message.HasMember("address") &&
-                    message.HasMember("id") &&
-                    message["name"].IsString() &&
-                    message["address"].IsString() &&
-                    message["id"].IsString() &&
-                    (config.hub.device_name == message["name"].GetString()) &&
-                    (address == message["address"].GetString()));
-            };
+            try
+            {
+                mqtt_client = mqtt::make_client(m_config.get().mqtt.uri);
+            }
+            catch (const utils::esp_exception &err)
+            {
+                return tl::make_unexpected<esp_err_t>(err.errc());
+            }
 
             {
-                mqtt::client mqtt_client;
-
-                try
-                {
-                    mqtt_client = mqtt::make_client(m_config.get().mqtt.uri);
-                }
-                catch (const utils::esp_exception &err)
-                {
-                    return tl::make_unexpected<esp_err_t>(err.errc());
-                }
+                std::string scan_message;
 
                 {
-                    std::string scan_message;
+                    std::array<char, utils::mac::MAC_STR_SIZE> mac_address;
+                    m_config.get().wifi.mac.to_charbuff(mac_address.data());
 
-                    {
-                        std::array<char, utils::mac::MAC_STR_SIZE> mac_address;
-                        m_config.get().wifi.mac.to_charbuff(mac_address.data());
+                    rapidjson::Document json;
+                    auto &allocator = json.GetAllocator();
+                    json.SetObject();
 
-                        rapidjson::Document json;
-                        auto &allocator = json.GetAllocator();
-                        json.SetObject();
+                    json.AddMember("name",    rapidjson::StringRef(m_config.get().hub.device_name),         allocator);
+                    json.AddMember("address", rapidjson::StringRef(mac_address.data(), mac_address.size()), allocator);
 
-                        json.AddMember("name", rapidjson::StringRef(m_config.get().hub.device_name), allocator);
-                        json.AddMember("address", rapidjson::StringRef(mac_address.data(), mac_address.size()), allocator);
-
-                        scan_message = utils::json::dump(std::move(json));
-                    }
-
-                    mqtt_client.get_observable(SCAN_ENABLE_TOPIC) |
-                    filter(is_empty_sv) |
-                    map([&](std::string_view) { 
-                        return std::string_view(scan_message);
-                    }) |
-                    subscribe<service::mqtt::client::message_t>(mqtt_client.get_subscriber(SCAN_RESULTS_TOPIC));
-
-                    auto connect_message =
-                        mqtt_client.get_observable(CONNECT_TOPIC) |
-                        map(parse_json) |
-                        filter(is_parse_success) |
-                        filter(is_connect_message) |
-                        map(retrieve_id) |
-                        take(1) |
-                        as_blocking();
-
-                    return connect_message.first();
+                    scan_message = utils::json::dump(std::move(json));
                 }
+
+                mqtt_client.get_observable(m_config.get().SCAN_ENABLE_TOPIC) |
+                filter(&is_empty_sv) |
+                map([&](std::string_view) { 
+                    return std::string_view(scan_message);
+                }) |
+                subscribe<service::mqtt::client::message_t>(mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
+
+                auto connect_message =
+                    mqtt_client.get_observable(m_config.get().CONNECT_TOPIC) |
+                    map(&parse_json) |
+                    filter(&is_parse_success) |
+                    filter(&is_connect_message) |
+                    filter(connect_message_predicate(
+                        m_config.get().hub.device_name, 
+                        m_config.get().wifi.mac)) |
+                    map(retrieve_id) |
+                    take(1) |
+                    as_blocking();
+
+                return connect_message.first();
             }
         }
 
     private:
+
         std::reference_wrapper<const configuration> m_config;
 
         static constexpr const char *TAG{ "hub::not_connected_t" };
-
-        inline static std::shared_ptr<rapidjson::Document> parse_json(std::string_view message) noexcept
-        {
-            auto result = std::make_shared<rapidjson::Document>();
-            result->Parse(message.data(), message.length());
-            return result;
-        }
-
-        inline static bool is_parse_success(std::shared_ptr<rapidjson::Document> message_ptr) noexcept
-        {
-            return !(message_ptr->HasParseError());
-        }
 
         inline static std::string retrieve_id(std::shared_ptr<rapidjson::Document> message_ptr)
         {
             const auto& message = *message_ptr;
             return std::string(message["id"].GetString(), message["id"].GetStringLength());
-        }
-
-        inline static bool is_empty_sv(std::string_view str) noexcept
-        {
-            return str.length() == 0;
         }
     };
 }

@@ -2,6 +2,7 @@
 #define HUB_UTILS_FSM_HPP
 
 #include <type_traits>
+#include <stdexcept>
 #include <variant>
 #include <cassert>
 
