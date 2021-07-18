@@ -20,39 +20,8 @@ jobs:
         run: |
           . /home/pi/esp-idf/export.sh
           idf.py app
-
-  static-analysis:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v2
-      - name: cppcheck
+      - name: Run CppCheck
         run: |
           . /home/pi/esp-idf/export.sh
-          ESP_COMPONENT_PATH=${IDF_PATH}/components
-          REPORT_DIRECTORY=/home/pi/projects/home-iot-hub-cppcheck
-          cppcheck --project=build/compile_commands.json -i${COMPONENT_PATH} -ibuild --xml 2> ${REPORT_DIRECTORY}/$(date +%d-%m-%Y_%H-%M-%S).xml
-        
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
+          REPORT_DIR=/home/pi/projects/home-iot-hub-cppcheck
+          cppcheck --project=build/compile_commands.json -i"${IDF_PATH}" -i"build" --suppress="*:*esp-idf/*" --suppress="*:*build/*" -rp --xml 2> ${REPORT_DIR}/${GITHUB_SHA}.xml
