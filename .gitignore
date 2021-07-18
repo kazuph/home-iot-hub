@@ -6,3 +6,5 @@ config.json
 debug.log
 docs
 partition
+cppcheck-build
+*.cppcheck
