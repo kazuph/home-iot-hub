@@ -1,113 +1,146 @@
 #ifndef HUB_MQTT_CLIENT_HPP
 #define HUB_MQTT_CLIENT_HPP
 
-#include "event/event.hpp"
+#include <string_view>
+#include <memory>
 
 #include "mqtt_client.h"
 #include "esp_err.h"
 
-#include <functional>
-#include <string_view>
-#include <string>
+#include "rxcpp/rx.hpp"
+#include "tl/expected.hpp"
+
+#include "utils/esp_exception.hpp"
 
 namespace hub::mqtt
 {
-    namespace event
+    namespace impl
     {
-        struct data_event_args
+        class client_state
         {
-            std::string topic;
-            std::string data;
-        };
+        public:
 
-        using data_event_handler_t      = hub::event::event_handler<data_event_args>;
-        using data_event_handler_fun_t  = data_event_handler_t::function_type;
+            struct mqtt_message_t
+            {
+                std::string_view topic;
+                std::string_view data;
+            };
+
+            client_state() = delete;
+
+            client_state(std::string_view uri);
+
+            client_state(const client_state&)               = delete;
+
+            client_state(client_state&&)                    = default;
+
+            client_state& operator=(const client_state&)    = delete;
+
+            client_state& operator=(client_state&&)         = default;
+
+            ~client_state();
+
+            inline rxcpp::observable<mqtt_message_t> get_observable() const noexcept
+            {
+                return m_subject.get_observable();
+            }
+
+            inline esp_mqtt_client_handle_t get_handle() noexcept
+            {
+                return m_handle;
+            }
+
+        private:
+
+            static constexpr const char* TAG{ "hub::mqtt::client_state" };
+
+            esp_mqtt_client_handle_t                    m_handle;
+
+            rxcpp::subjects::subject<mqtt_message_t>    m_subject;
+        };
     }
 
     /**
-     * @brief Class representing MQTT client.
+     * @brief Factory class managing MQTT observables and subscribers.
+     * Constructed via make_client function.
+     * Upon construction connects to the broker under the given URI.
+     * Each rxcpp::observable produced observes one MQTT topic.
+     * Each rxcpp::subscriber publishes to one MQTT topic. Data exchanged with
+     * rxcpp::obserables and rxcpp::subscribers is of type client::message_t, which
+     * is currently defined as std::string_view.
+     * 
      */
-    class client
+    struct client
     {
-    public:
-
-        client();
-
-        client(client&& other);
-
-        client(const client&) = delete;
-
-        ~client();
-
-        client& operator=(const client&) = delete;
-
-        client& operator=(client&& other);
+        /**
+         * @brief Quality of service.
+         * 
+         */
+        enum class qos_t : int
+        {
+            at_most_once    = 0,
+            at_least_once   = 1,
+            exactly_once    = 2
+        };
 
         /**
-         * @brief Connect to the MQTT broker under the specified URI.
+         * @brief Data type being passed to the rxcpp::subscribers and rxcpp::observables.
          * 
-         * @param uri MQTT broker URI in a form "mqtt://<ip>:port".
-         * @return esp_err_t ESP_OK on success, other on failure.
          */
-        esp_err_t connect(std::string_view uri);
-
-        /**
-         * @brief Disconnect from MQTT broker.
-         * 
-         * @return esp_err_t ESP_OK on success, other on failure.
-         */
-        esp_err_t disconnect();
-
-        /**
-         * @brief Publish data to the MQTT broker. Only valid after successful connection (@see connect).
-         * 
-         * @param topic Topic under which the data is published.
-         * @param data Data to be published.
-         * @param retain Retain flag.
-         * @return esp_err_t ESP_OK on success, other on failure.
-         */
-        esp_err_t publish(std::string_view topic, std::string_view data, bool retain = false);
-
-        /**
-         * @brief Subscribe to the specified MQTT topic. When data is received on this topic, data_event is fired,
-         * calling functions passed to m_data_event_handler (@see set_data_event_handler).
-         * 
-         * @param topic Topic to subscribe to.
-         * @return esp_err_t ESP_OK on success, other on failure.
-         */
-        esp_err_t subscribe(std::string_view topic);
-
-        /**
-         * @brief Unsubscribe from the given topic.
-         * 
-         * @param topic Topic to unsubscribe from.
-         * @return esp_err_t ESP_OK on success, other on failure.
-         */
-        esp_err_t unsubscribe(std::string_view topic);
-
-        /**
-         * @brief Set data event handler. Multiple functions can be submitted. Theese functions get called
-         * when data arrives on topics to which client is subscribed to.
-         * 
-         * @param event_handler Data event callback.
-         */
-        void set_data_event_handler(event::data_event_handler_fun_t event_handler);
-
-    private:
+        using message_t = std::string_view;
 
         static constexpr const char* TAG{ "hub::mqtt::client" };
 
-        static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+        /**
+         * @brief Mutable MQTT state.
+         * 
+         */
+        std::unique_ptr<impl::client_state> m_state;
 
-        esp_mqtt_client_handle_t    m_client_handle;
+        [[nodiscard]] static inline constexpr auto topic_predicate(std::string_view topic) noexcept
+        {
+            return [=](impl::client_state::mqtt_message_t message) {
+                return topic == message.topic;
+            };
+        }
 
-        event::data_event_handler_t m_data_event_handler;
+        /**
+         * @brief Get the MQTT observable for the specified topic.
+         * 
+         * @param topic 
+         * @param qos 
+         * @return rxcpp::observable<message_t> 
+         */
+        [[nodiscard]] rxcpp::observable<message_t> get_observable(std::string_view topic, qos_t qos = qos_t::at_most_once) noexcept;
+
+        /**
+         * @brief Get the MQTT subscriber. Publishes messages under the given topic with the specified parameters.
+         * 
+         * @param topic 
+         * @param qos 
+         * @param retain 
+         * @return rxcpp::subscriber<message_t> 
+         */
+        [[nodiscard]] rxcpp::subscriber<message_t> get_subscriber(std::string_view topic, qos_t qos = qos_t::at_most_once, bool retain = false);
     };
-}
 
-namespace hub::event
-{
-    using namespace hub::mqtt::event;
+    /**
+     * @brief Create MQTT subscriber/observable factory.
+     * 
+     * @param uri URI of the broker.
+     * @return client MQTT subscriber/observable factory.
+     */
+    [[nodiscard]] inline tl::expected<client, esp_err_t> make_client(std::string_view uri) noexcept
+    {
+        try
+        {
+            return client{ std::make_unique<impl::client_state>(uri) };
+        }
+        catch(const utils::esp_exception& err)
+        {
+            return tl::make_unexpected<esp_err_t>(err.errc());
+        }
+    }
 }
 
 #endif

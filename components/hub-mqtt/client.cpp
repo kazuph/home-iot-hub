@@ -1,196 +1,185 @@
 #include "mqtt/client.hpp"
 
-#include "esp_system.h"
-#include "esp_event.h"
-
 #include "esp_log.h"
-
-#include <exception>
-#include <stdexcept>
-#include <cassert>
 
 namespace hub::mqtt
 {
-    void client::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) 
+    namespace impl
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        esp_mqtt_event_handle_t event   = reinterpret_cast<esp_mqtt_event_handle_t>(event_data);
-        client* mqtt_client             = reinterpret_cast<client*>(handler_args);
-
-        if (event->event_id == MQTT_EVENT_DATA)
+        client_state::client_state(std::string_view uri) :
+            m_handle{ nullptr },
+            m_subject{  }
         {
-            if (mqtt_client == nullptr)
+            using namespace rxcpp::operators;
+
+            esp_err_t result = ESP_OK;
+            esp_mqtt_client_config_t mqtt_client_config{  };
+
+            if (m_handle = esp_mqtt_client_init(&mqtt_client_config); !m_handle)
             {
-                ESP_LOGE(TAG, "Client not recognized.");
+                LOG_AND_THROW(TAG, utils::esp_exception("MQTT client initialization failed."));
+            }
+
+            ESP_LOGD(TAG, "MQTT client initialized successfully.");
+
+            if (result = esp_mqtt_client_set_uri(m_handle, "mqtt://192.168.0.109:1883"); result != ESP_OK)
+            {
+                LOG_AND_THROW(TAG, utils::esp_exception("Unable to set MQTT URI."));
+            }
+
+            ESP_LOGD(TAG, "MQTT URI: \"%.*s\" set successfully.", uri.length(), uri.data());
+
+            result = esp_mqtt_client_register_event(
+                m_handle,
+                static_cast<esp_mqtt_event_id_t>(ESP_EVENT_ANY_ID),
+                [](void *handler_args, esp_event_base_t base, int32_t event_id, void* event) {
+
+                    esp_mqtt_event_handle_t event_data = reinterpret_cast<esp_mqtt_event_handle_t>(event);
+
+                    ESP_LOGV(TAG, "MQTT event code: %i.", event_data->event_id);
+
+                    if (event_data->event_id == MQTT_EVENT_DATA)
+                    {
+                        ESP_LOGV(TAG, "MQTT event: MQTT_EVENT_DATA.");
+
+                        client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
+
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
+
+                        auto topic = std::string_view(event_data->topic, event_data->topic_len);
+                        auto data = std::string_view(event_data->data, event_data->data_len);
+
+                        mqtt_client->m_subject.get_subscriber().on_next(mqtt_message_t{ topic, data });
+                    }
+                    else if (event_data->event_id == MQTT_EVENT_DELETED)
+                    {
+                        ESP_LOGV(TAG, "MQTT event: MQTT_EVENT_DELETED.");
+
+                        client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
+
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
+
+                        mqtt_client->m_subject.get_subscriber().on_completed();
+                    }
+                    else if (event_data->event_id == MQTT_EVENT_ERROR)
+                    {
+                        ESP_LOGV(TAG, "MQTT event: MQTT_EVENT_ERROR.");
+
+                        client_state* mqtt_client = reinterpret_cast<client_state*>(handler_args);
+
+                        if (!mqtt_client)
+                        {
+                            return;
+                        }
+
+                        mqtt_client->m_subject.get_subscriber().on_error(
+                            std::make_exception_ptr(utils::esp_exception("MQTT error occured."))
+                        );
+                    }
+                },
+                this
+            );
+
+            if (result != ESP_OK)
+            {
+                LOG_AND_THROW(TAG, utils::esp_exception("Event registration failed.", result));
+            }
+
+            ESP_LOGD(TAG, "MQTT events registration success.");
+
+            if (result = esp_mqtt_client_start(m_handle); result != ESP_OK)
+            {
+                LOG_AND_THROW(TAG, utils::esp_exception("Could not start MQTT client.", result));
+            }
+
+            ESP_LOGD(TAG, "MQTT client start success.");
+            ESP_LOGI(TAG, "MQTT client state initialization success.");
+        }
+
+        client_state::~client_state()
+        {
+            esp_err_t result = ESP_OK;
+
+            if (!m_handle)
+            {
                 return;
             }
 
-            mqtt_client->m_data_event_handler.invoke({ std::string(event->topic, event->topic_len), std::string(event->data, event->data_len) });
-        }
-        else if (event->event_id == MQTT_EVENT_CONNECTED)
-        {
+            if (result = esp_mqtt_client_stop(m_handle); result != ESP_OK)
+            {
+                ESP_LOGW(TAG, "MQTT client stop failed with error code: 0x%04x.", result);
+            }
 
-        }
-        else if (event->event_id == MQTT_EVENT_DISCONNECTED)
-        {
+            if (result = esp_mqtt_client_destroy(m_handle); result != ESP_OK)
+            {
+                ESP_LOGW(TAG, "MQTT client handle destroy failed with error code: 0x%04x.", result);
+                return;
+            }
 
-        }
-        else if (event->event_id == MQTT_EVENT_ERROR)
-        {
-
-        }
-    }
-
-    client::client() :
-        m_client_handle       { nullptr },
-        m_data_event_handler  {  }
-    {
-        ESP_LOGD(TAG, "Function: %s. (default constructor)", __func__);
-    }
-
-    client::client(client&& other) :
-        m_client_handle       { nullptr },
-        m_data_event_handler  {  }
-    {
-        ESP_LOGD(TAG, "Function: %s. (move constructor)", __func__);
-
-        *this = std::move(other);
-    }
-
-    client::~client()
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        if (esp_err_t result = disconnect(); result != ESP_OK)
-        {
-            ESP_LOGW(TAG, "Client disconnect failed with error code %x [%s].", result, esp_err_to_name(result));
+            ESP_LOGI(TAG, "MQTT client state destruction success.");
         }
     }
 
-    client& client::operator=(client&& other)
+    rxcpp::observable<client::message_t> client::get_observable(std::string_view topic, qos_t qos) noexcept
     {
-        ESP_LOGD(TAG, "Function: %s. (move assignment)", __func__);
+        using namespace rxcpp::operators;
 
-        if (this == &other)
+        esp_err_t result = esp_mqtt_client_subscribe(m_state->get_handle(), topic.data(), static_cast<int>(qos));
+        if (result == ESP_FAIL)
         {
-            return *this;
+            ESP_LOGE(TAG, "MQTT client topic subscribe failed with error code: 0x%04x.", result);
+            return rxcpp::observable<>::error<message_t>(utils::esp_exception("Could not subscribe to MQTT topic."));
         }
 
-        m_client_handle       = other.m_client_handle;
-        other.m_client_handle = nullptr;
+        ESP_LOGD(TAG, "MQTT client subscribed to topic: %.*s.", topic.length(), topic.data());
 
-        return *this;
+        return 
+            m_state->get_observable() |
+            finally([topic, qos, handle{ m_state->get_handle() }]() {
+                if (esp_err_t result = esp_mqtt_client_unsubscribe(handle, topic.data()) == ESP_FAIL)
+                {
+                    LOG_AND_THROW(TAG, utils::esp_exception("Unable to unsubscribe from topic.", result));
+                }
+
+                ESP_LOGD(TAG, "Unsubscribed from topic: %.*s.", topic.length(), topic.data());
+                ESP_LOGD(TAG, "MQTT topic observable finalized.");
+            }) |
+            filter(topic_predicate(topic)) |
+            map([](impl::client_state::mqtt_message_t message) {
+                ESP_LOGV(TAG, "Received data: %.*s.", message.data.length(), message.data.data());
+                return message.data; 
+            });
     }
 
-    esp_err_t client::connect(std::string_view uri)
+    rxcpp::subscriber<client::message_t> client::get_subscriber(std::string_view topic, qos_t qos, bool retain)
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        using namespace rxcpp::operators;
 
-        esp_err_t result = ESP_OK;
+        return rxcpp::make_subscriber<message_t>(
+            [topic, qos, retain, handle{ m_state->get_handle() }](message_t message) {
+                ESP_LOGD(TAG, "Publishing on topic: %.*s.", topic.length(), topic.data());
+                esp_err_t result = esp_mqtt_client_publish(
+                    handle, 
+                    topic.data(), 
+                    message.data(), 
+                    message.length(), 
+                    static_cast<int>(qos),
+                    static_cast<int>(retain));
 
-        assert(!m_client_handle);
+                if (result == ESP_FAIL)
+                {
+                    ESP_LOGE(TAG, "Data publish failed with error code: 0x%04x.", result);
+                    return;
+                }
 
-        {
-            esp_mqtt_client_config_t mqtt_client_config{};
-
-            mqtt_client_config.uri  = uri.data();
-            m_client_handle         = esp_mqtt_client_init(&mqtt_client_config);
-        }
-
-        if (!m_client_handle)
-        {
-            ESP_LOGE(TAG, "Client handle initialization failed.");
-            return ESP_FAIL;
-        }
-
-        if (result = esp_mqtt_client_start(m_client_handle); result != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Client start failed with error code %x [%s].", result, esp_err_to_name(result));
-            return result;
-        }
-
-        esp_mqtt_client_register_event(
-            m_client_handle,
-            static_cast<esp_mqtt_event_id_t>(MQTT_EVENT_DATA), 
-            &mqtt_event_handler,
-            this);
-
-        ESP_LOGI(TAG, "Client start success.");
-
-        return result;
-    }
-
-    esp_err_t client::disconnect()
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        esp_err_t result = ESP_OK;
-
-        if (!m_client_handle)
-        {
-            ESP_LOGW(TAG, "Client handle was nullptr.");
-            return ESP_FAIL;
-        }
-
-        esp_mqtt_client_stop(m_client_handle);
-        esp_mqtt_client_destroy(m_client_handle);
-
-        m_client_handle = nullptr;
-        return result;
-    }
-
-    esp_err_t client::publish(std::string_view topic, std::string_view data, bool retain)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        assert(m_client_handle);
-        
-        if (esp_mqtt_client_publish(m_client_handle, topic.data(), data.data(), data.length(), 1, retain) == -1)
-        {
-            ESP_LOGE(TAG, "Client publish failed.");
-            return ESP_FAIL;
-        }
-
-        ESP_LOGI(TAG, "Client publish success."); 
-        return ESP_OK;
-    }
-
-    esp_err_t client::subscribe(std::string_view topic)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        assert(m_client_handle);
-
-        if (esp_mqtt_client_subscribe(m_client_handle, topic.data(), 0) == -1)
-        {
-            ESP_LOGE(TAG, "Client subscribe failed.");
-            return ESP_FAIL;
-        }
-
-        ESP_LOGI(TAG, "Client subscribes to topic: %s.", topic.data());
-        return ESP_OK;
-    }
-
-    esp_err_t client::unsubscribe(std::string_view topic)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        assert(m_client_handle);
-
-        if (esp_mqtt_client_unsubscribe(m_client_handle, topic.data()) == -1)
-        {
-            ESP_LOGE(TAG, "Client unsubscribe failed.");
-            return ESP_FAIL;
-        }
-
-        ESP_LOGI(TAG, "Client unsubscribed from topic: %s.", topic.data());
-        return ESP_OK;
-    }
-
-    void client::set_data_event_handler(event::data_event_handler_fun_t event_handler)
-    {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-        m_data_event_handler += event_handler;
+                ESP_LOGV(TAG, "Published data: %.*s.", message.length(), message.data());
+            }
+        );
     }
 }

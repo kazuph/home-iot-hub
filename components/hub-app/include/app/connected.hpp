@@ -15,7 +15,7 @@
 #include "rapidjson/document.h"
 
 #include "ble/scanner.hpp"
-#include "service/mqtt_client.hpp"
+#include "mqtt/client.hpp"
 #include "utils/json.hpp"
 #include "utils/result.hpp"
 
@@ -43,14 +43,14 @@ namespace hub
 
         ~connected_t()                              = default;
 
-        tl::expected<void, esp_err_t> process_events() const
+        tl::expected<void, esp_err_t> process_events() const noexcept
         {
             using result_type = tl::expected<void, esp_err_t>;
 
             using namespace std::literals;
             using namespace rxcpp::operators;
 
-            auto mqtt_client         = service::mqtt::make_client(m_config.get().mqtt.uri);  // Factory of observables and subscribers.
+            auto mqtt_client         = mqtt::make_client(m_config.get().mqtt.uri).value();   // Factory of observables and subscribers. Abort on error.
             auto ble_scanner_factory = ble::scanner::get_observable_factory();               // Each scan is handled by an individual observable
 
             /* 
@@ -60,12 +60,13 @@ namespace hub
             */
             mqtt_client.get_observable(m_config.get().SCAN_ENABLE_TOPIC) |
             filter(&is_empty_sv) |
-            map([ble_scanner_factory](service::mqtt::client::message_t) { 
+            map([ble_scanner_factory](mqtt::client::message_t) { 
                 return ble_scanner_factory(3 /* seconds */); 
             }) |
             switch_on_next() |
             map(&scan_result_to_string) |
-            subscribe<service::mqtt::client::message_t>(mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
+            subscribe<mqtt::client::message_t>(
+                mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
 
 
             /*

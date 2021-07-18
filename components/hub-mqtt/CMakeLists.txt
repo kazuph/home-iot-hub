@@ -3,7 +3,8 @@ idf_component_register(
         "client.cpp"
     INCLUDE_DIRS 
         "include"
-    REQUIRES
+    REQUIRES 
         "mqtt"
-        "hub-event"
         "hub-utils")
+
+target_include_directories(${COMPONENT_LIB} PUBLIC ${rxcpp_SOURCE_DIR}/Rx/v2/src ${expected_SOURCE_DIR}/include)

@@ -19,7 +19,7 @@
 
 #include "timing/timing.hpp"
 
-#include "service/mqtt_client.hpp"
+#include "mqtt/client.hpp"
 #include "utils/esp_exception.hpp"
 #include "utils/json.hpp"
 
@@ -48,22 +48,59 @@ namespace hub
 
         ~not_connected_t()                                      = default;
 
-        tl::expected<std::string, esp_err_t> wait_for_id_assignment() const noexcept
+        inline tl::expected<std::string, esp_err_t> wait_for_id_assignment() const noexcept
         {
-            using namespace std::literals;
-            using namespace rxcpp::operators;
+            return mqtt::make_client(m_config.get().mqtt.uri)
+                .map([this](mqtt::client&& mqtt_client) {
+                    using namespace rxcpp::operators;
 
-            namespace mqtt = service::mqtt;
+                    std::string scan_message;
 
-            mqtt::client mqtt_client;
+                    {
+                        std::array<char, utils::mac::MAC_STR_SIZE> mac_address;
+                        m_config.get().wifi.mac.to_charbuff(mac_address.data());
 
-            try
+                        rapidjson::Document json;
+                        auto &allocator = json.GetAllocator();
+                        json.SetObject();
+
+                        json.AddMember("name",    rapidjson::StringRef(m_config.get().hub.device_name),         allocator);
+                        json.AddMember("address", rapidjson::StringRef(mac_address.data(), mac_address.size()), allocator);
+
+                        scan_message = utils::json::dump(std::move(json));
+                    }
+
+                    mqtt_client.get_observable(m_config.get().SCAN_ENABLE_TOPIC) |
+                    filter(&is_empty_sv) |
+                    map([&](std::string_view) { 
+                        return std::string_view(scan_message);
+                    }) |
+                    subscribe<mqtt::client::message_t>(mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
+
+                    auto connect_message =
+                        mqtt_client.get_observable(m_config.get().CONNECT_TOPIC) |
+                        map(&parse_json) |
+                        filter(&is_parse_success) |
+                        filter(&is_connect_message) |
+                        filter(connect_message_predicate(
+                            m_config.get().hub.device_name, 
+                            m_config.get().wifi.mac)) |
+                        map(retrieve_id) |
+                        take(1) |
+                        as_blocking();
+
+                    return connect_message.first();
+                });
+
+            /*mqtt::client mqtt_client;
+
+            if (auto result = mqtt::make_client(m_config.get().mqtt.uri); !result.has_value())
             {
-                mqtt_client = mqtt::make_client(m_config.get().mqtt.uri);
+                return result.error();
             }
-            catch (const utils::esp_exception &err)
+            else
             {
-                return tl::make_unexpected<esp_err_t>(err.errc());
+                mqtt_client = result.value();
             }
 
             {
@@ -88,7 +125,7 @@ namespace hub
                 map([&](std::string_view) { 
                     return std::string_view(scan_message);
                 }) |
-                subscribe<service::mqtt::client::message_t>(mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
+                subscribe<mqtt::client::message_t>(mqtt_client.get_subscriber(m_config.get().SCAN_RESULTS_TOPIC));
 
                 auto connect_message =
                     mqtt_client.get_observable(m_config.get().CONNECT_TOPIC) |
@@ -103,7 +140,7 @@ namespace hub
                     as_blocking();
 
                 return connect_message.first();
-            }
+            }*/
         }
 
     private:

@@ -9,7 +9,7 @@
 #include "ble/scanner.hpp"
 #include "ble/errc.hpp"
 #include "ble/mac.hpp"
-#include "service/mqtt_client.hpp"
+#include "mqtt/client.hpp"
 #include "timing/timing.hpp"
 #include "utils/esp_exception.hpp"
 #include "utils/json.hpp"
