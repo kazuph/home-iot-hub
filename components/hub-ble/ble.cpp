@@ -10,11 +10,11 @@ namespace hub::ble
 {
     static constexpr const char* TAG{ "hub::ble" };
 
-    result<void> init() noexcept
+    tl::expected<void, esp_err_t> init() noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        using result_type = result<void>;
+        using result_type = tl::expected<void, esp_err_t>;
 
         esp_err_t result = ESP_OK;
 
@@ -45,7 +45,7 @@ namespace hub::ble
 
         ESP_LOGI(TAG, "BLE module initialized.");
 
-        return result_type::success();
+        return result_type();
 
     cleanup_bluedroid_init:
         esp_bluedroid_deinit();
@@ -56,14 +56,14 @@ namespace hub::ble
     error:
 
         ESP_LOGE(TAG, "BLE module initialization failed.");
-        return result_type::failure(errc::initialization_failed);
+        return result_type(tl::unexpect, result);
     }
 
-    result<void> deinit() noexcept
+    tl::expected<void, esp_err_t> deinit() noexcept
     {
         ESP_LOGD(TAG, "Function: %s.", __func__);
 
-        using result_type = result<void>;
+        using result_type = tl::expected<void, esp_err_t>;
         
         esp_bluedroid_disable();
         esp_bluedroid_deinit();
@@ -72,6 +72,6 @@ namespace hub::ble
 
         ESP_LOGI(TAG, "BLE module deinitialized.");
 
-        return result_type::success();
+        return result_type();
     }
 }

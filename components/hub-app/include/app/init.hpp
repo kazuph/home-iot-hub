@@ -53,10 +53,7 @@ namespace hub
 
         tl::expected<void, esp_err_t> initialize_ble() const noexcept
         {
-            using result_type = tl::expected<void, esp_err_t>;
-
-            auto result =  ble::init();
-            return (result.is_valid()) ? result_type() : result_type(tl::unexpect, ESP_FAIL);
+            return ble::init();
         }
 
         tl::expected<void, esp_err_t> connect_to_wifi(const configuration& config) const noexcept

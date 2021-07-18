@@ -1,13 +1,15 @@
 #ifndef HUB_BLE_HPP
 #define HUB_BLE_HPP
 
-#include "errc.hpp"
+#include "esp_err.h"
+
+#include "tl/expected.hpp"
 
 namespace hub::ble
 {
-    result<void> init() noexcept;
+    tl::expected<void, esp_err_t> init() noexcept;
 
-    result<void> deinit() noexcept;
+    tl::expected<void, esp_err_t> deinit() noexcept;
 }
 
 #endif
