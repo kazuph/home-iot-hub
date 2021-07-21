@@ -1,11 +1,6 @@
 #ifndef HUB_APP_CLEANUP_HPP
 #define HUB_APP_CLEANUP_HPP
 
-#include "wifi/wifi.hpp"
-#include "ble/ble.hpp"
-#include "ble/scanner.hpp"
-#include "filesystem/filesystem.hpp"
-
 namespace hub
 {
     struct cleanup_t
@@ -24,12 +19,7 @@ namespace hub
 
         ~cleanup_t()                                = default;
 
-        void cleanup() const noexcept
-        {
-            wifi::disconnect();
-            ble::deinit();
-            filesystem::deinit();
-        }
+        void cleanup() const noexcept;
     };
 }
 
