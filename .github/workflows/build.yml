@@ -24,4 +24,4 @@ jobs:
         run: |
           . /home/pi/esp-idf/export.sh
           REPORT_DIR=/home/pi/projects/home-iot-hub-cppcheck
-          cppcheck --project=build/compile_commands.json -i"${IDF_PATH}" -i"build" --suppress="*:*esp-idf/*" --suppress="*:*build/*" -rp --xml 2> ${REPORT_DIR}/${GITHUB_SHA}.xml
+          cppcheck --project=build/compile_commands.json -i"${IDF_PATH}" -i"build" --suppress="*:*esp-idf/*" --suppress="*:*build/*" -rp --enable=all 2> ${REPORT_DIR}/${GITHUB_SHA}.xml
