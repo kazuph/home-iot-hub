@@ -85,7 +85,7 @@ namespace hub::ble
                 ESP_LOGI(TAG, "Registered GATTC app ID: %04x.", param->reg.app_id);
 
                 {
-                    std::shared_ptr<client> client_ptr = g_client_refs[param->reg.app_id].lock();
+                    client_ptr = g_client_refs[param->reg.app_id].lock();
 
                     if (!client_ptr)
                     {
