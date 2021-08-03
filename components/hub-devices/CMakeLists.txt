@@ -5,5 +5,4 @@ idf_component_register(
         "include"
     REQUIRES 
         "hub-utils" 
-        "hub-ble" 
-        "hub-async")
+        "hub-ble")

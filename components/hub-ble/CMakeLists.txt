@@ -12,7 +12,6 @@ idf_component_register(
     REQUIRES 
         "bt" 
         "log"
-        "hub-event"
         "hub-utils"
         "hub-timing")
 

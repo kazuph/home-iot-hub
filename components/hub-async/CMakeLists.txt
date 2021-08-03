@@ -1,9 +1,0 @@
-idf_component_register(
-    SRCS
-        "mutex.cpp"
-        "task.cpp"
-        "dispatch_queue.cpp"
-    INCLUDE_DIRS 
-        "include"
-    REQUIRES
-        "hub-timing")
