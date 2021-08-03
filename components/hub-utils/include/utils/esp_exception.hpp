@@ -6,25 +6,15 @@
 
 #include "esp_err.h"
 
-#include "fmt/format.h"
-
-#define LOG_AND_THROW(tag, except) { auto __except = except; ESP_LOGE(tag, "%s", __except.what()); throw std::move(__except); }
+#define LOG_AND_THROW(tag, except) do { auto __except = except; ESP_LOGE(tag, "%s", __except.what()); throw std::move(__except); } while (false);
 
 namespace hub::utils
 {
     struct esp_exception : public std::runtime_error
     {
-        explicit esp_exception(std::string_view message, esp_err_t errc = ESP_FAIL) :
-            std::runtime_error(fmt::format("{0} Error code: {1} [{2}]", message, errc, esp_err_to_name(errc))),
-            _errc{ errc }
-        {
-            
-        }
+        explicit esp_exception(std::string_view message, esp_err_t errc = ESP_FAIL);
 
-        esp_err_t errc() const noexcept
-        {
-            return _errc;
-        }
+        esp_err_t errc() const noexcept;
 
         esp_err_t _errc;
     };

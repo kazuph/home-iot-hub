@@ -1,4 +1,4 @@
-idf_component_register(INCLUDE_DIRS "include")
+idf_component_register(SRCS "esp_exception.cpp" "mac.cpp" INCLUDE_DIRS "include")
 
 include(FetchContent)
 
