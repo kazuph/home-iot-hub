@@ -3,14 +3,12 @@
 
 #include "utils/fsm.hpp"
 
-#include "cleanup.hpp"
-#include "connected.hpp"
 #include "init.hpp"
-#include "not_connected.hpp"
+#include "running.hpp"
 
 namespace hub
 {
-    class application final : public utils::fsm<init_t, not_connected_t, connected_t, cleanup_t> 
+    class application final : public utils::fsm<init_t, running_t> 
     {
     public:
         application()                                   = default;

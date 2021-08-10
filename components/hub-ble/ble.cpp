@@ -12,8 +12,6 @@ namespace hub::ble
 
     tl::expected<void, esp_err_t> init() noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         using result_type = tl::expected<void, esp_err_t>;
 
         esp_err_t result = ESP_OK;
@@ -61,8 +59,6 @@ namespace hub::ble
 
     tl::expected<void, esp_err_t> deinit() noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         using result_type = tl::expected<void, esp_err_t>;
         
         esp_bluedroid_disable();

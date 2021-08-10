@@ -1,9 +1,7 @@
 idf_component_register(
     SRCS
         "init.cpp"
-        "not_connected.cpp"
-        "connected.cpp"
-        "cleanup.cpp"
+        "running.cpp"
         "application.cpp"
     INCLUDE_DIRS 
         "include" 

@@ -12,34 +12,36 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/istreamwrapper.h"
 
+namespace rjs = rapidjson;
+
 namespace hub::utils::json
 {
-    inline std::string dump(rapidjson::Document&& document) noexcept
+    inline std::string dump(rjs::Document&& document) noexcept
     {
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        rjs::StringBuffer buffer;
+        rjs::Writer<rjs::StringBuffer> writer(buffer);
         document.Accept(writer);
         return std::string(buffer.GetString(), buffer.GetSize());
     }
 
-    inline std::string dump(const rapidjson::Document& document) noexcept
+    inline std::string dump(const rjs::Document& document) noexcept
     {
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        rjs::StringBuffer buffer;
+        rjs::Writer<rjs::StringBuffer> writer(buffer);
         document.Accept(writer);
         return std::string(buffer.GetString(), buffer.GetSize());
     }
 
-    inline rapidjson::Document parse(std::string_view str) noexcept
+    inline rjs::Document parse(std::string_view str) noexcept
     {
-        rapidjson::Document result;
+        rjs::Document result;
         result.Parse(str.data(), str.length());
         return result;
     }
 
-    inline rapidjson::Document parse_file(std::string_view path) noexcept
+    inline rjs::Document parse_file(std::string_view path) noexcept
     {
-        rapidjson::Document file;
+        rjs::Document file;
         std::ifstream ifs(path.data());
 
         if (!ifs)
@@ -48,24 +50,24 @@ namespace hub::utils::json
         }
 
         {
-            rapidjson::IStreamWrapper json_stream(ifs);
+            rjs::IStreamWrapper json_stream(ifs);
             file.ParseStream(json_stream);
         }
 
         return file;
     }
 
-    inline bool has_parse_error(const rapidjson::Document& document) noexcept
+    inline bool has_parse_error(const rjs::Document& document) noexcept
     {
         return document.HasParseError();
     }
 
-    inline bool is_object(const rapidjson::Document& document) noexcept
+    inline bool is_object(const rjs::Document& document) noexcept
     {
         return document.IsObject();
     }
 
-    inline bool has_member(const rapidjson::Document& document, std::string_view key) noexcept
+    inline bool has_member(const rjs::Document& document, std::string_view key) noexcept
     {
         assert(is_object(document));
         return document.HasMember(key.data());
@@ -73,10 +75,10 @@ namespace hub::utils::json
 
     inline auto has_member_predicate(std::string_view key) noexcept
     {
-        return [=](const rapidjson::Document& document) { return has_member(document, key); };
+        return [=](const rjs::Document& document) { return has_member(document, key); };
     }
 
-    inline bool is_array(const rapidjson::Document& document) noexcept
+    inline bool is_array(const rjs::Document& document) noexcept
     {
         return document.IsArray();
     }

@@ -1,13 +1,14 @@
 #ifndef HUB_BLE_DESCRIPTOR_HPP
 #define HUB_BLE_DESCRIPTOR_HPP
 
-#include "errc.hpp"
-
-#include "esp_gatt_defs.h"
-
 #include <cstdint>
 #include <vector>
 #include <memory>
+
+#include "esp_err.h"
+#include "esp_gatt_defs.h"
+
+#include "tl/expected.hpp"
 
 namespace hub::ble
 {
@@ -37,16 +38,22 @@ namespace hub::ble
          * @brief Write data to the descriptor.
          * 
          * @param data 
+         * @return tl::expected<void, esp_err_t> 
          */
-        result<void> write(std::vector<uint8_t> data) noexcept;
+        tl::expected<void, esp_err_t> write(std::vector<uint8_t> data) noexcept;
 
         /**
          * @brief Read data from the descriptor.
          * 
-         * @return std::vector<uint8_t> 
+         * @return tl::expected<std::vector<uint8_t>, esp_err_t> 
          */
-        result<std::vector<uint8_t>> read() const noexcept;
+        tl::expected<std::vector<uint8_t>, esp_err_t> read() const noexcept;
 
+        /**
+         * @brief Get the descriptor handle.
+         * 
+         * @return uint16_t 
+         */
         uint16_t get_handle() const
         {
             return m_descriptor.handle;

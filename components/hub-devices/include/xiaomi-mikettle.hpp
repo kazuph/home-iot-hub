@@ -5,7 +5,7 @@
 
 #include "utils/json.hpp"
 #include "ble/client.hpp"
-#include "ble/mac.hpp"
+#include "utils/mac.hpp"
 
 #include <memory>
 #include <string_view>
@@ -22,7 +22,7 @@ namespace hub::device::xiaomi
 
         static constexpr std::string_view DEVICE_NAME{ "MiKettle" };
 
-        void connect(ble::mac address)                  override;
+        void connect(utils::mac address)                override;
 
         void disconnect()                               override;
 

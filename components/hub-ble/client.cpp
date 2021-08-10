@@ -27,8 +27,6 @@ namespace hub::ble
         m_descriptor_data_cache     {  },
         m_characteristics_callbacks {  }
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         if (!m_event_group)
         {
             throw std::bad_alloc();
@@ -37,10 +35,6 @@ namespace hub::ble
 
     client::~client()
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        async::lock lock{ m_mutex };
-
         g_client_refs[m_app_id].reset();
 
         if (m_gattc_interface != ESP_GATT_IF_NONE)
@@ -53,7 +47,7 @@ namespace hub::ble
 
     void client::gattc_callback(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        
         ESP_LOGI(TAG, "Event: %x.", event);
 
         auto get_shared_client = [](esp_gatt_if_t gattc_interface) {
@@ -111,12 +105,14 @@ namespace hub::ble
             if (auto characteristic_iter = client_ptr->m_characteristics_callbacks.find(param->notify.handle); 
                 characteristic_iter != client_ptr->m_characteristics_callbacks.end())
             {
-                characteristic_iter->second.invoke(std::vector<uint8_t>(param->notify.value, param->notify.value + static_cast<size_t>(param->notify.value_len)));
+                std::invoke(
+                    characteristic_iter->second, 
+                    std::vector<uint8_t>(param->notify.value, param->notify.value + static_cast<size_t>(param->notify.value_len)));
             }
             break;
         case ESP_GATTC_CONNECT_EVT:
-            client_ptr->m_connection_id     = param->connect.conn_id;
-            client_ptr->m_address           = mac(param->connect.remote_bda);
+            client_ptr->m_connection_id = param->connect.conn_id;
+            client_ptr->m_address       = utils::mac(param->connect.remote_bda, param->connect.remote_bda + utils::mac::MAC_SIZE);
 
             if (esp_ble_gattc_send_mtu_req(gattc_if, client_ptr->m_connection_id) != ESP_OK)
             {
@@ -177,11 +173,9 @@ namespace hub::ble
         }
     }
 
-    result<void> client::connect(mac address) noexcept
+    tl::expected<void, esp_err_t> client::connect(utils::mac address) noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<void>;
+        esp_err_t result = ESP_OK;
 
         auto iter = std::find_if(g_client_refs.cbegin(), g_client_refs.cend(), [](const auto& client_ref) {
             return client_ref.expired();
@@ -190,78 +184,70 @@ namespace hub::ble
         if (iter == g_client_refs.cend())
         {
             ESP_LOGE(TAG, "Maximum number of clients already connected.");
-            result_type::failure(errc::error);
+            tl::expected<void, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
 
-        if (esp_ble_gattc_register_callback(&client::gattc_callback) != ESP_OK)
+        if (result = esp_ble_gattc_register_callback(&client::gattc_callback); result != ESP_OK)
         {
             ESP_LOGE(TAG, "Could not register GATTC callback.");
-            result_type::failure(errc::error);
+            tl::expected<void, esp_err_t>(tl::unexpect, result);
         }
 
-        if (esp_ble_gatt_set_local_mtu(500) != ESP_OK)
+        if (result = esp_ble_gatt_set_local_mtu(500); result != ESP_OK)
         {
             ESP_LOGE(TAG, "Could set local MTU size.");
-            result_type::failure(errc::error);
+            tl::expected<void, esp_err_t>(tl::unexpect, result);
         }
 
         {
             m_app_id = std::distance(g_client_refs.cbegin(), iter);
             g_client_refs[m_app_id] = shared_client::weak_from_this();
 
-            if (esp_ble_gattc_app_register(m_app_id) != ESP_OK)
+            if (result = esp_ble_gattc_app_register(m_app_id); result != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not register GATTC app.");
-                result_type::failure(errc::error);
+                tl::expected<void, esp_err_t>(tl::unexpect, result);
             }
         }
 
+        if (result = esp_ble_gattc_open(
+                m_gattc_interface, 
+                static_cast<uint8_t*>(address), 
+                BLE_ADDR_TYPE_PUBLIC, 
+                true); 
+            result != ESP_OK)
         {
-            async::lock lock{ m_mutex };
+            ESP_LOGE(TAG, "GATTC open failed.");
+            tl::expected<void, esp_err_t>(tl::unexpect, result);
+        }
 
-            if (esp_err_t result = esp_ble_gattc_open(
-                    m_gattc_interface, 
-                    address.to_address(), 
-                    address.get_type(), 
-                    true); 
-                result != ESP_OK)
-            {
-                ESP_LOGE(TAG, "GATTC open failed.");
-                return result_type::failure(result);
-            }
+        EventBits_t bits = xEventGroupWaitBits(m_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
 
-            EventBits_t bits = xEventGroupWaitBits(m_event_group, CONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
-
-            if (bits & CONNECT_BIT)
-            {
-                ESP_LOGI(TAG, "GATT client connected.");
-                return result_type::success();
-            }
-            else if (bits & FAIL_BIT)
-            {
-                ESP_LOGE(TAG, "GATT client connecton failed.");
-                return result_type::failure(errc::error);
-            }
-            else
-            {
-                ESP_LOGE(TAG, "GATT client connecton timed out.");
-                return result_type::failure(errc::timeout);
-            }
+        if (bits & CONNECT_BIT)
+        {
+            ESP_LOGI(TAG, "GATT client connected.");
+            return tl::expected<void, esp_err_t>();
+        }
+        else if (bits & FAIL_BIT)
+        {
+            ESP_LOGE(TAG, "GATT client connecton failed.");
+            return tl::expected<void, esp_err_t>(tl::unexpect, ESP_FAIL);
+        }
+        else
+        {
+            ESP_LOGE(TAG, "GATT client connecton timed out.");
+            return tl::expected<void, esp_err_t>(tl::unexpect, ESP_ERR_TIMEOUT);
         }
     }
 
-    result<void> client::disconnect() noexcept
+    tl::expected<void, esp_err_t> client::disconnect() noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        esp_err_t result = ESP_OK;
 
-        using result_type = result<void>;
-
-        async::lock lock{ m_mutex };
-
-        if (esp_err_t result = esp_ble_gattc_close(m_gattc_interface, m_connection_id); result != ESP_OK)
+        if (result = esp_ble_gattc_close(m_gattc_interface, m_connection_id); result != ESP_OK)
         {
             ESP_LOGE(TAG, "GATTC disconnect failed.");
-            return result_type::failure(errc::error);
+            return tl::expected<void, esp_err_t>(tl::unexpect, result);
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, DISCONNECT_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -269,34 +255,29 @@ namespace hub::ble
         if (bits & DISCONNECT_BIT)
         {
             ESP_LOGI(TAG, "Disconnect success.");
+            return tl::expected<void, esp_err_t>();
         }
         else if (bits & FAIL_BIT)
         {
             ESP_LOGE(TAG, "GATTC disconnect failed.");
-            result_type::failure(errc::error);
+            return tl::expected<void, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
         else
         {
             ESP_LOGE(TAG, "GATTC disconnect timeout.");
-            return result_type::failure(errc::timeout);
+            return tl::expected<void, esp_err_t>(tl::unexpect, ESP_ERR_TIMEOUT);
         }
-
-        return result_type::success();
     }
 
-    result<std::vector<service>> client::get_services() const noexcept
+    tl::expected<std::vector<service>, esp_err_t> client::get_services() const noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
+        esp_err_t result = ESP_OK;
 
-        using result_type = result<std::vector<service>>;
-
-        async::lock lock{ m_mutex };
-
-        m_services_cache = std::move(std::vector<service>());
+        m_services_cache = std::vector<service>();
         
-        if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, nullptr); result != ESP_OK)
+        if (result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, nullptr); result != ESP_OK)
         {
-            return result_type::failure(errc::error);
+            return tl::expected<std::vector<service>, esp_err_t>(tl::unexpect, result);
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -308,36 +289,30 @@ namespace hub::ble
         else if (bits & FAIL_BIT)
         {
             ESP_LOGE(TAG, "Retrieve service failed.");
-            return result_type::failure(errc::error);
+            return tl::expected<std::vector<service>, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
         else
         {
             ESP_LOGE(TAG, "Retrieve service timeout.");
-            result_type::failure(errc::timeout);
+            return tl::expected<std::vector<service>, esp_err_t>(tl::unexpect, ESP_ERR_TIMEOUT);
         }
 
         if (m_services_cache.empty())
         {
             ESP_LOGE(TAG, "No service found.");
-            return result_type::failure(errc::error);
+            return tl::expected<std::vector<service>, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
 
-        return result_type::success(std::move(m_services_cache));
+        return tl::expected<std::vector<service>, esp_err_t>(std::move(m_services_cache));
     }
 
-    result<service> client::get_service_by_uuid(const esp_bt_uuid_t* uuid) const noexcept
+    tl::expected<service, esp_err_t> client::get_service_by_uuid(const esp_bt_uuid_t* uuid) const noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
-        using result_type = result<service>;
-
-        async::lock lock{ m_mutex };
-
         m_services_cache = std::move(std::vector<service>());
         
         if (esp_err_t result = esp_ble_gattc_search_service(m_gattc_interface, m_connection_id, const_cast<esp_bt_uuid_t*>(uuid)); result != ESP_OK)
         {
-            return result_type::failure(errc::error);
+            return  tl::expected<service, esp_err_t>(tl::unexpect, result);
         }
 
         EventBits_t bits = xEventGroupWaitBits(m_event_group, SEARCH_SERVICE_BIT | FAIL_BIT, pdTRUE, pdFALSE, static_cast<TickType_t>(BLE_TIMEOUT));
@@ -349,20 +324,20 @@ namespace hub::ble
         else if (bits & FAIL_BIT)
         {
             ESP_LOGE(TAG, "Retrieve service failed.");
-            return result_type::failure(errc::error);
+            return  tl::expected<service, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
         else
         {
             ESP_LOGE(TAG, "Retrieve service timeout.");
-            return result_type::failure(errc::timeout);
+            return  tl::expected<service, esp_err_t>(tl::unexpect, ESP_ERR_TIMEOUT);
         }
 
         if (m_services_cache.empty())
         {
             ESP_LOGE(TAG, "No service found.");
-            return result_type::failure(errc::error);
+            return  tl::expected<service, esp_err_t>(tl::unexpect, ESP_FAIL);
         }
 
-        return result_type::success(std::move(m_services_cache.front()));
+        return tl::expected<service, esp_err_t>(std::move(m_services_cache.front()));
     }
 }

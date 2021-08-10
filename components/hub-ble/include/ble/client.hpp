@@ -1,20 +1,6 @@
 #ifndef HUB_BLE_CLIENT_HPP
 #define HUB_BLE_CLIENT_HPP
 
-#include "mac.hpp"
-#include "service.hpp"
-#include "characteristic.hpp"
-#include "descriptor.hpp"
-#include "event.hpp"
-#include "errc.hpp"
-
-#include "timing/timing.hpp"
-#include "async/mutex.hpp"
-#include "async/lock.hpp"
-
-#include "esp_gatt_defs.h"
-#include "esp_gattc_api.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
@@ -26,6 +12,19 @@
 #include <utility>
 #include <string_view>
 #include <map>
+
+#include "tl/expected.hpp"
+
+#include "esp_gatt_defs.h"
+#include "esp_gattc_api.h"
+#include "esp_err.h"
+
+#include "utils/mac.hpp"
+#include "timing/timing.hpp"
+
+#include "service.hpp"
+#include "characteristic.hpp"
+#include "descriptor.hpp"
 
 namespace hub::ble
 {
@@ -42,26 +41,63 @@ namespace hub::ble
         friend class characteristic;
         friend class descriptor;
 
+        using notify_event_handler_t = std::function<void(const std::vector<uint8_t>&)>;
         using shared_client = std::enable_shared_from_this<client>;
 
+        /**
+         * @brief Construct a new client object
+         * 
+         */
         client();
 
         virtual ~client();
 
+        /**
+         * @brief Get the shared client object
+         * 
+         * @return std::shared_ptr<client> 
+         */
         std::shared_ptr<client> get_shared_client() noexcept
         {
             return shared_client::shared_from_this();
         }
 
-        result<void> connect(mac address) noexcept;
+        /**
+         * @brief 
+         * 
+         * @param address 
+         * @return tl::expected<void, esp_err_t> 
+         */
+        tl::expected<void, esp_err_t> connect(utils::mac address) noexcept;
 
-        result<void> disconnect() noexcept;
+        /**
+         * @brief 
+         * 
+         * @return tl::expected<void, esp_err_t> 
+         */
+        tl::expected<void, esp_err_t> disconnect() noexcept;
 
-        result<std::vector<service>> get_services() const noexcept;
+        /**
+         * @brief Get the services object
+         * 
+         * @return tl::expected<std::vector<service>, esp_err_t> 
+         */
+        tl::expected<std::vector<service>, esp_err_t> get_services() const noexcept;
 
-        result<service> get_service_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
+        /**
+         * @brief Get the service by uuid object
+         * 
+         * @param uuid 
+         * @return tl::expected<service, esp_err_t> 
+         */
+        tl::expected<service, esp_err_t> get_service_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
 
-        mac get_address() const noexcept
+        /**
+         * @brief Get the address object
+         * 
+         * @return utils::mac 
+         */
+        utils::mac get_address() const noexcept
         {
             return m_address;
         }
@@ -86,18 +122,16 @@ namespace hub::ble
         uint16_t                                                    m_connection_id;
         uint16_t                                                    m_app_id;
         uint16_t                                                    m_gattc_interface;
-        mac                                                         m_address;
+        utils::mac                                                  m_address;
         EventGroupHandle_t                                          m_event_group;
 
         mutable std::vector<service>                                m_services_cache;
         mutable std::vector<uint8_t>                                m_characteristic_data_cache;
         mutable std::vector<uint8_t>                                m_descriptor_data_cache;
 
-        mutable std::map<uint16_t, event::notify_event_handler_t>   m_characteristics_callbacks;
+        mutable std::map<uint16_t, notify_event_handler_t>          m_characteristics_callbacks;
 
         mutable std::shared_ptr<client>                             m_self_ref;
-
-        mutable async::mutex                                        m_mutex;
     };
 }
 

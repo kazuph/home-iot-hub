@@ -27,8 +27,6 @@ namespace hub::wifi
 
     static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         esp_err_t result = ESP_OK;
 
         if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
@@ -64,8 +62,6 @@ namespace hub::wifi
 
     tl::expected<void, esp_err_t> connect(std::string_view ssid, std::string_view password, timing::duration_t timeout) noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         esp_err_t result = ESP_OK;
         wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
 
@@ -175,8 +171,6 @@ namespace hub::wifi
 
     tl::expected<void, esp_err_t> disconnect() noexcept
     {
-        ESP_LOGD(TAG, "Function: %s.", __func__);
-
         esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler);
         esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &event_handler);
         esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_START, &event_handler);

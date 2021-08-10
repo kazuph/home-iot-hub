@@ -12,16 +12,10 @@ namespace hub
 {
     struct configuration
     {
-        static constexpr std::string_view SCAN_ENABLE_TOPIC    { "home/scan_enable" };
-        static constexpr std::string_view SCAN_RESULTS_TOPIC   { "home/scan_results" };
-        static constexpr std::string_view CONNECT_TOPIC        { "home/connect" };
-        static constexpr std::string_view DISCONNECT_TOPIC     { "home/disconnect" };
-
         struct
         {
             std::string     ssid;
             std::string     password;
-            utils::mac      mac;
         } wifi;
         
         struct
@@ -31,9 +25,10 @@ namespace hub
 
         struct
         {
-            std::string     id;
-            std::string     device_name;
-        } hub;
+            std::string     name;
+            std::string     object_id;
+            std::string     discovery_prefix;
+        } general;
     };
 }
 

@@ -4,7 +4,7 @@
 
 namespace hub::utils
 {
-    esp_exception::esp_exception(std::string_view message, esp_err_t errc = ESP_FAIL) :
+    esp_exception::esp_exception(std::string_view message, esp_err_t errc) :
         std::runtime_error(fmt::format("{0} Error code: {1} [{2}]", message, errc, esp_err_to_name(errc))),
         _errc{ errc }
     {

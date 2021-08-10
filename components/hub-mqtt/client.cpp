@@ -1,33 +1,23 @@
 #include "mqtt/client.hpp"
 
-#include "esp_log.h"
-
 namespace hub::mqtt
 {
     namespace impl
     {
-        client_state::client_state(std::string_view uri) :
+        client_state::client_state(const config_t& config) :
             m_handle{ nullptr },
             m_subject{  }
         {
             using namespace rxcpp::operators;
 
             esp_err_t result = ESP_OK;
-            esp_mqtt_client_config_t mqtt_client_config{  };
 
-            if (m_handle = esp_mqtt_client_init(&mqtt_client_config); !m_handle)
+            if (m_handle = esp_mqtt_client_init(&config); !m_handle)
             {
                 LOG_AND_THROW(TAG, utils::esp_exception("MQTT client initialization failed."));
             }
 
             ESP_LOGD(TAG, "MQTT client initialized successfully.");
-
-            if (result = esp_mqtt_client_set_uri(m_handle, "mqtt://192.168.0.109:1883"); result != ESP_OK)
-            {
-                LOG_AND_THROW(TAG, utils::esp_exception("Unable to set MQTT URI."));
-            }
-
-            ESP_LOGD(TAG, "MQTT URI: \"%.*s\" set successfully.", uri.length(), uri.data());
 
             result = esp_mqtt_client_register_event(
                 m_handle,
@@ -49,8 +39,8 @@ namespace hub::mqtt
                             return;
                         }
 
-                        auto topic = std::string_view(event_data->topic, event_data->topic_len);
-                        auto data = std::string_view(event_data->data, event_data->data_len);
+                        auto topic  = std::string_view(event_data->topic, event_data->topic_len);
+                        auto data   = std::string_view(event_data->data, event_data->data_len);
 
                         mqtt_client->m_subject.get_subscriber().on_next(mqtt_message_t{ topic, data });
                     }
@@ -126,7 +116,7 @@ namespace hub::mqtt
         }
     }
 
-    rxcpp::observable<client::message_t> client::get_observable(std::string_view topic, qos_t qos) noexcept
+    rxcpp::observable<client::message_t> client::subscribe(std::string_view topic, qos_t qos) noexcept
     {
         using namespace rxcpp::operators;
 
@@ -141,6 +131,7 @@ namespace hub::mqtt
 
         return 
             m_state->get_observable() |
+            tap([local_state{ m_state }](auto) {  }) |
             finally([topic, qos, handle{ m_state->get_handle() }]() {
                 if (esp_err_t result = esp_mqtt_client_unsubscribe(handle, topic.data()) == ESP_FAIL)
                 {
@@ -157,29 +148,31 @@ namespace hub::mqtt
             });
     }
 
-    rxcpp::subscriber<client::message_t> client::get_subscriber(std::string_view topic, qos_t qos, bool retain)
+    tl::expected<client, esp_err_t> make_client(std::string_view uri) noexcept
     {
-        using namespace rxcpp::operators;
+        esp_mqtt_client_config_t config{  };
 
-        return rxcpp::make_subscriber<message_t>(
-            [topic, qos, retain, handle{ m_state->get_handle() }](message_t message) {
-                ESP_LOGD(TAG, "Publishing on topic: %.*s.", topic.length(), topic.data());
-                esp_err_t result = esp_mqtt_client_publish(
-                    handle, 
-                    topic.data(), 
-                    message.data(), 
-                    message.length(), 
-                    static_cast<int>(qos),
-                    static_cast<int>(retain));
+        config.uri = uri.data();
 
-                if (result == ESP_FAIL)
-                {
-                    ESP_LOGE(TAG, "Data publish failed with error code: 0x%04x.", result);
-                    return;
-                }
+        try
+        {
+            return client{ std::make_shared<impl::client_state>(config) };
+        }
+        catch(const utils::esp_exception& err)
+        {
+            return tl::make_unexpected<esp_err_t>(err.errc());
+        }
+    }
 
-                ESP_LOGV(TAG, "Published data: %.*s.", message.length(), message.data());
-            }
-        );
+    tl::expected<client, esp_err_t> make_client(const config_t& config) noexcept
+    {
+        try
+        {
+            return client{ std::make_shared<impl::client_state>(config) };
+        }
+        catch(const utils::esp_exception& err)
+        {
+            return tl::make_unexpected<esp_err_t>(err.errc());
+        }
     }
 }

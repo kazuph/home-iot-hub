@@ -1,15 +1,14 @@
 #ifndef HUB_BLE_SERVICE_HPP
 #define HUB_BLE_SERVICE_HPP
 
-#include "errc.hpp"
-
-#include "esp_gatt_defs.h"
-
-#include "esp_log.h"
-
 #include <vector>
 #include <memory>
 #include <utility>
+
+#include "esp_log.h"
+#include "esp_gatt_defs.h"
+
+#include "tl/expected.hpp"
 
 namespace hub::ble
 {
@@ -17,12 +16,17 @@ namespace hub::ble
     class characteristic;
     
     /**
-     * @brief Class service represents a single BLE service.
+     * @brief BLE service class.
+     * 
      */
     class service
     {
     public:
 
+        /**
+         * @brief Construct a new service object.
+         * 
+         */
         service() = delete;
 
         /**
@@ -87,13 +91,19 @@ namespace hub::ble
         }
 
         /**
-         * @brief Get all the characteristics for the given service.
+         * @brief Get the characteristics object
          * 
-         * @return std::vector<characteristic> 
+         * @return tl::expected<std::vector<characteristic>, esp_gatt_status_t> 
          */
-        result<std::vector<characteristic>> get_characteristics() const noexcept;
+        tl::expected<std::vector<characteristic>, esp_gatt_status_t> get_characteristics() const noexcept;
 
-        result<characteristic> get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
+        /**
+         * @brief Get characteristic by its uuid.
+         * 
+         * @param uuid 
+         * @return tl::expected<characteristic, esp_gatt_status_t> 
+         */
+        tl::expected<characteristic, esp_gatt_status_t> get_characteristic_by_uuid(const esp_bt_uuid_t* uuid) const noexcept;
 
     private:
 

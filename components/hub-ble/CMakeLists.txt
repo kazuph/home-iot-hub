@@ -6,7 +6,6 @@ idf_component_register(
         "service.cpp"
         "characteristic.cpp"
         "descriptor.cpp"
-        "mac.cpp"     
     INCLUDE_DIRS
         "include"
     REQUIRES 

@@ -10,5 +10,5 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(fmt)
 
-target_include_directories(${COMPONENT_LIB} INTERFACE ${rapidjson_SOURCE_DIR}/include)
-target_link_libraries(${COMPONENT_LIB} INTERFACE fmt::fmt-header-only)
+target_include_directories(${COMPONENT_LIB} INTERFACE ${rapidjson_SOURCE_DIR}/include ${fmt_SOURCE_DIR}/include)
+target_link_libraries(${COMPONENT_LIB} fmt::fmt)

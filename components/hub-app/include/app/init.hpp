@@ -2,6 +2,7 @@
 #define HUB_INIT_HPP
 
 #include <string_view>
+#include <functional>
 
 #include "esp_err.h"
 
@@ -27,13 +28,15 @@ namespace hub
 
         ~init_t()                           = default;
 
-        tl::expected<void, esp_err_t> initialize_filesystem() const noexcept;
+        tl::expected<std::reference_wrapper<init_t>, esp_err_t> initialize_filesystem() noexcept;
 
-        tl::expected<void, esp_err_t> initialize_ble() const noexcept;
+        tl::expected<std::reference_wrapper<init_t>, esp_err_t> initialize_ble() noexcept;
 
-        tl::expected<void, esp_err_t> connect_to_wifi(const configuration& config) const noexcept;
+        tl::expected<std::reference_wrapper<init_t>, esp_err_t> connect_to_wifi(const configuration& config) noexcept;
 
-        tl::expected<configuration, esp_err_t> read_config(std::string_view path) const;
+        tl::expected<configuration, esp_err_t> read_config(std::string_view path) const noexcept;
+
+        tl::expected<std::reference_wrapper<init_t>, esp_err_t> send_mqtt_config(const configuration& config) noexcept;
 
     private:
 

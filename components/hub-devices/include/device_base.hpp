@@ -1,14 +1,14 @@
 #ifndef HUB_SERVICE_DEVICE_INTERFACE_HPP
 #define HUB_SERVICE_DEVICE_INTERFACE_HPP
 
-#include "ble/client.hpp"
-#include "ble/mac.hpp"
-#include "utils/json.hpp"
+#include <functional>
+#include <memory>
 
 #include "esp_log.h"
 
-#include <functional>
-#include <memory>
+#include "ble/client.hpp"
+#include "utils/mac.hpp"
+#include "utils/json.hpp"
 
 namespace hub::device
 {
@@ -23,17 +23,16 @@ namespace hub::device
         device_base() :
             m_message_handler{  }
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
+            
         }
 
         template<typename MessageHandlerT>
         void set_message_handler(MessageHandlerT message_handler)
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
             m_message_handler = message_handler;
         }
 
-        virtual void connect(ble::mac address)          = 0;
+        virtual void connect(utils::mac address)        = 0;
 
         virtual void disconnect()                       = 0;
 
@@ -41,21 +40,18 @@ namespace hub::device
 
         virtual ~device_base()
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
+            
         }
 
     protected:
 
         std::shared_ptr<ble::client> get_client() noexcept
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
             return get_shared_client();
         }
 
         void invoke_message_handler(out_message_t&& message) const
         {
-            ESP_LOGD(TAG, "Function: %s.", __func__);
-
             if (!m_message_handler)
             {
                 ESP_LOGW(TAG, "Invalid message handler.");
