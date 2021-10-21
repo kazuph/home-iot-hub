@@ -1,4 +1,4 @@
-#include "esp_mac.h"
+// #include "esp_mac.h"
 
 #include "rxcpp/rx.hpp"
 
@@ -47,8 +47,8 @@ namespace hub
 
         return std::invoke([path]() -> tl::expected<rapidjson::Document, esp_err_t> {
             auto js_config = utils::json::parse_file(path);
-            return (!js_config.HasParseError() && js_config.IsObject()) ? 
-                std::move(js_config) : 
+            return (!js_config.HasParseError() && js_config.IsObject()) ?
+                std::move(js_config) :
                 tl::expected<rapidjson::Document, esp_err_t>(tl::unexpect, ESP_ERR_INVALID_ARG);
         })
             .and_then([&config](rjs::Document&& js_config) -> tl::expected<rapidjson::Document, esp_err_t> {
@@ -105,13 +105,13 @@ namespace hub
         };
 
         const auto switch_topic_prefix = fmt::format(
-            TOPIC_PREFIX_FMT, 
+            TOPIC_PREFIX_FMT,
             config.general.discovery_prefix,
             SWITCH_DEVICE_NAME,
             config.general.object_id);
 
         const auto sensor_topic_prefix = fmt::format(
-            TOPIC_PREFIX_FMT, 
+            TOPIC_PREFIX_FMT,
             config.general.discovery_prefix,
             SENSOR_DEVICE_NAME,
             config.general.object_id);
